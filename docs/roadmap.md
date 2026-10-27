@@ -16,10 +16,10 @@ Submission target: Nov 4 evening WIB. Hard deadline: Nov 4, 9:00 PM ET (Nov 5, 0
 
 ## Field input from the partner farm (Oct 27)
 
-Done: elver water ranges, TDS limit, stocking density, heavy-rain emergency (see `knowledge/partner-practice.json`). Still to use:
+Done: elver water ranges, TDS limit, stocking density, heavy-rain guidance (see `knowledge/partner-practice.json`). Still to use:
 
 - **Day 4 Today:** feeding progression task (1× → 2× → 3× a day while feed is finished, then more volume); monthly size sorting reminder; paste training fasting (3–7 days).
-- **Day 4 Watch:** heavy rain in the forecast → keep rainwater out, use settled water from the quarantine/settling pond (Kali Krasak flood scenario).
+- **Day 4 Watch:** heavy rain in the forecast → keep rainwater out, use settled water from the quarantine/settling pond when the water source turns muddy.
 - **Day 5 Problem:** fungus on eels → isolate in a quarantine pond and consult; no medicine dosing in the app.
 - **Day 7:** batch species (bicolor) and seed origin; stocking checklist (oxygen-filled bags, acclimatization, shelter, paranet, shade).
 

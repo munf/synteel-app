@@ -53,12 +53,12 @@
       "nursery_auto_response": "Alarm, feeder ditunda"
     },
     {
-      "id": "heavy_rain_flood",
-      "trigger": "Hujan deras atau sungai sumber air (mis. Kali Krasak) banjir",
+      "id": "heavy_rain",
+      "trigger": "Hujan deras, atau sumber air keruh setelah hujan",
       "source": "Praktik petani mitra Sleman",
       "operator_actions": [
         "Tutup atau alihkan aliran air hujan agar tidak masuk kolam dalam jumlah besar",
-        "Hentikan pengambilan air dari sungai selama air keruh",
+        "Hentikan pengambilan air dari sumber selama air keruh",
         "Pakai air dari kolam pengendapan/karantina yang sudah disiapkan",
         "Ukur pH, TDS dan suhu setelah hujan; perubahan mendadak membuat sidat stres"
       ],
