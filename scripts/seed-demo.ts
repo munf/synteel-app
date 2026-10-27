@@ -1,0 +1,58 @@
+// Fills the database with a realistic demo farm: two weeks of logs on three ponds.
+// Usage: node scripts/seed-demo.ts --reset   (deletes the existing database first;
+// stop the server before resetting, or it keeps writing to the deleted file)
+import { existsSync, rmSync } from 'node:fs';
+import { DAY_MS, localDate, type LogData } from '../server/src/domain.ts';
+import { openDb, repo } from '../server/src/db.ts';
+
+const dbPath = process.env.SYNTEEL_DB ?? new URL('../data/synteel.sqlite', import.meta.url).pathname;
+if (process.argv.includes('--reset')) {
+  for (const suffix of ['', '-wal', '-shm']) if (existsSync(dbPath + suffix)) rmSync(dbPath + suffix);
+} else if (existsSync(dbPath)) {
+  console.error(`Database already exists at ${dbPath}. Run with --reset to replace it.`);
+  process.exit(1);
+}
+
+const r = repo(openDb(dbPath));
+const tz = 'Asia/Jakarta';
+const now = new Date();
+const daysAgo = (d: number) => localDate(new Date(now.getTime() - d * DAY_MS), tz);
+// Deterministic pseudo-random so every reset gives the same demo.
+let seed = 42;
+const rand = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+const around = (base: number, spread: number, digits = 1) => Number((base + (rand() - 0.5) * 2 * spread).toFixed(digits));
+
+r.saveFarm({ name: 'Tambak Sidat Mitra', locationName: 'Sleman, Yogyakarta', lat: -7.72, lon: 110.36, timezone: tz });
+
+const ponds = [
+  { pond: r.addPond({ name: 'Kolam A', kind: 'fiber', volumeL: 870 }), phase: 'glass_eel' as const, stocked: 23, count: 500 },
+  { pond: r.addPond({ name: 'Kolam B', kind: 'fiber', volumeL: 870 }), phase: 'glass_eel' as const, stocked: 23, count: 500 },
+  { pond: r.addPond({ name: 'Kolam C', kind: 'beton', volumeL: 4000 }), phase: 'elver' as const, stocked: 60, count: 2000 },
+];
+
+for (const { pond, phase, stocked, count } of ponds) {
+  const batch = r.startBatch({ pondId: pond.id, phase, stockedAt: daysAgo(stocked), initialCount: count }, daysAgo(stocked));
+  for (let d = 14; d >= 0; d--) {
+    for (const hour of [7, 17]) {
+      const at = new Date(now.getTime() - d * DAY_MS);
+      at.setUTCHours(hour - 7, 15, 0, 0); // farm-local hour in WIB
+      // Today's evening log may still be in the future: record it as "just now" instead.
+      if (at > now) at.setTime(now.getTime() - 20 * 60 * 1000);
+      const data: LogData = {
+        readings: { temperature: around(27.6, 0.4), ph: around(7.4, 0.15, 2), tds: Math.round(around(phase === 'elver' ? 420 : 310, 12, 0)) },
+        feeding: { leftover: rand() < 0.8 ? 'none' : 'little' },
+        behavior: ['normal'],
+      };
+      if (rand() < 0.25) data.mortality = 1 + Math.floor(rand() * 3);
+      // Kolam B drifts into trouble over the last two days: warmer water, uneaten feed, eels surfacing.
+      if (pond.name === 'Kolam B' && d <= 1) {
+        data.readings!.temperature = around(29.4 + (1 - d) * 0.6, 0.2);
+        data.feeding = { leftover: 'much' };
+        if (d === 0 && hour === 17) data.behavior = ['surfacing'];
+      }
+      r.addLog({ pondId: pond.id, batchId: batch.id, loggedAt: at.toISOString(), source: 'manual', data });
+    }
+  }
+}
+
+console.log(`Seeded ${ponds.length} ponds with two weeks of logs into ${dbPath}`);

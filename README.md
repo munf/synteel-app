@@ -51,10 +51,14 @@ Requirements: Node.js 24+.
 npm install
 # API key: put MODEL_API_KEY=... in ~/.synteel.env (outside the repo), see .env.example
 npm run check:meta     # verify which Meta models your key can reach
+npm run seed:demo      # optional: demo farm with two weeks of logs (stop the server first)
 npm run dev:server     # http://localhost:8787
 npm run dev:web        # http://localhost:5173 (proxies /api to the server)
 ```
 
 ## Status
 
-Day 1: repository scaffold and knowledge base. See the roadmap in [`docs/roadmap.md`](docs/roadmap.md).
+- Day 1: repository scaffold and knowledge base.
+- Day 2: farm, pond and batch setup (each batch knows its nursery week and stage), manual logging (temperature, pH, TDS, deaths, behaviour, feed leftovers, water colour and smell), and the deterministic rules engine with tests (`npm test`).
+
+See the roadmap in [`docs/roadmap.md`](docs/roadmap.md).

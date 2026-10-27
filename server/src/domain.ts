@@ -1,0 +1,68 @@
+export type Phase = 'glass_eel' | 'elver';
+export type Level = 'ok' | 'info' | 'warning' | 'critical';
+export type Behavior = 'normal' | 'surfacing' | 'gathering_inlet' | 'not_eating' | 'lethargic';
+
+export interface Farm {
+  name: string;
+  locationName: string | null;
+  lat: number | null;
+  lon: number | null;
+  timezone: string;
+}
+
+export interface Pond {
+  id: number;
+  name: string;
+  kind: string | null;
+  volumeL: number | null;
+}
+
+export interface Batch {
+  id: number;
+  pondId: number;
+  phase: Phase;
+  stockedAt: string; // YYYY-MM-DD, farm-local
+  initialCount: number | null;
+}
+
+// One farmer log. Every field is optional so the same shape fits a quick manual
+// reading, a voice note or a photo after the AI has structured it.
+export interface LogData {
+  readings?: Partial<Record<'temperature' | 'ph' | 'tds' | 'do' | 'tan' | 'no2', number>>;
+  feeding?: { leftover?: 'none' | 'little' | 'much' };
+  mortality?: number;
+  behavior?: Behavior[];
+  water?: { color?: 'clear' | 'green' | 'brown' | 'cloudy'; smell?: 'normal' | 'foul' };
+  waterChangePct?: number;
+  note?: string;
+}
+
+export interface Log {
+  id: number;
+  pondId: number;
+  batchId: number | null;
+  loggedAt: string; // ISO timestamp
+  source: 'manual' | 'voice' | 'photo';
+  data: LogData;
+}
+
+export interface Finding {
+  id: string;
+  level: Exclude<Level, 'ok'>;
+  title: string;
+  detail: string;
+  actions: string[];
+  source: string;
+}
+
+export const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Calendar date (YYYY-MM-DD) of an instant in the farm's timezone.
+export function localDate(at: Date, timezone: string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(at);
+}
+
+export function batchWeek(batch: Batch, now: Date, timezone: string): number {
+  const days = (Date.parse(localDate(now, timezone)) - Date.parse(batch.stockedAt)) / DAY_MS;
+  return Math.max(0, Math.floor(days / 7));
+}
