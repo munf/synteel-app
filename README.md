@@ -2,6 +2,8 @@
 
 > Built for the **Meta Global AI Developer Hackathon** (Oct 26 – Nov 4, 2026) · Track: **Indie** · Theme: **Build for Your World**
 
+🌐 Synt Eel website: **[eel.synt.fun](https://eel.synt.fun)**
+
 Eel farmers in Indonesia lose whole batches of glass eels and elvers overnight. The fish are fragile, the water can turn in a few hours, and most farmers keep track of their ponds from memory. By the time anyone notices, it is too late to act.
 
 Synt Eel is a mobile app that closes that gap:
@@ -22,7 +24,7 @@ Judges need to see what is new, so here it is plainly.
 | All code in this repository (app, server, agents, rules engine) | Synt Eel Nursery Blueprint v5: an internal design document. Its water-quality thresholds, the 0–12 week glass eel program and maintenance SOPs were transcribed into [`knowledge/`](knowledge/) as data |
 | The knowledge base format and how the agents use it |
 | Elver-phase practice from an interview with our partner eel farmer in Sleman ([`knowledge/partner-practice.json`](knowledge/partner-practice.json)) | 3D render of the Synt Nursery v5 system, shown only as a labelled "product vision" at the end of the demo video |
-| 3D render of the sensor kit (made during the event) | Landing page eel.synt.fun (not part of this submission) |
+| 3D render of the sensor kit (made during the event) | Landing page [eel.synt.fun](https://eel.synt.fun) (not part of this submission) |
 
 Commit history in this repo starts on Oct 26, 2026.
 
