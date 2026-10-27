@@ -1,8 +1,11 @@
 import type { Aeration, Batch, Behavior, Farm, Finding, Level, Log, LogData, Phase, Pond, Setting } from '../../server/src/domain.ts';
 import type { Nowcast, NowcastPoint, RiskFactor, RiskLevel, SuggestedCheck } from '../../server/src/nowcast.ts';
+import type { Draft, DraftField } from '../../server/src/ai.ts';
+import type { LogSource } from '../../server/src/domain.ts';
 
 export type { Aeration, Batch, Behavior, Farm, Finding, Level, Log, LogData, Phase, Pond, Setting };
 export type { Nowcast, NowcastPoint, RiskFactor, RiskLevel, SuggestedCheck };
+export type { Draft, DraftField, LogSource };
 
 export type ReadingKey = keyof NonNullable<LogData['readings']>;
 
@@ -65,5 +68,7 @@ export const api = {
   pond: (id: number) => call<{ pond: PondSummary; logs: Log[] }>('GET', `/ponds/${id}`),
   startBatch: (pondId: number, batch: { phase: Phase; stockedAt: string; initialCount?: number }) =>
     call<{ pond: PondSummary }>('POST', `/ponds/${pondId}/batches`, batch),
-  addLog: (pondId: number, data: LogData) => call<{ log: Log; pond: PondSummary }>('POST', `/ponds/${pondId}/logs`, data),
+  addLog: (pondId: number, data: LogData, source: LogSource = 'manual') =>
+    call<{ log: Log; pond: PondSummary }>('POST', `/ponds/${pondId}/logs`, { ...data, source }),
+  aiMode: () => call<{ mode: 'meta' | 'mock' | 'off' }>('GET', '/ai'),
 };

@@ -102,3 +102,41 @@ test('a quick check with the aerator off is critical, and the nowcast works with
   assert.equal(nc.ponds[0].now.level, 'critical');
   assert.equal(nc.ponds[0].now.factors[0].id, 'aeration_off');
 });
+
+test('capture returns a draft without saving a log; logs keep their source', async () => {
+  const { createAi } = await import('../src/ai.ts');
+  const api = createApi(repo(openDb(':memory:')), { clock: () => new Date('2026-10-28T03:00:00Z'), ai: createAi({ apiKey: '', base: '', mock: true }) });
+  await api.request('/farm', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Tambak' }) });
+  const pond = (await (await api.request('/ponds', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Kolam C' }) })).json()).pond;
+
+  const form = new FormData();
+  form.append('kind', 'voice');
+  form.append('audio', new Blob(['fake'], { type: 'audio/webm' }), 'a.webm');
+  const res = await api.request(`/ponds/${pond.id}/capture`, { method: 'POST', body: form });
+  assert.equal(res.status, 200);
+  const { draft } = await res.json();
+  assert.equal(draft.data.readings.temperature, 28.6);
+  assert.match(draft.transcript, /Kolam C/);
+  const detail = await (await api.request(`/ponds/${pond.id}`)).json();
+  assert.equal(detail.logs.length, 0);
+
+  const noPhoto = new FormData();
+  noPhoto.append('kind', 'photo');
+  assert.equal((await api.request(`/ponds/${pond.id}/capture`, { method: 'POST', body: noPhoto })).status, 400);
+
+  const saved = await api.request(`/ponds/${pond.id}/logs`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ ...draft.data, source: 'voice' }),
+  });
+  assert.equal((await saved.json()).log.source, 'voice');
+});
+
+test('capture without AI answers 503 with a friendly message', async () => {
+  const call = setup();
+  await call('PUT', '/farm', { name: 'Tambak' });
+  const pond = (await call('POST', '/ponds', { name: 'Kolam C' })).json.pond;
+  const res = await call('POST', `/ponds/${pond.id}/capture`, {});
+  assert.equal(res.status, 503);
+  assert.match(res.json.error, /AI belum aktif/);
+});

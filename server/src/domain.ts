@@ -48,12 +48,21 @@ export interface LogData {
   note?: string;
 }
 
+export type LogSource = 'manual' | 'voice' | 'photo' | 'video';
+export const LOG_SOURCES: LogSource[] = ['manual', 'voice', 'photo', 'video'];
+
+export type ReadingKey = keyof NonNullable<LogData['readings']>;
+/** Plausible ranges: anything outside is a typo or a misread display, never a real reading. */
+export const READING_LIMITS: Record<ReadingKey, [number, number]> = {
+  temperature: [0, 45], ph: [0, 14], tds: [0, 50000], do: [0, 30], tan: [0, 50], no2: [0, 50],
+};
+
 export interface Log {
   id: number;
   pondId: number;
   batchId: number | null;
   loggedAt: string; // ISO timestamp
-  source: 'manual' | 'voice' | 'photo';
+  source: LogSource;
   data: LogData;
 }
 

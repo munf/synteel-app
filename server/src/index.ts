@@ -1,6 +1,8 @@
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
+import { createAi } from './ai.ts';
 import { createApi } from './api.ts';
+import { captureStore } from './captures.ts';
 import { openDb, repo } from './db.ts';
 import { env } from './env.ts';
 import { knowledge } from './knowledge.ts';
@@ -13,7 +15,9 @@ app.get('/health', (c) => c.json({ ok: true, modelApiKeyConfigured: env.modelApi
 
 app.get('/knowledge', (c) => c.json(knowledge));
 
-app.route('/', createApi(repo(openDb())));
+const ai = createAi({ apiKey: env.modelApiKey, base: env.modelApiBase, mock: env.aiMock });
+console.log(`AI mode: ${ai.mode}`);
+app.route('/', createApi(repo(openDb()), { ai, saveCapture: captureStore() }));
 
 // Routes must all be registered before the first request, which the monitor makes.
 app.get('/monitor', (c) => c.json({ intervalMs: MONITOR_INTERVAL_MS, ...monitor.status }));

@@ -21,6 +21,7 @@ The Meta API credits were not active yet, and the partner farm said that losses 
 | Day | New focus |
 |---|---|
 | 3 | Pond nowcast + check schedule (done) |
+| 3b | Capture flow without the API: voice, meter photo, daily video (frames + audio), glare check, draft review, offline queue (done) |
 | 4 | Muse Spark agent on top of the nowcast (evening briefing, "measure now" when uncertain, plan for the night); voice and photo logging |
 | 5 | Problem flow with SAM 3.1 video; photo guidance (glare, angle, polarizing clip), on-device blur/glare check, white-basin protocol for dead eels |
 

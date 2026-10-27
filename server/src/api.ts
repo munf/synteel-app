@@ -1,7 +1,9 @@
 import { Hono } from 'hono';
-import { batchWeek, DAY_MS, localDate, type Aeration, type Behavior, type LogData, type Pond, type Setting } from './domain.ts';
+import { batchWeek, DAY_MS, LOG_SOURCES, localDate, READING_LIMITS, type Aeration, type Behavior, type LogData, type Pond, type Setting } from './domain.ts';
 import type { Repo } from './db.ts';
 import { knowledge } from './knowledge.ts';
+import { AiFailed, AiUnavailable, type Ai, type CaptureKind } from './ai.ts';
+import type { SaveCapture } from './captures.ts';
 import { computeNowcast } from './nowcast.ts';
 import { assessPond, overallLevel, type Threshold } from './rules.ts';
 import { geocode as defaultGeocode, getWeather as defaultGetWeather } from './weather.ts';
@@ -38,11 +40,8 @@ function oneOf<T extends string>(v: unknown, allowed: readonly T[], field: strin
 function parseLogData(body: Record<string, any>): LogData {
   const data: LogData = {};
   const readings: LogData['readings'] = {};
-  const limits: Record<(typeof READINGS)[number], [number, number]> = {
-    temperature: [0, 45], ph: [0, 14], tds: [0, 50000], do: [0, 30], tan: [0, 50], no2: [0, 50],
-  };
   for (const key of READINGS) {
-    const v = num(body.readings?.[key], key, { min: limits[key][0], max: limits[key][1] });
+    const v = num(body.readings?.[key], key, { min: READING_LIMITS[key][0], max: READING_LIMITS[key][1] });
     if (v !== undefined) readings[key] = v;
   }
   if (Object.keys(readings).length) data.readings = readings;
@@ -89,13 +88,27 @@ export interface ApiDeps {
   clock?: () => Date;
   getWeather?: typeof defaultGetWeather;
   geocode?: typeof defaultGeocode;
+  ai?: Ai;
+  saveCapture?: SaveCapture;
 }
 
-export function createApi(repo: Repo, { clock = () => new Date(), getWeather = defaultGetWeather, geocode = defaultGeocode }: ApiDeps = {}) {
+const MAX_IMAGES = 24;
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+const MAX_AUDIO_BYTES = 15 * 1024 * 1024;
+
+export function createApi(
+  repo: Repo,
+  { clock = () => new Date(), getWeather = defaultGetWeather, geocode = defaultGeocode, ai, saveCapture }: ApiDeps = {},
+) {
   const api = new Hono();
 
   api.onError((err, c) => {
     if (err instanceof BadRequest) return c.json({ error: err.message }, 400);
+    if (err instanceof AiUnavailable) return c.json({ error: err.message }, 503);
+    if (err instanceof AiFailed) {
+      console.error(err.message);
+      return c.json({ error: 'AI gagal membaca. Coba lagi, atau isi manual.' }, 502);
+    }
     console.error(err);
     return c.json({ error: 'Terjadi kesalahan di server' }, 500);
   });
@@ -258,6 +271,36 @@ export function createApi(repo: Repo, { clock = () => new Date(), getWeather = d
     return c.json({ pond: pondSummary(pond) }, 201);
   });
 
+  api.get('/ai', (c) => c.json({ mode: ai?.mode ?? 'off' }));
+
+  // Photo, voice note or daily video → a draft log. Nothing is saved to the pond here:
+  // the farmer reviews the draft in the Record form and saves it as a normal log.
+  api.post('/ponds/:id/capture', async (c) => {
+    const pond = repo.getPond(Number(c.req.param('id')));
+    if (!pond) return c.json({ error: 'Kolam tidak ditemukan' }, 404);
+    if (!ai || ai.mode === 'off') throw new AiUnavailable('AI belum aktif. Isi manual dulu, atau coba lagi nanti.');
+    const form = await c.req.parseBody({ all: true });
+    const kind = oneOf<CaptureKind>(form.kind, ['photo', 'voice', 'video'], 'jenis rekaman');
+    if (!kind) throw new BadRequest('jenis rekaman wajib diisi');
+    const field = oneOf(form.field, ['temperature', 'ph', 'tds'] as const, 'kolom');
+    const images = ([] as unknown[]).concat(form.image ?? []).filter((f): f is File => f instanceof File);
+    const audio = form.audio instanceof File ? form.audio : undefined;
+    if (images.length > MAX_IMAGES || images.some((f) => f.size > MAX_IMAGE_BYTES)) throw new BadRequest('Gambar terlalu banyak atau terlalu besar');
+    if (audio && audio.size > MAX_AUDIO_BYTES) throw new BadRequest('Rekaman suara terlalu panjang');
+    if (kind === 'photo' && !images.length) throw new BadRequest('Foto belum ada');
+    if (kind === 'voice' && !audio) throw new BadRequest('Rekaman suara belum ada');
+    if (kind === 'video' && !images.length && !audio) throw new BadRequest('Video belum ada');
+
+    const batch = repo.activeBatch(pond.id);
+    const started = Date.now();
+    const draft = await ai.draft({ kind, field, images, audio, pondName: pond.name, phase: batch?.phase });
+    await saveCapture?.(
+      { pondId: pond.id, kind, field, at: clock().toISOString(), ms: Date.now() - started, draft },
+      [...images.map((blob, i) => ({ name: `image-${i}.jpg`, blob })), ...(audio ? [{ name: `audio.${audio.type.includes('wav') ? 'wav' : 'webm'}`, blob: audio }] : [])],
+    ).catch((err) => console.error('capture not stored:', err));
+    return c.json({ draft });
+  });
+
   api.post('/ponds/:id/logs', async (c) => {
     const pond = repo.getPond(Number(c.req.param('id')));
     if (!pond) return c.json({ error: 'Kolam tidak ditemukan' }, 404);
@@ -268,7 +311,7 @@ export function createApi(repo: Repo, { clock = () => new Date(), getWeather = d
       pondId: pond.id,
       batchId: repo.activeBatch(pond.id)?.id ?? null,
       loggedAt: loggedAt.toISOString(),
-      source: 'manual',
+      source: oneOf(body.source, LOG_SOURCES, 'sumber') ?? 'manual',
       data: parseLogData(body),
     });
     return c.json({ log, pond: pondSummary(pond) }, 201);

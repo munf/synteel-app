@@ -274,3 +274,33 @@ button, input, textarea { font: inherit; color: inherit; }
 .table { width: 100%; border-collapse: collapse; margin-top: 6px; font-variant-numeric: tabular-nums; }
 .table th, .table td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); }
 details summary { cursor: pointer; color: var(--accent); font-weight: 600; min-height: 32px; }
+
+/* Capture: big targets for wet hands. */
+.capture-bar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.capture {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  min-height: 76px; padding: 8px 4px;
+  border: 1px solid var(--accent); border-radius: var(--radius);
+  background: var(--surface); color: var(--accent);
+  font-weight: 700; font-size: 0.85rem; line-height: 1.2; text-align: center; cursor: pointer;
+}
+.capture:disabled { opacity: 0.5; }
+.capture.rec { background: var(--critical); border-color: var(--critical); color: #fff; }
+.icon-btn {
+  flex: none; width: 52px; height: 48px; align-self: flex-end;
+  display: grid; place-items: center;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface); color: var(--accent); cursor: pointer;
+}
+.icon-btn:disabled { opacity: 0.5; }
+.reading-row { display: flex; gap: 8px; align-items: flex-end; }
+.reading-row > .field { flex: 1; }
+.working { font-weight: 700; color: var(--accent); }
+.ai-banner { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--info-bg); color: var(--info); font-size: 0.88rem; font-weight: 600; }
+.ai-tag { margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--info-bg); color: var(--info); font-size: 0.72rem; font-weight: 700; white-space: nowrap; }
+.ai-tag.doubt { background: var(--warning-bg); color: var(--warning); }
+.field input.ai { border-color: var(--info); background: var(--info-bg); }
+.field input.ai.doubt { border-color: var(--warning); background: var(--warning-bg); }
+.ai-result { gap: 6px; }
+.photo-check { border-color: var(--warning); background: var(--warning-bg); }
+.job { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 0.92rem; }

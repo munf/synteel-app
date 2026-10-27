@@ -55,7 +55,7 @@ npm install
 # API key: put MODEL_API_KEY=... in ~/.synteel.env (outside the repo), see .env.example
 npm run check:meta     # verify which Meta models your key can reach
 npm run seed:demo      # optional: demo farm with two weeks of logs (stop the server first)
-npm run dev:server     # http://localhost:8787
+npm run dev:server     # http://localhost:8787  (SYNTEEL_AI_MOCK=1 for example AI drafts)
 npm run dev:web        # http://localhost:5173 (proxies /api to the server)
 ```
 
@@ -70,5 +70,13 @@ npm run dev:web        # http://localhost:5173 (proxies /api to the server)
   - Suggested checks, including night alarms.
   - A server-side monitor that re-runs every 30 minutes and records when a pond's risk rises.
   - A 36-hour chart on the Watch screen, and a one-tap "quick check". The farm location comes from GPS or a place name.
+- Hands-free capture (wet hands at the pond):
+  - **Voice note**: one big button.
+  - **Meter photos**: a camera button next to every reading.
+  - **Daily video**: the phone extracts 12 frames and a 16 kHz soundtrack instead of uploading the whole video, to save data and API cost.
+  - On-phone blur and glare check before a photo is sent.
+  - The AI fills a draft that the farmer checks; each field shows "from photo / from voice", or "unsure, check again".
+  - Captures wait in an offline queue on the phone until there is signal.
+  - Before Meta API access works, `SYNTEEL_AI_MOCK=1` runs the flow with clearly labelled example drafts.
 
 See the roadmap in [`docs/roadmap.md`](docs/roadmap.md).

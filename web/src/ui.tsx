@@ -47,7 +47,7 @@ export function Chips<T extends string>(props: {
   );
 }
 
-export function Field({ label, hint, children }: { label: string; hint?: string; children: ComponentChildren }) {
+export function Field({ label, hint, children }: { label: ComponentChildren; hint?: string; children: ComponentChildren }) {
   return (
     <label class="field">
       <span class="field-label">{label}</span>
@@ -56,6 +56,15 @@ export function Field({ label, hint, children }: { label: string; hint?: string;
     </label>
   );
 }
+
+const icon = (d: string) => () => (
+  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d={d} />
+  </svg>
+);
+export const IconCamera = icon('M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z');
+export const IconMic = icon('M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3');
+export const IconVideo = icon('M3 7a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM16 10l5-3v10l-5-3');
 
 export function Empty({ children }: { children: ComponentChildren }) {
   return <p class="empty">{children}</p>;
