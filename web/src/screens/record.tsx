@@ -1,11 +1,12 @@
 import { useState } from 'preact/hooks';
 import { api, type Behavior, type LogData, type PondSummary } from '../api.ts';
-import { behaviorLabel, colorLabel, leftoverLabel, smellLabel } from '../labels.ts';
+import { aerationCheckLabel, behaviorLabel, colorLabel, leftoverLabel, smellLabel } from '../labels.ts';
 import { Chips, Field, FindingCard, LevelBadge } from '../ui.tsx';
 
 type Leftover = keyof typeof leftoverLabel;
 type Color = keyof typeof colorLabel;
 type Smell = keyof typeof smellLabel;
+type AerationCheck = keyof typeof aerationCheckLabel;
 
 // Accept both "27,5" and "27.5": farmers' phones often default to a comma keypad.
 const parseNum = (s: string) => (s.trim() === '' ? undefined : Number(s.replace(',', '.')));
@@ -20,6 +21,7 @@ export function Record({ ponds, initialPondId, onSaved }: { ponds: PondSummary[]
   const [behavior, setBehavior] = useState<Behavior[]>([]);
   const [color, setColor] = useState<Color[]>([]);
   const [smell, setSmell] = useState<Smell[]>([]);
+  const [aeration, setAeration] = useState<AerationCheck[]>([]);
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -34,6 +36,7 @@ export function Record({ ponds, initialPondId, onSaved }: { ponds: PondSummary[]
     setBehavior([]);
     setColor([]);
     setSmell([]);
+    setAeration([]);
     setNote('');
   };
 
@@ -51,6 +54,7 @@ export function Record({ ponds, initialPondId, onSaved }: { ponds: PondSummary[]
       feeding: leftover[0] ? { leftover: leftover[0] } : undefined,
       behavior: behavior.length ? behavior : undefined,
       water: color[0] || smell[0] ? { color: color[0], smell: smell[0] } : undefined,
+      aeration: aeration[0],
       note: note || undefined,
     };
     setBusy(true);
@@ -110,7 +114,7 @@ export function Record({ ponds, initialPondId, onSaved }: { ponds: PondSummary[]
           <input inputMode="decimal" value={ph} onInput={(e) => setPh(e.currentTarget.value)} placeholder="7,4" />
         </Field>
         <Field label="TDS ppm">
-          <input inputMode="numeric" value={tds} onInput={(e) => setTds(e.currentTarget.value)} placeholder="300" />
+          <input inputMode="numeric" value={tds} onInput={(e) => setTds(e.currentTarget.value)} placeholder="150" />
         </Field>
       </div>
 
@@ -128,6 +132,9 @@ export function Record({ ponds, initialPondId, onSaved }: { ponds: PondSummary[]
 
       <Field label="Perilaku sidat">
         <Chips options={behaviorLabel} value={behavior} onChange={setBehavior} multiple />
+      </Field>
+      <Field label="Aerator">
+        <Chips options={aerationCheckLabel} value={aeration} onChange={setAeration} />
       </Field>
       <Field label="Sisa pakan">
         <Chips options={leftoverLabel} value={leftover} onChange={setLeftover} />

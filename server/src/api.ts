@@ -1,8 +1,10 @@
 import { Hono } from 'hono';
-import { batchWeek, DAY_MS, localDate, type Behavior, type LogData, type Pond } from './domain.ts';
+import { batchWeek, DAY_MS, localDate, type Aeration, type Behavior, type LogData, type Pond, type Setting } from './domain.ts';
 import type { Repo } from './db.ts';
 import { knowledge } from './knowledge.ts';
+import { computeNowcast } from './nowcast.ts';
 import { assessPond, overallLevel, type Threshold } from './rules.ts';
+import { geocode as defaultGeocode, getWeather as defaultGetWeather } from './weather.ts';
 
 const thresholds = knowledge.thresholds.parameters as Threshold[];
 const stages = knowledge.nurseryProgram.stages as { weeks: [number, number]; name: string; feed: string; mesh_mm: string; water: string }[];
@@ -60,6 +62,9 @@ function parseLogData(body: Record<string, any>): LogData {
   const smell = oneOf(body.water?.smell, ['normal', 'foul'] as const, 'bau air');
   if (color || smell) data.water = { ...(color && { color }), ...(smell && { smell }) };
 
+  const aeration = oneOf(body.aeration, ['on', 'weak', 'off'] as const, 'aerasi');
+  if (aeration) data.aeration = aeration;
+
   const waterChangePct = num(body.waterChangePct, 'ganti air', { min: 0, max: 100 });
   if (waterChangePct) data.waterChangePct = waterChangePct;
 
@@ -70,7 +75,23 @@ function parseLogData(body: Record<string, any>): LogData {
   return data;
 }
 
-export function createApi(repo: Repo, clock: () => Date = () => new Date()) {
+function pondProfile(body: Record<string, any>) {
+  return {
+    areaM2: num(body.areaM2, 'luas kolam', { min: 0.01 }) ?? null,
+    setting: oneOf<Setting>(body.setting, ['outdoor', 'indoor'], 'tempat kolam') ?? null,
+    shaded: typeof body.shaded === 'boolean' ? body.shaded : null,
+    aeration: oneOf<Aeration>(body.aeration, ['full', 'partial', 'none'], 'aerasi') ?? null,
+    depthCm: num(body.depthCm, 'kedalaman air', { min: 1, max: 500 }) ?? null,
+  };
+}
+
+export interface ApiDeps {
+  clock?: () => Date;
+  getWeather?: typeof defaultGetWeather;
+  geocode?: typeof defaultGeocode;
+}
+
+export function createApi(repo: Repo, { clock = () => new Date(), getWeather = defaultGetWeather, geocode = defaultGeocode }: ApiDeps = {}) {
   const api = new Hono();
 
   api.onError((err, c) => {
@@ -81,8 +102,7 @@ export function createApi(repo: Repo, clock: () => Date = () => new Date()) {
 
   const timezone = () => repo.getFarm()?.timezone ?? 'Asia/Jakarta';
 
-  function pondSummary(pond: Pond) {
-    const now = clock();
+  function pondState(pond: Pond, now: Date) {
     const tz = timezone();
     const batch = repo.activeBatch(pond.id);
     const logs = repo.logsSince(pond.id, new Date(now.getTime() - 7 * DAY_MS).toISOString());
@@ -102,6 +122,12 @@ export function createApi(repo: Repo, clock: () => Date = () => new Date()) {
         density: estimatedAlive !== null && pond.areaM2 ? estimatedAlive / pond.areaM2 : null,
       };
     }
+    return { batch, logs, program };
+  }
+
+  function pondSummary(pond: Pond) {
+    const now = clock();
+    const { batch, logs, program } = pondState(pond, now);
     const findings = assessPond(logs, thresholds, now, { phase: batch?.phase, density: program?.density ?? undefined });
 
     const latest: Partial<Record<(typeof READINGS)[number], { value: number; at: string }>> = {};
@@ -112,7 +138,39 @@ export function createApi(repo: Repo, clock: () => Date = () => new Date()) {
       }
     }
 
-    return { ...pond, batch, program, latest, findings, level: overallLevel(findings) };
+    const lastLogAt = logs[0]?.loggedAt ?? null;
+    return { ...pond, batch, program, latest, lastLogAt, findings, level: overallLevel(findings) };
+  }
+
+  /** Estimated conditions for every pond. Weather failures degrade the estimate, never the response. */
+  async function nowcastAll() {
+    const now = clock();
+    const farm = repo.getFarm();
+    let weather: Awaited<ReturnType<typeof getWeather>>['hours'] = [];
+    let weatherError: string | null = null;
+    if (farm?.lat != null && farm.lon != null) {
+      try {
+        weather = (await getWeather(farm.lat, farm.lon, now.getTime())).hours;
+      } catch (err) {
+        weatherError = (err as Error).message;
+      }
+    } else {
+      weatherError = 'Lokasi tambak belum diatur';
+    }
+    const ponds = repo.listPonds().map((pond) => {
+      const { batch, logs, program } = pondState(pond, now);
+      return computeNowcast({
+        pond,
+        phase: batch?.phase,
+        density: program?.density ?? undefined,
+        logs,
+        weather,
+        thresholds,
+        now: now.getTime(),
+        timezone: timezone(),
+      });
+    });
+    return { generatedAt: now.getTime(), weather: { available: weather.length > 0, error: weatherError }, ponds };
   }
 
   api.get('/farm', (c) => {
@@ -122,11 +180,19 @@ export function createApi(repo: Repo, clock: () => Date = () => new Date()) {
 
   api.put('/farm', async (c) => {
     const body = await c.req.json();
+    const locationName = text(body.locationName, 'lokasi');
+    let lat = num(body.lat, 'lintang', { min: -90, max: 90 }) ?? null;
+    let lon = num(body.lon, 'bujur', { min: -180, max: 180 }) ?? null;
+    // No GPS: look the place name up so the weather still works.
+    if ((lat === null || lon === null) && locationName) {
+      const place = await geocode(locationName).catch(() => null);
+      if (place) ({ lat, lon } = place);
+    }
     repo.saveFarm({
       name: text(body.name, 'nama tambak', true)!,
-      locationName: text(body.locationName, 'lokasi'),
-      lat: num(body.lat, 'lintang', { min: -90, max: 90 }) ?? null,
-      lon: num(body.lon, 'bujur', { min: -180, max: 180 }) ?? null,
+      locationName,
+      lat,
+      lon,
       timezone: text(body.timezone, 'zona waktu') ?? 'Asia/Jakarta',
     });
     return c.json({ farm: repo.getFarm() });
@@ -138,10 +204,29 @@ export function createApi(repo: Repo, clock: () => Date = () => new Date()) {
       name: text(body.name, 'nama kolam', true)!,
       kind: text(body.kind, 'jenis kolam'),
       volumeL: num(body.volumeL, 'volume', { min: 0 }) ?? null,
-      areaM2: num(body.areaM2, 'luas kolam', { min: 0.01 }) ?? null,
+      ...pondProfile(body),
     });
     return c.json({ pond: pondSummary(pond) }, 201);
   });
+
+  api.put('/ponds/:id', async (c) => {
+    const pond = repo.getPond(Number(c.req.param('id')));
+    if (!pond) return c.json({ error: 'Kolam tidak ditemukan' }, 404);
+    const body = await c.req.json();
+    // Only fields present in the body change.
+    const profile = pondProfile(body);
+    const kept = Object.fromEntries(Object.entries(profile).map(([k, v]) => [k, k in body ? v : pond[k as keyof typeof profile]]));
+    repo.updatePond({
+      ...pond,
+      ...(kept as typeof profile),
+      name: text(body.name, 'nama kolam') ?? pond.name,
+      kind: 'kind' in body ? text(body.kind, 'jenis kolam') : pond.kind,
+      volumeL: 'volumeL' in body ? (num(body.volumeL, 'volume', { min: 0 }) ?? null) : pond.volumeL,
+    });
+    return c.json({ pond: pondSummary(repo.getPond(pond.id)!) });
+  });
+
+  api.get('/nowcast', async (c) => c.json(await nowcastAll()));
 
   api.delete('/ponds/:id', (c) => {
     repo.archivePond(Number(c.req.param('id')));

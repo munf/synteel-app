@@ -10,12 +10,20 @@ export interface Farm {
   timezone: string;
 }
 
+export type Setting = 'outdoor' | 'indoor';
+export type Aeration = 'full' | 'partial' | 'none';
+
 export interface Pond {
   id: number;
   name: string;
   kind: string | null;
   volumeL: number | null;
   areaM2: number | null; // pond floor area, for stocking density
+  // Profile used by the water temperature model and the oxygen risk estimate.
+  setting: Setting | null;
+  shaded: boolean | null; // paranet or roof over an outdoor pond
+  aeration: Aeration | null; // 'full' = 24 hours a day
+  depthCm: number | null;
 }
 
 export interface Batch {
@@ -35,6 +43,8 @@ export interface LogData {
   behavior?: Behavior[];
   water?: { color?: 'clear' | 'green' | 'brown' | 'cloudy'; smell?: 'normal' | 'foul' };
   waterChangePct?: number;
+  /** What the farmer saw at the aerator / air stones during this check. */
+  aeration?: 'on' | 'weak' | 'off';
   note?: string;
 }
 

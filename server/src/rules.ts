@@ -48,7 +48,12 @@ function latestReading(logs: Log[], key: ReadingKey, since: number) {
   return null;
 }
 
-function median(values: number[]): number {
+/** Limits for a parameter, preferring phase-specific ones. */
+export function limitsFor(t: Threshold, phase?: Phase): Limits {
+  return (phase && t.by_phase?.[phase]) || t;
+}
+
+export function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
@@ -67,7 +72,7 @@ export function assessPond(logs: Log[], thresholds: Threshold[], now: Date, ctx:
   //    Phase-specific limits win over the defaults.
   for (const t of thresholds) {
     if (t.scope !== 'general') continue;
-    const limits: Limits = (ctx.phase && t.by_phase?.[ctx.phase]) || t;
+    const limits = limitsFor(t, ctx.phase);
     if (!limits.warning && !limits.critical) continue;
     const reading = latestReading(logs, t.id as ReadingKey, last24h);
     if (!reading) continue;
@@ -99,6 +104,19 @@ export function assessPond(logs: Log[], thresholds: Threshold[], now: Date, ctx:
         `Sidat terlihat ${signs}.` +
         (temp && temp.value > 28 ? ` Suhu ${fmt(temp.value)} °C ikut menurunkan oksigen terlarut.` : ''),
       actions: ['Cek aerator, diffuser dan selang udara', 'Tambah aerasi atau oksigen darurat', 'Tunda pemberian pakan'],
+      source: LOW_DO_SOURCE,
+    });
+  }
+  // The farmer looked at the aerator. With 24-hour aeration, a failed aerator is the
+  // fastest way to lose a batch.
+  const aeration = recent.find((l) => l.data.aeration)?.data.aeration;
+  if (aeration === 'off' || aeration === 'weak') {
+    findings.push({
+      id: 'aeration',
+      level: aeration === 'off' ? 'critical' : 'warning',
+      title: aeration === 'off' ? 'Aerator mati' : 'Aerasi lemah',
+      detail: aeration === 'off' ? 'Tanpa aerasi, oksigen di kolam padat bisa habis dalam hitungan jam.' : 'Gelembung sedikit: cek selang, batu aerasi dan blower.',
+      actions: ['Nyalakan aerator cadangan atau oksigen darurat', 'Cek listrik, blower dan selang udara', 'Tunda pemberian pakan'],
       source: LOW_DO_SOURCE,
     });
   }

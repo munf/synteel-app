@@ -1,6 +1,8 @@
-import type { Batch, Behavior, Farm, Finding, Level, Log, LogData, Phase, Pond } from '../../server/src/domain.ts';
+import type { Aeration, Batch, Behavior, Farm, Finding, Level, Log, LogData, Phase, Pond, Setting } from '../../server/src/domain.ts';
+import type { Nowcast, NowcastPoint, RiskFactor, RiskLevel, SuggestedCheck } from '../../server/src/nowcast.ts';
 
-export type { Batch, Behavior, Farm, Finding, Level, Log, LogData, Phase, Pond };
+export type { Aeration, Batch, Behavior, Farm, Finding, Level, Log, LogData, Phase, Pond, Setting };
+export type { Nowcast, NowcastPoint, RiskFactor, RiskLevel, SuggestedCheck };
 
 export type ReadingKey = keyof NonNullable<LogData['readings']>;
 
@@ -23,9 +25,18 @@ export interface PondSummary extends Pond {
     density: number | null;
   } | null;
   latest: Partial<Record<ReadingKey, { value: number; at: string }>>;
+  lastLogAt: string | null;
   findings: Finding[];
   level: Level;
 }
+
+export interface NowcastState {
+  generatedAt: number;
+  weather: { available: boolean; error: string | null };
+  ponds: Nowcast[];
+}
+
+export type PondProfile = Partial<Pick<Pond, 'name' | 'kind' | 'volumeL' | 'areaM2' | 'setting' | 'shaded' | 'aeration' | 'depthCm'>>;
 
 export interface FarmState {
   farm: Farm | null;
@@ -48,7 +59,9 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 export const api = {
   farm: () => call<FarmState>('GET', '/farm'),
   saveFarm: (farm: Partial<Farm>) => call<{ farm: Farm }>('PUT', '/farm', farm),
-  addPond: (pond: { name: string; kind?: string; volumeL?: number; areaM2?: number }) => call<{ pond: PondSummary }>('POST', '/ponds', pond),
+  addPond: (pond: PondProfile & { name: string }) => call<{ pond: PondSummary }>('POST', '/ponds', pond),
+  updatePond: (id: number, pond: PondProfile) => call<{ pond: PondSummary }>('PUT', `/ponds/${id}`, pond),
+  nowcast: () => call<NowcastState>('GET', '/nowcast'),
   pond: (id: number) => call<{ pond: PondSummary; logs: Log[] }>('GET', `/ponds/${id}`),
   startBatch: (pondId: number, batch: { phase: Phase; stockedAt: string; initialCount?: number }) =>
     call<{ pond: PondSummary }>('POST', `/ponds/${pondId}/batches`, batch),

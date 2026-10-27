@@ -1,10 +1,10 @@
-import type { FarmState, PondSummary, ReadingKey } from '../api.ts';
-import { fmtDate, fmtNum, phaseLabel, readingLabel } from '../labels.ts';
+import type { FarmState, Nowcast, NowcastState, PondSummary, ReadingKey } from '../api.ts';
+import { fmtAgo, fmtDate, fmtNum, phaseLabel, readingLabel, riskLabel } from '../labels.ts';
 import { Empty, LevelBadge } from '../ui.tsx';
 
 const SHOWN: ReadingKey[] = ['temperature', 'ph', 'tds'];
 
-function PondCard({ pond, onOpen }: { pond: PondSummary; onOpen: () => void }) {
+function PondCard({ pond, nc, onOpen }: { pond: PondSummary; nc?: Nowcast; onOpen: () => void }) {
   const top = pond.findings[0];
   return (
     <button class={`pond-card lv-${pond.level}`} onClick={onOpen}>
@@ -28,11 +28,28 @@ function PondCard({ pond, onOpen }: { pond: PondSummary; onOpen: () => void }) {
         ))}
       </dl>
       {top && <p class={`pond-top lv-${top.level}`}>{top.title}</p>}
+      {nc && (
+        <p class="small">
+          {nc.now.temp !== null && <>Air sekarang ±{fmtNum(nc.now.temp)} °C · </>}
+          <span class={`risk-text lv-${nc.now.level}`}>{riskLabel[nc.now.level]}</span>
+          {nc.lastCheckAt !== null && <span class="muted"> · dicek {fmtAgo(nc.lastCheckAt, nc.generatedAt)}</span>}
+        </p>
+      )}
     </button>
   );
 }
 
-export function Today({ state, onOpenPond, onAddPond }: { state: FarmState; onOpenPond: (id: number) => void; onAddPond: () => void }) {
+export function Today({
+  state,
+  nowcast,
+  onOpenPond,
+  onAddPond,
+}: {
+  state: FarmState;
+  nowcast: NowcastState | null;
+  onOpenPond: (id: number) => void;
+  onAddPond: () => void;
+}) {
   const counts = { critical: 0, warning: 0 };
   for (const p of state.ponds) if (p.level === 'critical' || p.level === 'warning') counts[p.level]++;
 
@@ -52,7 +69,7 @@ export function Today({ state, onOpenPond, onAddPond }: { state: FarmState; onOp
       {state.ponds.length === 0 && <Empty>Belum ada kolam.</Empty>}
       <div class="stack">
         {state.ponds.map((p) => (
-          <PondCard key={p.id} pond={p} onOpen={() => onOpenPond(p.id)} />
+          <PondCard key={p.id} pond={p} nc={nowcast?.ponds.find((n) => n.pondId === p.id)} onOpen={() => onOpenPond(p.id)} />
         ))}
       </div>
       <button class="secondary" onClick={onAddPond}>

@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
-import type { Batch, Farm, Log, LogData, Phase, Pond } from './domain.ts';
+import type { Aeration, Batch, Farm, Log, LogData, Phase, Pond, Setting } from './domain.ts';
 
 const defaultPath = fileURLToPath(new URL('../../data/synteel.sqlite', import.meta.url));
 
@@ -28,6 +28,10 @@ export function openDb(path = process.env.SYNTEEL_DB ?? defaultPath) {
       kind text,
       volume_l real,
       area_m2 real,
+      setting text,
+      shaded integer,
+      aeration text,
+      depth_cm real,
       archived integer not null default 0
     );
 
@@ -50,9 +54,11 @@ export function openDb(path = process.env.SYNTEEL_DB ?? defaultPath) {
     );
     create index if not exists logs_pond_time on logs (pond_id, logged_at);
   `);
-  // Databases created before area_m2 existed.
+  // Databases created before these pond columns existed.
   const pondCols = (db.prepare('pragma table_info(ponds)').all() as { name: string }[]).map((c) => c.name);
-  if (!pondCols.includes('area_m2')) db.exec('alter table ponds add column area_m2 real');
+  for (const [col, type] of [['area_m2', 'real'], ['setting', 'text'], ['shaded', 'integer'], ['aeration', 'text'], ['depth_cm', 'real']]) {
+    if (!pondCols.includes(col)) db.exec(`alter table ponds add column ${col} ${type}`);
+  }
   return db;
 }
 
@@ -66,6 +72,10 @@ const toPond = (r: Row): Pond => ({
   kind: r.kind as string | null,
   volumeL: r.volume_l as number | null,
   areaM2: r.area_m2 as number | null,
+  setting: r.setting as Setting | null,
+  shaded: r.shaded === null || r.shaded === undefined ? null : Boolean(r.shaded),
+  aeration: r.aeration as Aeration | null,
+  depthCm: r.depth_cm as number | null,
 });
 
 const toBatch = (r: Row): Batch => ({
@@ -118,9 +128,15 @@ export function repo(db: Db) {
 
     addPond(p: Omit<Pond, 'id'>): Pond {
       const { lastInsertRowid } = db
-        .prepare('insert into ponds (name, kind, volume_l, area_m2) values (?, ?, ?, ?)')
-        .run(p.name, p.kind, p.volumeL, p.areaM2);
+        .prepare('insert into ponds (name, kind, volume_l, area_m2, setting, shaded, aeration, depth_cm) values (?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(p.name, p.kind, p.volumeL, p.areaM2, p.setting, p.shaded === null ? null : Number(p.shaded), p.aeration, p.depthCm);
       return { id: Number(lastInsertRowid), ...p };
+    },
+
+    updatePond(p: Pond) {
+      db.prepare(
+        'update ponds set name = ?, kind = ?, volume_l = ?, area_m2 = ?, setting = ?, shaded = ?, aeration = ?, depth_cm = ? where id = ?',
+      ).run(p.name, p.kind, p.volumeL, p.areaM2, p.setting, p.shaded === null ? null : Number(p.shaded), p.aeration, p.depthCm, p.id);
     },
 
     archivePond(id: number) {

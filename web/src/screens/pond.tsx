@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { api, type Log, type PondSummary } from '../api.ts';
-import { fmtNum, fmtTime, phaseLabel, summarizeLog } from '../labels.ts';
+import { aerationLabel, fmtNum, fmtTime, phaseLabel, settingLabel, summarizeLog } from '../labels.ts';
 import { Empty, FindingCard, LevelBadge } from '../ui.tsx';
 
 export function PondDetail({ id, onBack, onRecord }: { id: number; onBack: () => void; onRecord: (id: number) => void }) {
@@ -26,6 +26,19 @@ export function PondDetail({ id, onBack, onRecord }: { id: number; onBack: () =>
         <h1>{pond.name}</h1>
         <LevelBadge level={pond.level} />
       </div>
+
+      {(pond.setting || pond.aeration || pond.depthCm) && (
+        <p class="muted small">
+          {[
+            pond.setting && settingLabel[pond.setting] + (pond.setting === 'outdoor' && pond.shaded ? ', berpeneduh' : ''),
+            pond.aeration && `aerasi ${aerationLabel[pond.aeration].toLowerCase()}`,
+            pond.depthCm && `kedalaman ${fmtNum(pond.depthCm)} cm`,
+            pond.areaM2 && `${fmtNum(pond.areaM2)} m²`,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </p>
+      )}
 
       {pond.batch && pond.program && (
         <section class="panel">

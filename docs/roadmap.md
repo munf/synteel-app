@@ -14,6 +14,16 @@ Submission target: Nov 4 evening WIB. Hard deadline: Nov 4, 9:00 PM ET (Nov 5, 0
 | 8 | Tue Nov 3 | Hardening + recording | Bug fixes, test on a low-end Android, deploy, screen recordings for the video |
 | 9 | Wed Nov 4 | Submission | 3-minute video, README, submission form |
 
+## Change on Oct 27: pond nowcast moved to Day 3
+
+The Meta API credits were not active yet, and the partner farm said that losses happen whenever the pond is left unwatched, at any hour. Their ponds run 24-hour aeration. So the deterministic **pond nowcast** moved forward to Day 3, because it needs no Meta API. It covers weather, water temperature estimates, hourly oxygen risk, check schedules with night alarms, and a 30-minute server monitor. AI logging (voice and photo) moves to Day 4, alongside the agent that explains the nowcast.
+
+| Day | New focus |
+|---|---|
+| 3 | Pond nowcast + check schedule (done) |
+| 4 | Muse Spark agent on top of the nowcast (evening briefing, "measure now" when uncertain, plan for the night); voice and photo logging |
+| 5 | Problem flow with SAM 3.1 video; photo guidance (glare, angle, polarizing clip), on-device blur/glare check, white-basin protocol for dead eels |
+
 ## Field input from the partner farm (Oct 27)
 
 Done: elver water ranges, TDS limit, stocking density, heavy-rain guidance (see `knowledge/partner-practice.json`). Still to use:

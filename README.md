@@ -10,7 +10,7 @@ Synt Eel is a mobile app that closes that gap:
 
 - **Record (Catat)**: the farmer sends a voice note, a photo or a pH / TDS / temperature reading. Meta models turn it into a structured pond log.
 - **Today (Hari Ini)**: shows each pond's status and the day's tasks, based on the batch's week in the nursery program.
-- **Watch (Waspada)**: an agent combines recent logs, the batch phase, the weather forecast and validated water-quality thresholds into an evening risk briefing. It also schedules night checks with alarm-style notifications. This includes inferring low dissolved-oxygen risk even when the farm has no DO meter.
+- **Watch (Waspada)**: the farmer measures once or twice a day, but eels die in the hours nobody is looking. Every 30 minutes the server re-estimates each pond's water temperature from the hourly weather, anchored on the last reading and calibrated per pond. It turns that, together with what the farmer logged, into an oxygen risk score with its reasons. This works even on farms with no DO meter. It also builds a check schedule, with a night alarm when risk peaks while people sleep. An agent turns this into an evening briefing (in progress).
 - **Problem (Ada Masalah)**: the farmer takes a photo or video. SAM 3.1 marks dead or surfacing eels, and the app lists the first actions to take in the first 15 minutes, why, and when to call an expert. It follows up afterwards.
 
 The AI **advises, it does not decide**. Emergency alerts come from deterministic threshold rules and never depend on a language model being available.
@@ -64,5 +64,11 @@ npm run dev:web        # http://localhost:5173 (proxies /api to the server)
 - Day 1: repository scaffold and knowledge base.
 - Day 2: farm, pond and batch setup (each batch knows its nursery week and stage), manual logging (temperature, pH, TDS, deaths, behaviour, feed leftovers, water colour and smell), and the deterministic rules engine with tests (`npm test`).
 - Field input: elver ponds now use the partner farm's water ranges, TDS has an upper limit, and pond area gives a stocking density check (ideal 40–60 per m², max 100).
+- Day 3: pond nowcast ([`server/src/nowcast.ts`](server/src/nowcast.ts)).
+  - A water temperature model driven by Open-Meteo hourly weather. It re-anchors on each reading and learns a per-pond offset from past errors, and its uncertainty grows with time since the last reading.
+  - Hourly oxygen risk with explained factors: warm water, eel behaviour, aerator status, green water at night, density, uneaten feed, heavy rain, and hours unwatched.
+  - Suggested checks, including night alarms.
+  - A server-side monitor that re-runs every 30 minutes and records when a pond's risk rises.
+  - A 36-hour chart on the Watch screen, and a one-tap "quick check". The farm location comes from GPS or a place name.
 
 See the roadmap in [`docs/roadmap.md`](docs/roadmap.md).

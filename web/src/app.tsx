@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
-import { api, type FarmState } from './api.ts';
+import { api, type FarmState, type NowcastState } from './api.ts';
 import { PondDetail } from './screens/pond.tsx';
 import { Record } from './screens/record.tsx';
 import { AddPond, FarmSetup } from './screens/setup.tsx';
@@ -27,6 +27,7 @@ export function App() {
   const [state, setState] = useState<FarmState | null>(null);
   const [error, setError] = useState('');
   const [route, setRoute] = useState<Route>({ name: 'today' });
+  const [nowcast, setNowcast] = useState<NowcastState | null>(null);
 
   const refresh = useCallback(() => {
     api.farm().then(
@@ -36,9 +37,16 @@ export function App() {
       },
       (e) => setError(e.message),
     );
+    // The estimate is a bonus: if it fails, the rest of the app still works.
+    api.nowcast().then(setNowcast, () => {});
   }, []);
 
-  useEffect(refresh, [refresh]);
+  useEffect(() => {
+    refresh();
+    // Keep the estimate fresh while the app stays open on the pond side.
+    const timer = setInterval(() => api.nowcast().then(setNowcast, () => {}), 5 * 60_000);
+    return () => clearInterval(timer);
+  }, [refresh]);
 
   const go = (r: Route) => {
     setRoute(r);
@@ -75,7 +83,7 @@ export function App() {
   } else if (route.name === 'record') {
     body = <Record key={route.pondId ?? 0} ponds={state.ponds} initialPondId={route.pondId} onSaved={refresh} />;
   } else if (route.name === 'watch') {
-    body = <Watch state={state} />;
+    body = <Watch state={state} nowcast={nowcast} onChanged={refresh} onRecord={(id) => go({ name: 'record', pondId: id })} />;
   } else if (route.name === 'problem') {
     body = (
       <div class="screen stack">
@@ -85,11 +93,12 @@ export function App() {
       </div>
     );
   } else {
-    body = <Today state={state} onOpenPond={(id) => go({ name: 'pond', id })} onAddPond={() => go({ name: 'add-pond' })} />;
+    body = <Today state={state} nowcast={nowcast} onOpenPond={(id) => go({ name: 'pond', id })} onAddPond={() => go({ name: 'add-pond' })} />;
   }
 
   const ready = Boolean(state?.farm && state.ponds.length);
-  const alerts = state?.ponds.filter((p) => p.level === 'critical').length ?? 0;
+  const alerts =
+    state?.ponds.filter((p) => p.level === 'critical' || nowcast?.ponds.find((n) => n.pondId === p.id)?.now.level === 'critical').length ?? 0;
 
   return (
     <div class="shell">

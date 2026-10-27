@@ -4,7 +4,7 @@ import { createApi } from '../src/api.ts';
 import { openDb, repo } from '../src/db.ts';
 
 function setup(nowIso = '2026-10-28T03:00:00Z') {
-  const api = createApi(repo(openDb(':memory:')), () => new Date(nowIso));
+  const api = createApi(repo(openDb(':memory:')), { clock: () => new Date(nowIso), getWeather: async () => ({ hours: [], fetchedAt: 0 }), geocode: async () => null });
   const call = async (method: string, path: string, body?: unknown) => {
     const res = await api.request(path, {
       method,
@@ -73,4 +73,32 @@ test('archived ponds disappear from the farm', async () => {
   const pond = (await call('POST', '/ponds', { name: 'A' })).json.pond;
   assert.equal((await call('DELETE', `/ponds/${pond.id}`)).status, 204);
   assert.equal((await call('GET', '/farm')).json.ponds.length, 0);
+});
+
+test('pond profile: partial update keeps the other fields', async () => {
+  const call = setup();
+  await call('PUT', '/farm', { name: 'Tambak', locationName: 'Sleman' });
+  const pond = (await call('POST', '/ponds', { name: 'Kolam C', setting: 'outdoor', shaded: true, aeration: 'full', depthCm: 30, areaM2: 12 })).json.pond;
+  assert.equal(pond.setting, 'outdoor');
+  assert.equal(pond.shaded, true);
+  const updated = (await call('PUT', `/ponds/${pond.id}`, { aeration: 'partial' })).json.pond;
+  assert.equal(updated.aeration, 'partial');
+  assert.equal(updated.depthCm, 30);
+  assert.equal(updated.shaded, true);
+  assert.equal((await call('PUT', `/ponds/${pond.id}`, { setting: 'cave' })).status, 400);
+});
+
+test('a quick check with the aerator off is critical, and the nowcast works without weather', async () => {
+  const call = setup();
+  await call('PUT', '/farm', { name: 'Tambak', locationName: 'Sleman' });
+  const pond = (await call('POST', '/ponds', { name: 'Kolam C', setting: 'outdoor', aeration: 'full' })).json.pond;
+  const logged = await call('POST', `/ponds/${pond.id}/logs`, { behavior: ['normal'], aeration: 'off' });
+  assert.equal(logged.json.pond.findings[0].id, 'aeration');
+  assert.equal(logged.json.pond.level, 'critical');
+
+  const nc = (await call('GET', '/nowcast')).json;
+  assert.equal(nc.weather.available, false);
+  assert.match(nc.weather.error, /Lokasi tambak belum diatur/);
+  assert.equal(nc.ponds[0].now.level, 'critical');
+  assert.equal(nc.ponds[0].now.factors[0].id, 'aeration_off');
 });
