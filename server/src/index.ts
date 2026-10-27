@@ -27,6 +27,6 @@ const monitor = startMonitor(
   (change) => console.log(`risk up: pond ${change.pondId} ${change.from} → ${change.to}: ${change.reasons.join('; ')}`),
 );
 
-serve({ fetch: app.fetch, port: env.port }, (info) => {
-  console.log(`synteel server listening on http://localhost:${info.port}`);
+serve({ fetch: app.fetch, port: env.port, hostname: env.host }, (info) => {
+  console.log(`synteel server listening on http://${env.host ?? 'localhost'}:${info.port}`);
 });

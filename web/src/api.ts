@@ -47,8 +47,11 @@ export interface FarmState {
   today: string;
 }
 
+// Relative to the page, so the app also works under a sub-path such as eel.synt.fun/preview/.
+export const API = `${import.meta.env.BASE_URL}api`;
+
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(`${API}${path}`, {
     method,
     headers: body === undefined ? undefined : { 'content-type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),

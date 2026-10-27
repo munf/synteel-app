@@ -16,6 +16,8 @@ export const env = {
   modelApiKey: process.env.MODEL_API_KEY ?? '',
   modelApiBase: process.env.MODEL_API_BASE ?? 'https://api.meta.ai/v1',
   port: Number(process.env.PORT ?? 8787),
+  // e.g. 127.0.0.1 behind a reverse proxy; unset listens on all interfaces.
+  host: process.env.HOST,
   // Example drafts instead of real AI, until Meta API access works.
   aiMock: process.env.SYNTEEL_AI_MOCK === '1',
 };
