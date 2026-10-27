@@ -1,0 +1,22 @@
+# Roadmap (Oct 27 – Nov 4, 2026)
+
+Submission target: Nov 4 evening WIB. Hard deadline: Nov 4, 9:00 PM ET (Nov 5, 09:00 WIB).
+
+| Day | Date | Focus | Done when |
+|---|---|---|---|
+| 1 | Tue Oct 27 | Foundations | Repo scaffold; knowledge base from Blueprint v5; Meta API spikes (Voice Transcribe on Indonesian, SAM 3.1 on elver photos) |
+| 2 | Wed Oct 28 | Data + rules | Farm / pond / batch setup (batch knows its nursery week); manual pH, TDS, temperature logs; deterministic threshold rules engine |
+| 3 | Thu Oct 29 | AI logging | Voice note and photo into a structured log the farmer confirms; offline queue |
+| 4 | Fri Oct 30 | Today + Watch | Home screen with pond status and phase-based daily tasks; agentic evening risk assessment (logs, weather, phase), including inferred low-DO risk |
+| 5 | Sat Oct 31 | Problem flow | Photo or video, SAM 3.1 marks dead or surfacing eels, then first actions, likely causes with sources, when to call an expert, and follow-up |
+| 6 | Sun Nov 1 | Alarms + Android | Android build; alarm-style night checks; escalation when unanswered |
+| 7 | Mon Nov 2 | Vision screen + demo data | Synt Nursery vision screen (labelled as not built); realistic seed data and replayable scenarios; UI polish; feature freeze |
+| 8 | Tue Nov 3 | Hardening + recording | Bug fixes, test on a low-end Android, deploy, screen recordings for the video |
+| 9 | Wed Nov 4 | Submission | 3-minute video, README, submission form |
+
+## Fallbacks
+
+- Voice Transcribe lacks Indonesian: send audio to Muse Spark 1.2 directly.
+- SAM 3.1 struggles with transparent glass eels: demo on elvers, and treat glass eels as future work.
+- Unreliable alarms on old Android: schedule night checks from the evening briefing; plain notifications on web.
+- Meta API credits delayed: develop against Muse Spark Open on a partner provider.

@@ -1,0 +1,17 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+
+# Secrets: the Meta Model API key lives outside the repo (see .env.example)
+.env
+.env.*
+!.env.example
+
+# Local data
+*.sqlite
+*.sqlite-*
+data/
+
+# Field material from partner farmers is not published
+uji/

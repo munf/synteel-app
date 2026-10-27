@@ -1,0 +1,139 @@
+{
+  "source": "Synt Eel Nursery Blueprint v5 Rev. A, ch. 9 (Sensor dan ambang alarm) and ch. 10 (Mode darurat)",
+  "note": "Design starting points; re-tune after the first trial batch.",
+  "parameters": [
+    {
+      "id": "do",
+      "name": "Oksigen terlarut (DO) kolam",
+      "unit": "mg/L",
+      "scope": "general",
+      "target": { "min": 6 },
+      "warning": { "below": 5 },
+      "critical": { "below": 4 },
+      "operator_action": "Cek aerator, diffuser dan selang udara; tunda pemberian pakan.",
+      "nursery_auto_action": "Buka solenoid O₂, tunda feeder, SMS"
+    },
+    {
+      "id": "temperature",
+      "name": "Suhu kolam",
+      "unit": "°C",
+      "scope": "general",
+      "target": { "min": 27, "max": 28 },
+      "warning": { "below": 26, "above": 29 },
+      "critical": { "below": 25, "above": 30 },
+      "operator_action": "Cek kapasitas pemanas/pendingin dan kondisi ruangan.",
+      "nursery_auto_action": "Chiller / heat pump; termostat fisik memutus heater"
+    },
+    {
+      "id": "ph",
+      "name": "pH",
+      "unit": "",
+      "scope": "general",
+      "target": { "min": 7.0, "max": 7.8 },
+      "warning": { "below": 6.9, "above": 7.9 },
+      "critical": { "below": 6.7, "above": 8.2 },
+      "operator_action": "Cek dosis buffer dan sumber air; ulangi pengukuran.",
+      "nursery_auto_action": "Dosis buffer"
+    },
+    {
+      "id": "tan",
+      "name": "Amonia (TAN)",
+      "unit": "mg/L",
+      "scope": "general",
+      "measured_by": "test kit",
+      "target": { "max": 0.5 },
+      "warning": { "above": 0.5 },
+      "critical": { "above": 1.0 },
+      "critical_note": "atau NH₃ > 0,02 mg/L",
+      "operator_action": "Kurangi pakan, pasang zeolit, cek biofilter.",
+      "nursery_auto_action": "Tunda pakan, pasang zeolit"
+    },
+    {
+      "id": "no2",
+      "name": "Nitrit (NO₂)",
+      "unit": "mg/L",
+      "scope": "general",
+      "measured_by": "test kit",
+      "target": { "max": 0.3 },
+      "warning": { "above": 0.3 },
+      "critical": { "above": 0.5 },
+      "operator_action": "Kurangi beban pakan; cek kinerja biofilter.",
+      "nursery_auto_action": "Naikkan aliran denitrifikasi"
+    },
+    {
+      "id": "no3",
+      "name": "Nitrat (NO₃)",
+      "unit": "mg/L",
+      "scope": "general",
+      "measured_by": "test kit",
+      "target": { "max": 50 },
+      "warning": { "above": 80 },
+      "critical": { "above": 100 },
+      "operator_action": "Ganti air sebagian.",
+      "nursery_auto_action": "Naikkan aliran denitrifikasi"
+    },
+    {
+      "id": "turbidity",
+      "name": "Kekeruhan",
+      "unit": "NTU",
+      "scope": "general",
+      "target": { "max": 5 },
+      "warning": { "above": 8 },
+      "critical": { "above": 15 },
+      "operator_action": "Buang sisa pakan dan kotoran; cek filter.",
+      "nursery_auto_action": "Backwash, cek skimmer"
+    },
+    {
+      "id": "co2",
+      "name": "CO₂ terlarut",
+      "unit": "mg/L",
+      "scope": "general",
+      "target": { "max": 10 },
+      "warning": { "above": 12 },
+      "critical": { "above": 15 },
+      "operator_action": "Tambah aerasi.",
+      "nursery_auto_action": "Naikkan udara C3"
+    },
+    {
+      "id": "salinity",
+      "name": "EC / salinitas",
+      "unit": "ppt",
+      "scope": "general",
+      "target": { "setpoint": "sesuai fase (lihat nursery-program.json)" },
+      "warning": { "deviation": 0.5 },
+      "critical": { "deviation": 1.0 },
+      "operator_action": "Koreksi bertahap dengan garam atau air tawar; jangan ubah mendadak.",
+      "nursery_auto_action": "Dosis garam atau top-off"
+    },
+    {
+      "id": "tds",
+      "name": "TDS",
+      "unit": "ppm",
+      "scope": "general",
+      "target": null,
+      "warning": null,
+      "critical": null,
+      "todo": "Belum ada ambang absolut. Dipakai sebagai proksi EC/salinitas; aturan memakai perubahan mendadak terhadap baseline kolam sendiri."
+    },
+    {
+      "id": "biofilter_do",
+      "name": "DO biofilter",
+      "unit": "mg/L",
+      "scope": "synt-nursery",
+      "target": { "min": 5 },
+      "warning": { "below": 4 },
+      "critical": { "below": 3 },
+      "nursery_auto_action": "Alarm aerator"
+    },
+    {
+      "id": "orp_sump",
+      "name": "ORP sump",
+      "unit": "mV",
+      "scope": "synt-nursery",
+      "target": { "min": 250, "max": 320 },
+      "warning": { "above": 340 },
+      "critical": { "above": 360 },
+      "nursery_auto_action": "Ozon mati"
+    }
+  ]
+}

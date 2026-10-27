@@ -1,0 +1,60 @@
+{
+  "source": "Synt Eel Nursery Blueprint v5 Rev. A, ch. 2.4 (Kapasitas) and 5.2 (Program 0–12 minggu)",
+  "species": "Anguilla bicolor",
+  "phase": "glass_eel",
+  "note": "Acuan awal; disesuaikan dengan hasil uji batch pertama. Sortir ukuran tidak dilakukan pada fase ini.",
+  "assumptions": {
+    "temperature_c": "27–28",
+    "growth": "±6× dalam 12 minggu (±0,17 g → ±1,0 g)",
+    "survival_assumed_pct": 80,
+    "final_feed_rate": "3% bobot/hari (setara kering), protein 50%"
+  },
+  "stages": [
+    {
+      "weeks": [0, 0],
+      "name": "Penerimaan & aklimasi",
+      "feed": "Puasa 24–48 jam, lalu cacing darah cincang sedikit",
+      "mesh_mm": "0,5",
+      "water": "Salinitas awal sesuai asal benih, turun bertahap ke tawar dalam 5–7 hari; suhu naik ±1 °C per 12 jam ke 27–28 °C",
+      "watch": ["salinity", "temperature"]
+    },
+    {
+      "weeks": [1, 2],
+      "name": "Adaptasi pakan",
+      "feed": "Cacing darah/tubifex beku cincang, 8–10% bobot basah/hari, 6–8 kali",
+      "feed_rate_pct": [8, 10],
+      "feedings_per_day": [6, 8],
+      "mesh_mm": "0,5",
+      "water": "DO ≥ 6 mg/L, TAN < 0,5 mg/L",
+      "watch": ["do", "tan"]
+    },
+    {
+      "weeks": [3, 5],
+      "name": "Transisi pasta",
+      "feed": "Campuran cacing + pakan buatan, porsi buatan naik bertahap, 6–8%",
+      "feed_rate_pct": [6, 8],
+      "mesh_mm": "1",
+      "water": "Pantau NO₂ dan kekeruhan saat beban pakan naik",
+      "watch": ["no2", "turbidity"]
+    },
+    {
+      "weeks": [6, 9],
+      "name": "Pertumbuhan",
+      "feed": "Pasta penuh 5–6%, 4–6 kali",
+      "feed_rate_pct": [5, 6],
+      "feedings_per_day": [4, 6],
+      "mesh_mm": "1–1,5",
+      "water": "Biofilter mendekati beban penuh; jaga pH 7,0–7,8",
+      "watch": ["ph", "tan"]
+    },
+    {
+      "weeks": [10, 12],
+      "name": "Persiapan panen",
+      "feed": "Pasta/remah 3–5%",
+      "feed_rate_pct": [3, 5],
+      "mesh_mm": "2",
+      "water": "Batas kemampuan biofilter (TAN) pada padat tebar target; panen per batch/kolam",
+      "watch": ["tan", "no2"]
+    }
+  ]
+}

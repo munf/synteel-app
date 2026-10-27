@@ -1,0 +1,29 @@
+{
+  "source": "Synt Eel Nursery Blueprint v5 Rev. A, ch. 11 (SOP perawatan)",
+  "note": "Pekerjaan manual harian ±20 menit pada sistem Synt Nursery.",
+  "tasks": [
+    { "frequency": "daily", "scope": "general", "task": "Amati perilaku benih (dan rekaman kamera bila ada)", "note": "Catat benih mati" },
+    { "frequency": "daily", "scope": "general", "task": "Catat DO, suhu, pH, EC/TDS", "note": "Bandingkan dengan target" },
+    { "frequency": "daily", "scope": "general", "task": "Beri pakan dan buang sisa pakan", "note": "Wadah pakan tetap tertutup" },
+    { "frequency": "daily", "scope": "synt-nursery", "task": "Kosongkan jeriken busa skimmer", "note": "Buang ke floor drain" },
+    { "frequency": "daily", "scope": "synt-nursery", "task": "Cek reservoir dan manometer make-up", "note": "Tekanan turun = filter mulai buntu" },
+    { "frequency": "daily", "scope": "synt-nursery", "task": "Pastikan chamber C0 kering" },
+    { "frequency": "daily", "scope": "synt-nursery", "task": "Baca log alarm" },
+
+    { "frequency": "weekly", "scope": "synt-nursery", "task": "Buka katup lumpur sesaat di tiap chamber", "note": "5–10 detik per chamber" },
+    { "frequency": "weekly", "scope": "synt-nursery", "task": "Cuci gelas busa skimmer" },
+    { "frequency": "weekly", "scope": "general", "task": "Uji kit manual TAN dan NO₂", "note": "Uji silang dengan sensor bila ada" },
+    { "frequency": "weekly", "scope": "synt-nursery", "task": "Cek nozzle spray dan filter cakram" },
+    { "frequency": "weekly", "scope": "general", "task": "Bersihkan atau ganti saringan (mesh) drain sesuai fase", "note": "0,5 → 1 → 2 mm" },
+
+    { "frequency": "monthly", "scope": "general", "task": "Cek tekanan tabung O₂ darurat", "note": "Ganti bila < 50 bar" },
+    { "frequency": "monthly", "scope": "general", "task": "Kalibrasi alat ukur pH, ORP, EC/TDS", "note": "Larutan buffer standar" },
+    { "frequency": "monthly", "scope": "synt-nursery", "task": "Ganti filter sedimen, cek karbon blok" },
+    { "frequency": "monthly", "scope": "synt-nursery", "task": "Bersihkan selongsong kuarsa UV", "note": "Matikan UV dulu" },
+    { "frequency": "monthly", "scope": "general", "task": "Uji cadangan listrik (UPS) dan oksigen darurat dengan simulasi padam", "note": "5 menit" },
+
+    { "frequency": "per_batch", "scope": "general", "task": "Kuras dan bersihkan kolam", "note": "Setelah panen" },
+    { "frequency": "per_batch", "scope": "synt-nursery", "task": "Ganti karbon aktif, regenerasi zeolit" },
+    { "frequency": "per_batch", "scope": "general", "task": "Evaluasi data mortalitas dan pertumbuhan", "note": "Dasar revisi program" }
+  ]
+}

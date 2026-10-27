@@ -1,0 +1,41 @@
+{
+  "source": "Synt Eel Nursery Blueprint v5 Rev. A, ch. 10 (Mode darurat)",
+  "note": "Kolom nursery_auto_response hanya berlaku untuk sistem Synt Nursery; operator_actions dipakai untuk semua kolam.",
+  "emergencies": [
+    {
+      "id": "power_outage",
+      "trigger": "Listrik (PLN) padam",
+      "operator_actions": [
+        "Pantau lama padam",
+        "Nyalakan aerasi cadangan atau oksigen darurat bila ada",
+        "Siapkan tabung oksigen cadangan; ganti bila padam > 6 jam",
+        "Setelah listrik kembali: nyalakan alat bertahap, tutup oksigen darurat, cek kondisi benih"
+      ],
+      "nursery_auto_response": "UPS memikul kontrol + aerator; solenoid O₂ membuka; SMS dalam 1 menit; O₂ mengalir 6–12 jam"
+    },
+    {
+      "id": "pump_failure",
+      "trigger": "Pompa utama gagal / debit < 50%",
+      "operator_actions": ["Pastikan aerasi tetap jalan", "Ganti pompa (simpan pompa cadangan)", "Cek sumbatan"],
+      "nursery_auto_response": "Alarm; aerator tetap; pengendali dapat membuka O₂"
+    },
+    {
+      "id": "low_do",
+      "trigger": "DO kolam < 4 mg/L, atau tanda-tanda DO rendah (benih naik ke permukaan / berkumpul di inlet)",
+      "operator_actions": ["Cek aerator, diffuser dan selang udara", "Tambah aerasi atau oksigen darurat", "Tunda pemberian pakan"],
+      "nursery_auto_response": "Alarm kritis, solenoid O₂ dibuka, feeder ditunda"
+    },
+    {
+      "id": "temperature_extreme",
+      "trigger": "Suhu < 25 °C atau > 30 °C",
+      "operator_actions": ["Cek pemanas/pendingin dan kondisi ruangan", "Beri peneduh bila panas"],
+      "nursery_auto_response": "Chiller atau heat pump penuh; termostat fisik memutus heater"
+    },
+    {
+      "id": "high_ammonia",
+      "trigger": "Amonia (TAN) > 1,0 mg/L",
+      "operator_actions": ["Kurangi pakan", "Pasang zeolit", "Cek biofilter"],
+      "nursery_auto_response": "Alarm, feeder ditunda"
+    }
+  ]
+}

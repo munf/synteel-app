@@ -1,0 +1,8 @@
+{
+  "source": "Synt Eel Nursery Blueprint v5 Rev. A, ch. 9.1 (Tingkat alarm)",
+  "levels": [
+    { "level": 1, "name": "Peringatan", "signal": "Notifikasi biasa", "notify": ["operator_on_duty"] },
+    { "level": 2, "name": "Kritis", "signal": "Notifikasi bergaya alarm (berbunyi)", "notify": ["operator_on_duty", "owner"] },
+    { "level": 3, "name": "Tidak ditanggapi 10 menit", "signal": "Diulang tiap 10 menit", "notify": ["backup_contact"], "after_minutes": 10, "repeat_minutes": 10 }
+  ]
+}
