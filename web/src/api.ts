@@ -20,6 +20,7 @@ export interface PondSummary extends Pond {
     beyondProgram: boolean;
     estimatedAlive: number | null;
     totalDead: number;
+    density: number | null;
   } | null;
   latest: Partial<Record<ReadingKey, { value: number; at: string }>>;
   findings: Finding[];
@@ -47,7 +48,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 export const api = {
   farm: () => call<FarmState>('GET', '/farm'),
   saveFarm: (farm: Partial<Farm>) => call<{ farm: Farm }>('PUT', '/farm', farm),
-  addPond: (pond: { name: string; kind?: string; volumeL?: number }) => call<{ pond: PondSummary }>('POST', '/ponds', pond),
+  addPond: (pond: { name: string; kind?: string; volumeL?: number; areaM2?: number }) => call<{ pond: PondSummary }>('POST', '/ponds', pond),
   pond: (id: number) => call<{ pond: PondSummary; logs: Log[] }>('GET', `/ponds/${id}`),
   startBatch: (pondId: number, batch: { phase: Phase; stockedAt: string; initialCount?: number }) =>
     call<{ pond: PondSummary }>('POST', `/ponds/${pondId}/batches`, batch),

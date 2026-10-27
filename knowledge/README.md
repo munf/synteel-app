@@ -10,7 +10,10 @@ Domain knowledge that the rules engine and the agents work from. The agents are 
 | `nursery-program.json` | Glass eel program, weeks 0–12: feed, mesh, water targets | Blueprint v5, ch. 2.4 and 5.2 |
 | `sop.json` | Daily, weekly, monthly and per-batch maintenance tasks | Blueprint v5, ch. 11 |
 | `alarm-levels.json` | Alarm levels and escalation | Blueprint v5, ch. 9.1 |
-| `emergencies.json` | Trigger → operator actions | Blueprint v5, ch. 10 |
+| `emergencies.json` | Trigger → operator actions | Blueprint v5, ch. 10; heavy rain / river flood from the partner farm |
+| `partner-practice.json` | Elver-phase practice: water ranges, stocking density, feeding progression, sorting, rainy season, fungus quarantine | Interview with the partner eel farmer in Sleman, **collected during the hackathon** |
+
+Elver ponds use the partner farm's ranges (`by_phase.elver` in `thresholds.json`: temperature 28–31 °C, pH 6.8–7.6), because the Blueprint values were designed for glass eels in an indoor recirculating system. TDS above 200 ppm comes from the partner farm and applies to all ponds.
 
 The blueprint is an internal Synt document written **before** the hackathon. Its values were transcribed here as data with the author's permission. The blueprint itself states they are **design starting points**: not yet field-validated, and to be re-tuned after the first trial batch.
 
@@ -20,5 +23,7 @@ Threshold values come from the blueprint as-is. The blueprint's chapter 10 gives
 
 ## Known gaps (TODO)
 
-- **TDS:** the partner farm measures TDS, but the blueprint uses EC/salinity. No absolute TDS threshold is defined yet; rules use sudden changes against the pond's own baseline.
-- **Elver phase program:** the blueprint covers glass eel weeks 0–12 only. Elver-phase guidance still needs a validated source.
+- **TDS:** only an upper limit (200 ppm) from the partner farm; no critical level. Sudden changes against the pond's own baseline are still flagged.
+- **Elver critical temperature:** the upper critical limit (33 °C) is a Synt Eel heuristic and needs validation.
+- **Elver phase program:** partner practice covers husbandry, but there is no week-by-week elver program yet.
+- **Open questions** for the partner farm are listed in `partner-practice.json`.

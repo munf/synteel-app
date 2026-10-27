@@ -86,21 +86,23 @@ export function createApi(repo: Repo, clock: () => Date = () => new Date()) {
     const tz = timezone();
     const batch = repo.activeBatch(pond.id);
     const logs = repo.logsSince(pond.id, new Date(now.getTime() - 7 * DAY_MS).toISOString());
-    const findings = assessPond(logs, thresholds, now);
 
     let program = null;
     if (batch) {
       const week = batchWeek(batch, now, tz);
       const stage = batch.phase === 'glass_eel' ? (stages.find((s) => week >= s.weeks[0] && week <= s.weeks[1]) ?? null) : null;
       const dead = repo.totalMortality(batch.id);
+      const estimatedAlive = batch.initialCount !== null ? Math.max(0, batch.initialCount - dead) : null;
       program = {
         week,
         stage,
         beyondProgram: batch.phase === 'glass_eel' && week > 12,
-        estimatedAlive: batch.initialCount !== null ? Math.max(0, batch.initialCount - dead) : null,
+        estimatedAlive,
         totalDead: dead,
+        density: estimatedAlive !== null && pond.areaM2 ? estimatedAlive / pond.areaM2 : null,
       };
     }
+    const findings = assessPond(logs, thresholds, now, { phase: batch?.phase, density: program?.density ?? undefined });
 
     const latest: Partial<Record<(typeof READINGS)[number], { value: number; at: string }>> = {};
     for (const log of logs) {
@@ -136,6 +138,7 @@ export function createApi(repo: Repo, clock: () => Date = () => new Date()) {
       name: text(body.name, 'nama kolam', true)!,
       kind: text(body.kind, 'jenis kolam'),
       volumeL: num(body.volumeL, 'volume', { min: 0 }) ?? null,
+      areaM2: num(body.areaM2, 'luas kolam', { min: 0.01 }) ?? null,
     });
     return c.json({ pond: pondSummary(pond) }, 201);
   });

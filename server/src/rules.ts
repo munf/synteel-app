@@ -1,23 +1,36 @@
 // Deterministic risk rules. This layer never calls a language model, so alerts keep
 // working when the AI API is slow, down or out of credit.
-import { DAY_MS, type Finding, type Level, type Log, type LogData } from './domain.ts';
+import { DAY_MS, type Finding, type Level, type Log, type LogData, type Phase } from './domain.ts';
 
 interface Bound { below?: number; above?: number }
-export interface Threshold {
+interface Limits {
+  target: { min?: number; max?: number } | null;
+  warning: Bound | null;
+  critical: Bound | null;
+  source?: string;
+}
+export interface Threshold extends Limits {
   id: string;
   name: string;
   unit: string;
   scope: string;
-  target: { min?: number; max?: number } | null;
-  warning: Bound | null;
-  critical: Bound | null;
   operator_action?: string;
+  /** Phase-specific limits that replace the default ones, e.g. partner-farm practice for elvers. */
+  by_phase?: Partial<Record<Phase, Limits>>;
+}
+
+/** What the rules know about the pond beyond its logs. */
+export interface PondContext {
+  phase?: Phase;
+  /** Estimated live eels per m² of pond floor. */
+  density?: number;
 }
 
 type ReadingKey = keyof NonNullable<LogData['readings']>;
 
 const THRESHOLD_SOURCE = 'Ambang Blueprint Synt Nursery v5';
 const HEURISTIC_SOURCE = 'Heuristik Synt Eel (perlu validasi)';
+const PARTNER_SOURCE = 'Praktik petani mitra Sleman';
 const LOW_DO_SOURCE = 'Penanganan darurat Blueprint Synt Nursery v5 (DO rendah)';
 
 const fmt = (n: number) => n.toLocaleString('id-ID', { maximumFractionDigits: 2 });
@@ -45,25 +58,28 @@ function median(values: number[]): number {
  * Assess one pond from its recent logs.
  * `logs` must be sorted newest first and should cover at least the last 7 days.
  */
-export function assessPond(logs: Log[], thresholds: Threshold[], now: Date): Finding[] {
+export function assessPond(logs: Log[], thresholds: Threshold[], now: Date, ctx: PondContext = {}): Finding[] {
   const findings: Finding[] = [];
   const last24h = now.getTime() - DAY_MS;
   const recent = logs.filter((l) => Date.parse(l.loggedAt) >= last24h);
 
   // 1. Fixed thresholds on the latest reading of each parameter.
+  //    Phase-specific limits win over the defaults.
   for (const t of thresholds) {
-    if (t.scope !== 'general' || (!t.warning && !t.critical)) continue;
+    if (t.scope !== 'general') continue;
+    const limits: Limits = (ctx.phase && t.by_phase?.[ctx.phase]) || t;
+    if (!limits.warning && !limits.critical) continue;
     const reading = latestReading(logs, t.id as ReadingKey, last24h);
     if (!reading) continue;
-    const level = breaches(t.critical, reading.value) ? 'critical' : breaches(t.warning, reading.value) ? 'warning' : null;
+    const level = breaches(limits.critical, reading.value) ? 'critical' : breaches(limits.warning, reading.value) ? 'warning' : null;
     if (!level) continue;
     findings.push({
       id: `threshold:${t.id}`,
       level,
       title: `${t.name} ${level === 'critical' ? 'kritis' : 'di luar batas'}: ${fmt(reading.value)} ${t.unit}`.trim(),
-      detail: describeBounds(t),
+      detail: describeBounds(limits, t.unit),
       actions: t.operator_action ? [t.operator_action] : [],
-      source: `${THRESHOLD_SOURCE} (${t.id})`,
+      source: limits.source ?? `${THRESHOLD_SOURCE} (${t.id})`,
     });
   }
 
@@ -162,7 +178,19 @@ export function assessPond(logs: Log[], thresholds: Threshold[], now: Date): Fin
     }
   }
 
-  // 7. Nothing measured today.
+  // 7. Overcrowded elver ponds: more competition for oxygen and feed, and more cannibalism.
+  if (ctx.phase === 'elver' && ctx.density !== undefined && ctx.density > 100) {
+    findings.push({
+      id: 'stocking:density',
+      level: 'warning',
+      title: `Kolam terlalu padat: ±${Math.round(ctx.density)} ekor/m²`,
+      detail: 'Ideal 40–60 ekor/m², maksimal 100. Kolam padat lebih cepat kekurangan oksigen dan memicu kanibalisme.',
+      actions: ['Pindahkan sebagian sidat ke kolam lain', 'Sortir berdasarkan ukuran', 'Pastikan aerasi cukup'],
+      source: PARTNER_SOURCE,
+    });
+  }
+
+  // 8. Nothing measured today.
   if (!recent.some((l) => l.data.readings && Object.keys(l.data.readings).length > 0)) {
     findings.push({
       id: 'stale',
@@ -185,10 +213,10 @@ export function overallLevel(findings: Finding[]): Level {
   return 'ok';
 }
 
-function describeBounds(t: Threshold): string {
+function describeBounds(t: Limits, unitName: string): string {
   const range = (b: Bound | null) =>
     [b?.below !== undefined && `di bawah ${fmt(b.below)}`, b?.above !== undefined && `di atas ${fmt(b.above)}`].filter(Boolean).join(' atau ');
-  const unit = t.unit ? ` ${t.unit}` : '';
+  const unit = unitName ? ` ${unitName}` : '';
   const parts: string[] = [];
   if (t.target?.min !== undefined && t.target?.max !== undefined) parts.push(`Target ${fmt(t.target.min)}–${fmt(t.target.max)}${unit}.`);
   else if (t.target?.min !== undefined) parts.push(`Target minimal ${fmt(t.target.min)}${unit}.`);

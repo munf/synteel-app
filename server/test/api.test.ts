@@ -29,7 +29,7 @@ test('setup flow: farm, pond, batch, log, assessment', async () => {
   assert.equal(batched.program.stage.name, 'Transisi pasta');
 
   const logged = await call('POST', `/ponds/${pond.id}/logs`, {
-    readings: { temperature: 30.5, ph: 7.4, tds: 280 },
+    readings: { temperature: 30.5, ph: 7.4, tds: 150 },
     mortality: 4,
     behavior: ['surfacing'],
     feeding: { leftover: 'little' },

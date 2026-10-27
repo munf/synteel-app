@@ -46,6 +46,7 @@ export function AddPond({ today, onDone, onCancel }: { today: string; onDone: (p
   const [name, setName] = useState('');
   const [kind, setKind] = useState<('fiber' | 'beton' | 'terpal')[]>(['fiber']);
   const [volumeL, setVolumeL] = useState('');
+  const [areaM2, setAreaM2] = useState('');
   const [phase, setPhase] = useState<Phase[]>(['glass_eel']);
   const [stockedAt, setStockedAt] = useState(today);
   const [initialCount, setInitialCount] = useState('');
@@ -57,7 +58,12 @@ export function AddPond({ today, onDone, onCancel }: { today: string; onDone: (p
     setBusy(true);
     setError('');
     try {
-      const { pond } = await api.addPond({ name, kind: kind[0], volumeL: volumeL ? Number(volumeL) : undefined });
+      const { pond } = await api.addPond({
+        name,
+        kind: kind[0],
+        volumeL: volumeL ? Number(volumeL) : undefined,
+        areaM2: areaM2 ? Number(areaM2.replace(',', '.')) : undefined,
+      });
       await api.startBatch(pond.id, {
         phase: phase[0] ?? 'glass_eel',
         stockedAt,
@@ -82,6 +88,9 @@ export function AddPond({ today, onDone, onCancel }: { today: string; onDone: (p
       </Field>
       <Field label="Jenis kolam">
         <Chips options={{ fiber: 'Fiber', beton: 'Beton', terpal: 'Terpal' }} value={kind} onChange={setKind} />
+      </Field>
+      <Field label="Luas dasar kolam (m²)" hint="Panjang × lebar. Dipakai untuk menghitung kepadatan tebar.">
+        <input inputMode="decimal" value={areaM2} onInput={(e) => setAreaM2(e.currentTarget.value)} placeholder="mis. 12" />
       </Field>
       <Field label="Volume air (liter)">
         <input inputMode="numeric" value={volumeL} onInput={(e) => setVolumeL(e.currentTarget.value)} placeholder="mis. 870" />

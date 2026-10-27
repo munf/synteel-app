@@ -20,7 +20,8 @@ Judges need to see what is new, so here it is plainly.
 | Built during the hackathon (Oct 26 – Nov 4, 2026) | Pre-existing (before Oct 26) |
 |---|---|
 | All code in this repository (app, server, agents, rules engine) | Synt Eel Nursery Blueprint v5: an internal design document. Its water-quality thresholds, the 0–12 week glass eel program and maintenance SOPs were transcribed into [`knowledge/`](knowledge/) as data |
-| The knowledge base format and how the agents use it | 3D render of the Synt Nursery v5 system, shown only as a labelled "product vision" at the end of the demo video |
+| The knowledge base format and how the agents use it |
+| Elver-phase practice from an interview with our partner eel farmer in Sleman ([`knowledge/partner-practice.json`](knowledge/partner-practice.json)) | 3D render of the Synt Nursery v5 system, shown only as a labelled "product vision" at the end of the demo video |
 | 3D render of the sensor kit (made during the event) | Landing page eel.synt.fun (not part of this submission) |
 
 Commit history in this repo starts on Oct 26, 2026.
@@ -60,5 +61,6 @@ npm run dev:web        # http://localhost:5173 (proxies /api to the server)
 
 - Day 1: repository scaffold and knowledge base.
 - Day 2: farm, pond and batch setup (each batch knows its nursery week and stage), manual logging (temperature, pH, TDS, deaths, behaviour, feed leftovers, water colour and smell), and the deterministic rules engine with tests (`npm test`).
+- Field input: elver ponds now use the partner farm's water ranges, TDS has an upper limit, and pond area gives a stocking density check (ideal 40–60 per m², max 100).
 
 See the roadmap in [`docs/roadmap.md`](docs/roadmap.md).

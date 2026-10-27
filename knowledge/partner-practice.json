@@ -1,0 +1,47 @@
+{
+  "source": "Diskusi dengan petani sidat mitra, Sleman, Yogyakarta (Oktober 2026, selama hackathon)",
+  "note": "Praktik lapangan dari petani yang memelihara elver di kolam beton terbuka. Belum diuji silang dengan literatur; dipakai sebagai acuan fase elver dan sebagai konteks agen.",
+  "species": { "recommended": "Anguilla bicolor", "seed_origin": "Cilacap" },
+  "water": {
+    "temperature_c": { "ideal_min": 28, "ideal_max": 31 },
+    "ph": { "ideal_min": 6.8, "ideal_max": 7.6 },
+    "tds_ppm": { "max": 200 },
+    "depth_cm": { "value": 30, "note": "Dari dasar kolam, atau menyesuaikan tinggi dinding kolam" },
+    "oxygen": "Aerasi/oksigen disarankan",
+    "flow": "Arus air tidak terlalu diperlukan (tergantung kondisi)",
+    "drain": "Model pembuangan air leher angsa (perlu konfirmasi)"
+  },
+  "stocking": {
+    "density_per_m2": { "ideal_min": 40, "ideal_max": 60, "max": 100 },
+    "transport": "Bibit diangkut dalam plastik berisi oksigen",
+    "acclimatization": "Aklimatisasi sebelum bibit dilepas ke kolam"
+  },
+  "feeding": {
+    "feed_source": "Pakan dari koperasi mina bersama",
+    "paste_training": "Untuk mengajarkan makan pasta, sidat dipuasakan 3–7 hari",
+    "progression": [
+      "Mulai 1 kali sehari",
+      "Bila pakan habis, naikkan menjadi 2 kali sehari, lalu 3 kali sehari",
+      "Bila 3 kali sehari tetap habis semua, perbanyak volume tiap pemberian"
+    ]
+  },
+  "husbandry": [
+    { "id": "shelter", "text": "Sediakan shelter (tempat berlindung) di kolam" },
+    { "id": "predator_net", "text": "Pasang jaring paranet untuk menghindari predator" },
+    { "id": "shade", "text": "Hindari sinar matahari langsung ke kolam" },
+    { "id": "sorting", "text": "Sortir berdasarkan ukuran sebulan sekali untuk mencegah kanibalisme", "every_days": 30 }
+  ],
+  "health": [
+    {
+      "id": "fungus",
+      "text": "Bibit yang terkena jamur dipisahkan ke kolam karantina dan diobati dengan obat jamur khusus. Penanganan disesuaikan dengan suhu, pH dan kualitas air.",
+      "app_policy": "Aplikasi tidak memberi dosis obat; arahkan ke karantina dan konsultasi."
+    }
+  ],
+  "rainy_season": [
+    "Hindari air hujan masuk ke kolam dalam jumlah besar",
+    "Siapkan 1 kolam untuk karantina/pengendapan air sebelum dipakai",
+    "Skenario Kali Krasak banjir: air sumber membawa lumpur dan material, jangan langsung masukkan ke kolam"
+  ],
+  "open_questions": ["Arti 'rush water' pada catatan asli", "Apakah rentang suhu dan pH ini juga berlaku untuk fase glass eel"]
+}

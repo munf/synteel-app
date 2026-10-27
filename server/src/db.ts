@@ -27,6 +27,7 @@ export function openDb(path = process.env.SYNTEEL_DB ?? defaultPath) {
       name text not null,
       kind text,
       volume_l real,
+      area_m2 real,
       archived integer not null default 0
     );
 
@@ -49,6 +50,9 @@ export function openDb(path = process.env.SYNTEEL_DB ?? defaultPath) {
     );
     create index if not exists logs_pond_time on logs (pond_id, logged_at);
   `);
+  // Databases created before area_m2 existed.
+  const pondCols = (db.prepare('pragma table_info(ponds)').all() as { name: string }[]).map((c) => c.name);
+  if (!pondCols.includes('area_m2')) db.exec('alter table ponds add column area_m2 real');
   return db;
 }
 
@@ -61,6 +65,7 @@ const toPond = (r: Row): Pond => ({
   name: r.name as string,
   kind: r.kind as string | null,
   volumeL: r.volume_l as number | null,
+  areaM2: r.area_m2 as number | null,
 });
 
 const toBatch = (r: Row): Batch => ({
@@ -113,8 +118,8 @@ export function repo(db: Db) {
 
     addPond(p: Omit<Pond, 'id'>): Pond {
       const { lastInsertRowid } = db
-        .prepare('insert into ponds (name, kind, volume_l) values (?, ?, ?)')
-        .run(p.name, p.kind, p.volumeL);
+        .prepare('insert into ponds (name, kind, volume_l, area_m2) values (?, ?, ?, ?)')
+        .run(p.name, p.kind, p.volumeL, p.areaM2);
       return { id: Number(lastInsertRowid), ...p };
     },
 

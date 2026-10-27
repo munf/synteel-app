@@ -25,9 +25,10 @@ const around = (base: number, spread: number, digits = 1) => Number((base + (ran
 r.saveFarm({ name: 'Tambak Sidat Mitra', locationName: 'Sleman, Yogyakarta', lat: -7.72, lon: 110.36, timezone: tz });
 
 const ponds = [
-  { pond: r.addPond({ name: 'Kolam A', kind: 'fiber', volumeL: 870 }), phase: 'glass_eel' as const, stocked: 23, count: 500 },
-  { pond: r.addPond({ name: 'Kolam B', kind: 'fiber', volumeL: 870 }), phase: 'glass_eel' as const, stocked: 23, count: 500 },
-  { pond: r.addPond({ name: 'Kolam C', kind: 'beton', volumeL: 4000 }), phase: 'elver' as const, stocked: 60, count: 2000 },
+  { pond: r.addPond({ name: 'Kolam A', kind: 'fiber', volumeL: 870, areaM2: 2.9 }), phase: 'glass_eel' as const, stocked: 23, count: 500 },
+  { pond: r.addPond({ name: 'Kolam B', kind: 'fiber', volumeL: 870, areaM2: 2.9 }), phase: 'glass_eel' as const, stocked: 23, count: 500 },
+  // Elver pond as the partner farm runs it: 30 cm deep, about 50 eels per m².
+  { pond: r.addPond({ name: 'Kolam C', kind: 'beton', volumeL: 3600, areaM2: 12 }), phase: 'elver' as const, stocked: 60, count: 650 },
 ];
 
 for (const { pond, phase, stocked, count } of ponds) {
@@ -39,7 +40,12 @@ for (const { pond, phase, stocked, count } of ponds) {
       // Today's evening log may still be in the future: record it as "just now" instead.
       if (at > now) at.setTime(now.getTime() - 20 * 60 * 1000);
       const data: LogData = {
-        readings: { temperature: around(27.6, 0.4), ph: around(7.4, 0.15, 2), tds: Math.round(around(phase === 'elver' ? 420 : 310, 12, 0)) },
+        readings: {
+          // Glass eels follow the Blueprint range (27–28 °C); elvers the partner farm's (28–31 °C, pH 6.8–7.6).
+          temperature: phase === 'elver' ? around(29.2, 0.6) : around(27.6, 0.4),
+          ph: phase === 'elver' ? around(7.2, 0.15, 2) : around(7.4, 0.15, 2),
+          tds: Math.round(around(phase === 'elver' ? 160 : 140, 12, 0)),
+        },
         feeding: { leftover: rand() < 0.8 ? 'none' : 'little' },
         behavior: ['normal'],
       };

@@ -54,6 +54,12 @@ export function PondDetail({ id, onBack, onRecord }: { id: number; onBack: () =>
             {pond.program.estimatedAlive !== null && <>Perkiraan hidup ±{fmtNum(pond.program.estimatedAlive)} ekor · </>}
             Total mati tercatat {fmtNum(pond.program.totalDead)} ekor
           </p>
+          {pond.program.density !== null && (
+            <p class="small">
+              Kepadatan ±{fmtNum(Math.round(pond.program.density))} ekor/m²
+              {pond.batch.phase === 'elver' && <span class="muted"> · ideal 40–60, maks. 100</span>}
+            </p>
+          )}
         </section>
       )}
 

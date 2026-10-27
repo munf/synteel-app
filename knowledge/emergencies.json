@@ -16,26 +16,53 @@
     {
       "id": "pump_failure",
       "trigger": "Pompa utama gagal / debit < 50%",
-      "operator_actions": ["Pastikan aerasi tetap jalan", "Ganti pompa (simpan pompa cadangan)", "Cek sumbatan"],
+      "operator_actions": [
+        "Pastikan aerasi tetap jalan",
+        "Ganti pompa (simpan pompa cadangan)",
+        "Cek sumbatan"
+      ],
       "nursery_auto_response": "Alarm; aerator tetap; pengendali dapat membuka O₂"
     },
     {
       "id": "low_do",
       "trigger": "DO kolam < 4 mg/L, atau tanda-tanda DO rendah (benih naik ke permukaan / berkumpul di inlet)",
-      "operator_actions": ["Cek aerator, diffuser dan selang udara", "Tambah aerasi atau oksigen darurat", "Tunda pemberian pakan"],
+      "operator_actions": [
+        "Cek aerator, diffuser dan selang udara",
+        "Tambah aerasi atau oksigen darurat",
+        "Tunda pemberian pakan"
+      ],
       "nursery_auto_response": "Alarm kritis, solenoid O₂ dibuka, feeder ditunda"
     },
     {
       "id": "temperature_extreme",
       "trigger": "Suhu < 25 °C atau > 30 °C",
-      "operator_actions": ["Cek pemanas/pendingin dan kondisi ruangan", "Beri peneduh bila panas"],
+      "operator_actions": [
+        "Cek pemanas/pendingin dan kondisi ruangan",
+        "Beri peneduh bila panas"
+      ],
       "nursery_auto_response": "Chiller atau heat pump penuh; termostat fisik memutus heater"
     },
     {
       "id": "high_ammonia",
       "trigger": "Amonia (TAN) > 1,0 mg/L",
-      "operator_actions": ["Kurangi pakan", "Pasang zeolit", "Cek biofilter"],
+      "operator_actions": [
+        "Kurangi pakan",
+        "Pasang zeolit",
+        "Cek biofilter"
+      ],
       "nursery_auto_response": "Alarm, feeder ditunda"
+    },
+    {
+      "id": "heavy_rain_flood",
+      "trigger": "Hujan deras atau sungai sumber air (mis. Kali Krasak) banjir",
+      "source": "Praktik petani mitra Sleman",
+      "operator_actions": [
+        "Tutup atau alihkan aliran air hujan agar tidak masuk kolam dalam jumlah besar",
+        "Hentikan pengambilan air dari sungai selama air keruh",
+        "Pakai air dari kolam pengendapan/karantina yang sudah disiapkan",
+        "Ukur pH, TDS dan suhu setelah hujan; perubahan mendadak membuat sidat stres"
+      ],
+      "nursery_auto_response": null
     }
   ]
 }

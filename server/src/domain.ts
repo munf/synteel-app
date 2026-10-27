@@ -15,6 +15,7 @@ export interface Pond {
   name: string;
   kind: string | null;
   volumeL: number | null;
+  areaM2: number | null; // pond floor area, for stocking density
 }
 
 export interface Batch {
