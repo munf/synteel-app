@@ -3,6 +3,7 @@
 > Built for the **Meta Global AI Developer Hackathon** (Oct 26 – Nov 4, 2026) · Track: **Indie** · Theme: **Build for Your World**
 
 🌐 Synt Eel website: **[eel.synt.fun](https://eel.synt.fun)**
+
 📱 Try the app: **[eel.synt.fun/preview](https://eel.synt.fun/preview/)** (demo farm, reset every night; AI capture runs in example mode until Meta API access is active)
 
 Eel farmers in Indonesia lose whole batches of glass eels and elvers overnight. The fish are fragile, the water can turn in a few hours, and most farmers keep track of their ponds from memory. By the time anyone notices, it is too late to act.
