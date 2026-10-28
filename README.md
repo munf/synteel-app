@@ -4,7 +4,7 @@
 
 🌐 Synt Eel website: **[eel.synt.fun](https://eel.synt.fun)**
 
-📱 Try the app: **[eel.synt.fun/preview](https://eel.synt.fun/preview/)** (demo farm, reset every night; AI capture runs in example mode until Meta API access is active)
+📱 Try the app: **[eel.synt.fun/preview](https://eel.synt.fun/preview/)** (demo farm, reset every night; photo, voice and video capture read by Meta Muse models, with a daily demo quota)
 
 Eel farmers in Indonesia lose whole batches of glass eels and elvers overnight. The fish are fragile, the water can turn in a few hours, and most farmers keep track of their ponds from memory. By the time anyone notices, it is too late to act.
 
@@ -34,10 +34,10 @@ Commit history in this repo starts on Oct 26, 2026.
 
 | Model | Used for |
 |---|---|
-| Muse Spark (Meta Model API) | Structuring voice, photo and text logs; risk-reasoning agent with tool calls; problem triage |
-| Muse Voice Transcribe | Farmers' voice notes into text (Indonesian, with code-switching) |
+| Muse Spark 1.3 (Meta Model API) | Reading meter displays and pond video frames; structuring voice notes into a pond log (strict JSON schema); risk-reasoning agent with tool calls; problem triage |
+| Muse Voice Transcribe | Farmers' voice notes and video narration into text (Indonesian, with code-switching), WAV converted on the phone |
 | SAM 3.1 | Segmenting and counting dead or surfacing eels in pond photos and video |
-| Muse Spark Open / Muse Glimmer | Open-weight path for high-frequency log processing (planned, subject to partner credits) |
+| Muse Spark Open (Fireworks) | Open-weight fallback: takes over capture reading automatically when the Meta API is down or out of credits |
 
 ## Repository layout
 
@@ -54,8 +54,9 @@ Requirements: Node.js 24+.
 
 ```sh
 npm install
-# API key: put MODEL_API_KEY=... in ~/.synteel.env (outside the repo), see .env.example
-npm run check:meta     # verify which Meta models your key can reach
+# API keys: put META_API_KEY=... (and optionally FIREWORKS_API_KEY=...) in ~/.synteel.env
+# (outside the repo), see .env.example
+npm run check:meta     # verify which Muse models your keys can reach
 npm run seed:demo      # optional: demo farm with two weeks of logs (stop the server first)
 npm run dev:server     # http://localhost:8787  (SYNTEEL_AI_MOCK=1 for example AI drafts)
 npm run dev:web        # http://localhost:5173 (proxies /api to the server)
@@ -79,6 +80,7 @@ npm run dev:web        # http://localhost:5173 (proxies /api to the server)
   - On-phone blur and glare check before a photo is sent.
   - The AI fills a draft that the farmer checks; each field shows "from photo / from voice", or "unsure, check again".
   - Captures wait in an offline queue on the phone until there is signal.
-  - Before Meta API access works, `SYNTEEL_AI_MOCK=1` runs the flow with clearly labelled example drafts.
+  - Without API keys, `SYNTEEL_AI_MOCK=1` runs the flow with clearly labelled example drafts.
+  - `SYNTEEL_AI_DAILY_CAP` limits real AI reads per day (used on the public preview).
 
 See the roadmap in [`docs/roadmap.md`](docs/roadmap.md).

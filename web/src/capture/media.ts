@@ -164,6 +164,11 @@ export async function prepareVideo(file: Blob, frameCount = 12): Promise<{ frame
 
 // ---------- voice ----------
 
+/** Muse Voice Transcribe takes WAV only, so voice notes are converted on the phone. */
+export async function voiceToWav(file: Blob, maxSeconds = 120): Promise<Blob> {
+  return (await soundtrack(file, maxSeconds)) ?? file;
+}
+
 export const canRecordAudio = () => typeof MediaRecorder !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
 
 export async function startRecording(maxSeconds = 60) {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { api, type Behavior, type Draft, type DraftField, type LogData, type LogSource, type PondSummary } from '../api.ts';
-import { canRecordAudio, prepareImage, prepareVideo, startRecording, type PreparedImage } from '../capture/media.ts';
+import { canRecordAudio, prepareImage, prepareVideo, startRecording, voiceToWav, type PreparedImage } from '../capture/media.ts';
 import { process, queue, Retryable, type CaptureKind, type Job } from '../capture/queue.ts';
 import { aerationCheckLabel, behaviorLabel, colorLabel, fmtClock, leftoverLabel, smellLabel } from '../labels.ts';
 import { Chips, Field, FindingCard, IconCamera, IconMic, IconVideo, LevelBadge } from '../ui.tsx';
@@ -201,7 +201,7 @@ export function Record({ ponds, initialPondId, onSaved }: { ponds: PondSummary[]
       // One place sends the note, whether the farmer tapped stop or 60 s ran out.
       rec.finished.then((audio) => {
         setRecording(null);
-        if (audio.size > 0) send({ ...job, audio });
+        if (audio.size > 0) voiceToWav(audio).then((wav) => send({ ...job, audio: wav }));
       });
     } catch {
       setError('Mikrofon tidak bisa dipakai. Izinkan mikrofon di pengaturan browser.');
@@ -327,7 +327,7 @@ export function Record({ ponds, initialPondId, onSaved }: { ponds: PondSummary[]
         onChange={(e) => {
           const f = e.currentTarget.files?.[0];
           e.currentTarget.value = '';
-          if (f && pond) send({ ...base(), kind: 'voice', audio: f });
+          if (f && pond) voiceToWav(f).then((wav) => send({ ...base(), kind: 'voice', audio: wav }));
         }}
       />
 

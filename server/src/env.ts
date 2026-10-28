@@ -12,9 +12,24 @@ if (existsSync(envFile)) {
   }
 }
 
+const metaKey = process.env.META_API_KEY ?? process.env.MODEL_API_KEY ?? '';
+const metaBase = process.env.MODEL_API_BASE ?? 'https://api.meta.ai/v1';
+const meta = { name: 'meta', apiKey: metaKey, base: metaBase, model: 'muse-spark-1.3' };
+// Open-weight Muse Spark Open on Fireworks (partner credits): fallback when the Meta API
+// is down or out of credits. SYNTEEL_AI_PROVIDER=fireworks puts it first.
+const fireworks = {
+  name: 'fireworks',
+  apiKey: process.env.FIREWORKS_API_KEY ?? '',
+  base: 'https://api.fireworks.ai/inference/v1',
+  model: 'accounts/fireworks/models/muse-spark-open',
+};
+
 export const env = {
-  modelApiKey: process.env.MODEL_API_KEY ?? '',
-  modelApiBase: process.env.MODEL_API_BASE ?? 'https://api.meta.ai/v1',
+  aiChat: process.env.SYNTEEL_AI_PROVIDER === 'fireworks' ? [fireworks, meta] : [meta, fireworks],
+  // Speech-to-text only exists on the Meta side.
+  aiTranscriber: { apiKey: metaKey, base: metaBase, model: 'muse-voice-transcribe-1.0' },
+  // Real AI reads allowed per day; unset means no cap. Set on the public preview.
+  aiDailyCap: Number(process.env.SYNTEEL_AI_DAILY_CAP ?? 0),
   port: Number(process.env.PORT ?? 8787),
   // e.g. 127.0.0.1 behind a reverse proxy; unset listens on all interfaces.
   host: process.env.HOST,

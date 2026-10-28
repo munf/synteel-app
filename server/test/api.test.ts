@@ -105,7 +105,7 @@ test('a quick check with the aerator off is critical, and the nowcast works with
 
 test('capture returns a draft without saving a log; logs keep their source', async () => {
   const { createAi } = await import('../src/ai.ts');
-  const api = createApi(repo(openDb(':memory:')), { clock: () => new Date('2026-10-28T03:00:00Z'), ai: createAi({ apiKey: '', base: '', mock: true }) });
+  const api = createApi(repo(openDb(':memory:')), { clock: () => new Date('2026-10-28T03:00:00Z'), ai: createAi({ chat: [], mock: true }) });
   await api.request('/farm', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Tambak' }) });
   const pond = (await (await api.request('/ponds', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Kolam C' }) })).json()).pond;
 

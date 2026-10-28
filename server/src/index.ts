@@ -1,6 +1,6 @@
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
-import { createAi } from './ai.ts';
+import { createAi, withDailyCap } from './ai.ts';
 import { createApi } from './api.ts';
 import { captureStore } from './captures.ts';
 import { openDb, repo } from './db.ts';
@@ -11,12 +11,13 @@ import type { Nowcast } from './nowcast.ts';
 
 const app = new Hono().basePath('/api');
 
-app.get('/health', (c) => c.json({ ok: true, modelApiKeyConfigured: env.modelApiKey !== '' }));
+app.get('/health', (c) => c.json({ ok: true, modelApiKeyConfigured: env.aiChat.some((p) => p.apiKey !== '') }));
 
 app.get('/knowledge', (c) => c.json(knowledge));
 
-const ai = createAi({ apiKey: env.modelApiKey, base: env.modelApiBase, mock: env.aiMock });
-console.log(`AI mode: ${ai.mode}`);
+const ai = withDailyCap(createAi({ chat: env.aiChat, transcriber: env.aiTranscriber, mock: env.aiMock }), env.aiDailyCap);
+const chain = env.aiChat.filter((p) => p.apiKey).map((p) => p.name).join(' → ');
+console.log(`AI mode: ${ai.mode}${ai.mode === 'meta' ? ` (${chain}${env.aiTranscriber.apiKey ? ', voice: meta' : ', no voice'}${env.aiDailyCap ? `, cap ${env.aiDailyCap}/day` : ''})` : ''}`);
 app.route('/', createApi(repo(openDb()), { ai, saveCapture: captureStore() }));
 
 // Routes must all be registered before the first request, which the monitor makes.
