@@ -1,3 +1,4 @@
+import type { Briefing, BriefingCheck } from '../../server/src/agent.ts';
 import type { Aeration, Batch, Behavior, Farm, Finding, Level, Log, LogData, Phase, Pond, Setting } from '../../server/src/domain.ts';
 import type { Nowcast, NowcastPoint, RiskFactor, RiskLevel, SuggestedCheck } from '../../server/src/nowcast.ts';
 import type { Limits } from '../../server/src/rules.ts';
@@ -7,6 +8,7 @@ import type { LogSource } from '../../server/src/domain.ts';
 export type { Aeration, Batch, Behavior, Farm, Finding, Level, Log, LogData, Phase, Pond, Setting };
 export type { Limits, Nowcast, NowcastPoint, RiskFactor, RiskLevel, SuggestedCheck };
 export type { Draft, DraftField, LogSource };
+export type { Briefing, BriefingCheck };
 
 export type ReadingKey = keyof NonNullable<LogData['readings']>;
 
@@ -155,5 +157,7 @@ export const api = {
   addLog: (pondId: number, data: LogData, source: LogSource = 'manual') =>
     call<{ log: Log; pond: PondSummary }>('POST', `/ponds/${pondId}/logs`, { ...data, source }),
   aiMode: () => call<{ mode: 'meta' | 'mock' | 'off' }>('GET', '/ai'),
+  briefing: () => call<{ briefing: Briefing | null }>('GET', '/briefing'),
+  makeBriefing: () => call<{ briefing: Briefing }>('POST', '/briefing'),
   knowledge: () => call<{ emergencies: { emergencies: Emergency[] } }>('GET', '/knowledge'),
 };

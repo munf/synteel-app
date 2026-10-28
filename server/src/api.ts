@@ -4,7 +4,8 @@ import { batchWeek, DAY_MS, LOG_SOURCES, localDate, READING_LIMITS, type Aeratio
 import type { FarmRepo, Repo, Role } from './db.ts';
 import { attemptLimiter, AuthError, checkPin, hashPin, hashToken, inviteCode, newToken, normalizePhone, tempPin, verifyPin } from './auth.ts';
 import { knowledge } from './knowledge.ts';
-import { AiFailed, AiUnavailable, type Ai, type CaptureKind } from './ai.ts';
+import { AiFailed, AiUnavailable, type Ai, type CaptureKind, type ChatProvider } from './ai.ts';
+import { runBriefing, type Briefing, type BriefingInput } from './agent.ts';
 import type { SaveCapture } from './captures.ts';
 import { computeNowcast } from './nowcast.ts';
 import { assessPond, classifyReading, limitsFor, overallLevel, type Limits, type Threshold } from './rules.ts';
@@ -98,6 +99,8 @@ export interface ApiDeps {
   demoPhone?: string | null;
   /** Real AI reads per farm per day, so one farm cannot use up everyone's credits; 0 = no cap. */
   farmAiCap?: number;
+  /** Models for the evening briefing agent, tried in order; empty = rules-only briefings. */
+  agentProviders?: ChatProvider[];
 }
 
 const MAX_IMAGES = 24;
@@ -110,7 +113,7 @@ type Env = { Variables: { userId: number; farmId: number | null; tokenHash: stri
 
 export function createApi(
   store: Repo,
-  { clock = () => new Date(), getWeather = defaultGetWeather, geocode = defaultGeocode, ai, saveCapture, cookieName = 'synteel_session', demoPhone = null, farmAiCap = 0 }: ApiDeps = {},
+  { clock = () => new Date(), getWeather = defaultGetWeather, geocode = defaultGeocode, ai, saveCapture, cookieName = 'synteel_session', demoPhone = null, farmAiCap = 0, agentProviders = [] }: ApiDeps = {},
 ) {
   const api = new Hono<Env>();
   const limiter = attemptLimiter();
@@ -244,6 +247,69 @@ export function createApi(
       .filter((h) => h.t >= now.getTime() - 3600_000 && h.t <= now.getTime() + 24 * 3600_000)
       .map(({ t, airTemp, rain, cloud }) => ({ t, airTemp, rain, cloud }));
     return { generatedAt: now.getTime(), weather: { available: weather.length > 0, error: weatherError, place: farm?.locationName ?? null, hours }, ponds };
+  }
+
+  // ---------- evening briefing ----------
+
+  const MAX_BRIEFINGS_PER_DAY = 4;
+
+  /** Compact daily history of one pond for the agent's get_pond_history tool. */
+  function pondHistory(r: FarmRepo, pondId: number, days: number) {
+    const tz = timezone(r);
+    const byDay = new Map<string, { temp: number[]; ph?: number; tds?: number; dead: number; leftover?: string; behavior: Set<string>; aeration?: string }>();
+    for (const l of r.logsSince(pondId, new Date(clock().getTime() - days * DAY_MS).toISOString()).reverse()) {
+      const day = localDate(new Date(l.loggedAt), tz);
+      const d = byDay.get(day) ?? { temp: [], dead: 0, behavior: new Set() };
+      const rd = l.data.readings ?? {};
+      if (rd.temperature !== undefined) d.temp.push(rd.temperature);
+      if (rd.ph !== undefined) d.ph = rd.ph;
+      if (rd.tds !== undefined) d.tds = rd.tds;
+      d.dead += l.data.mortality ?? 0;
+      if (l.data.feeding?.leftover) d.leftover = l.data.feeding.leftover;
+      for (const b of l.data.behavior ?? []) d.behavior.add(b);
+      if (l.data.aeration) d.aeration = l.data.aeration;
+      byDay.set(day, d);
+    }
+    return [...byDay.entries()].map(([date, d]) => ({
+      date,
+      water_temp: d.temp.length ? { min: Math.min(...d.temp), max: Math.max(...d.temp) } : null,
+      ph: d.ph ?? null,
+      tds: d.tds ?? null,
+      dead: d.dead,
+      feed_left: d.leftover ?? null,
+      behavior: [...d.behavior],
+      aerator: d.aeration ?? null,
+    }));
+  }
+
+  async function makeBriefing(r: FarmRepo): Promise<Briefing> {
+    const now = clock();
+    const nc = await nowcastAll(r);
+    const farm = r.getFarm()!;
+    const input: BriefingInput = {
+      farmName: farm.name,
+      now: now.getTime(),
+      timezone: farm.timezone,
+      ponds: r.listPonds().map((p) => {
+        const s = pondSummary(r, p);
+        return {
+          id: p.id,
+          name: p.name,
+          phase: s.batch?.phase ?? null,
+          week: s.program?.week ?? null,
+          level: s.level,
+          findings: s.findings.map((f) => ({ title: f.title, level: f.level })),
+          latest: s.latest as BriefingInput['ponds'][number]['latest'],
+          lastLogAt: s.lastLogAt,
+        };
+      }),
+      nowcasts: nc.ponds,
+      weather: nc.weather.hours,
+      history: (pondId, days) => pondHistory(r, pondId, days),
+    };
+    const briefing = await runBriefing(input, ai?.mode === 'meta' ? agentProviders : []);
+    r.saveBriefing(localDate(now, timezone(r)), briefing);
+    return briefing;
   }
 
   // ---------- sessions ----------
@@ -432,6 +498,19 @@ export function createApi(
     return c.json({ farm: r.getFarm() });
   });
 
+  api.get('/briefing', (c) => {
+    const r = needFarm(c);
+    return c.json({ briefing: r.briefing<Briefing>(localDate(clock(), timezone(r))) });
+  });
+
+  // Ask for a fresh briefing now (the server also makes one by itself every evening).
+  api.post('/briefing', async (c) => {
+    const r = needFarm(c);
+    if (r.listPonds().length === 0) throw new BadRequest('Belum ada kolam');
+    if (r.briefingsOn(localDate(clock(), timezone(r))) >= MAX_BRIEFINGS_PER_DAY) throw new BadRequest('Briefing hari ini sudah disusun beberapa kali. Coba lagi besok.');
+    return c.json({ briefing: await makeBriefing(r) }, 201);
+  });
+
   // ---------- members ----------
 
   api.get('/farm/members', (c) => {
@@ -581,5 +660,18 @@ export function createApi(
   });
 
   // For the server's own background monitor, which has no session.
-  return Object.assign(api, { nowcastFarm: (farmId: number) => nowcastAll(store.farm(farmId)) });
+  return Object.assign(api, {
+    nowcastFarm: (farmId: number) => nowcastAll(store.farm(farmId)),
+    /** The evening run: a briefing for every farm with ponds that has none yet today, from `hour` local time. */
+    async briefFarms(hour = 17) {
+      for (const id of store.farmIds()) {
+        const r = store.farm(id);
+        const farm = r.getFarm();
+        if (!farm || r.listPonds().length === 0) continue;
+        const localHour = Number(clock().toLocaleString('en-GB', { hour: '2-digit', hour12: false, timeZone: farm.timezone }));
+        if (localHour < hour || r.briefing(localDate(clock(), farm.timezone))) continue;
+        await makeBriefing(r).catch((err) => console.error(`briefing farm ${id}:`, err));
+      }
+    },
+  });
 }

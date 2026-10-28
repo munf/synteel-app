@@ -19,7 +19,7 @@ const ai = withDailyCap(createAi({ chat: env.aiChat, transcriber: env.aiTranscri
 const chain = env.aiChat.filter((p) => p.apiKey).map((p) => p.name).join(' → ');
 console.log(`AI mode: ${ai.mode}${ai.mode === 'meta' ? ` (${chain}${env.aiTranscriber.apiKey ? ', voice: meta' : ', no voice'}${env.aiDailyCap ? `, cap ${env.aiDailyCap}/day` : ''})` : ''}`);
 const store = repo(openDb());
-const api = createApi(store, { ai, saveCapture: captureStore(), cookieName: env.cookieName, demoPhone: env.demoPhone, farmAiCap: env.farmAiCap });
+const api = createApi(store, { ai, saveCapture: captureStore(), cookieName: env.cookieName, demoPhone: env.demoPhone, farmAiCap: env.farmAiCap, agentProviders: env.aiChat.filter((p) => p.apiKey) });
 app.route('/', api);
 
 // Routes must all be registered before the first request, which the monitor makes.
@@ -30,6 +30,9 @@ const monitor = startMonitor(
   async () => ({ ponds: (await Promise.all(store.farmIds().map((id) => api.nowcastFarm(id)))).flatMap((n) => n.ponds as Nowcast[]) }),
   (change) => console.log(`risk up: pond ${change.pondId} ${change.from} → ${change.to}: ${change.reasons.join('; ')}`),
 );
+
+// Evening briefing: check every 10 minutes; each farm gets one from 17.00 local time.
+setInterval(() => api.briefFarms().catch((err) => console.error('briefings:', err)), 10 * 60_000);
 
 serve({ fetch: app.fetch, port: env.port, hostname: env.host }, (info) => {
   console.log(`synteel server listening on http://${env.host ?? 'localhost'}:${info.port}`);

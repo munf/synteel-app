@@ -48,6 +48,15 @@ export function openDb(path = process.env.SYNTEEL_DB ?? defaultPath) {
       expires_at text not null
     );
 
+    create table if not exists briefings (
+      id integer primary key,
+      farm_id integer not null references farms(id),
+      local_date text not null,
+      created_at text not null,
+      body text not null
+    );
+    create index if not exists briefings_farm on briefings (farm_id, local_date);
+
     create table if not exists invites (
       code text primary key,
       farm_id integer not null references farms(id),
@@ -220,6 +229,20 @@ export function farmRepo(db: Db, farmId: number) {
       return (
         db.prepare('select * from logs where pond_id = ? and logged_at >= ? order by logged_at desc').all(pondId, sinceIso) as Row[]
       ).map(toLog);
+    },
+
+    saveBriefing(localDate: string, briefing: unknown) {
+      db.prepare('insert into briefings (farm_id, local_date, created_at, body) values (?, ?, ?, ?)').run(farmId, localDate, new Date().toISOString(), JSON.stringify(briefing));
+    },
+
+    /** Newest briefing made on `localDate`, or null. */
+    briefing<T>(localDate: string): T | null {
+      const r = db.prepare('select body from briefings where farm_id = ? and local_date = ? order by id desc limit 1').get(farmId, localDate) as Row | undefined;
+      return r ? (JSON.parse(r.body as string) as T) : null;
+    },
+
+    briefingsOn(localDate: string): number {
+      return (db.prepare('select count(*) as n from briefings where farm_id = ? and local_date = ?').get(farmId, localDate) as Row).n as number;
     },
 
     totalMortality(batchId: number): number {

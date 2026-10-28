@@ -1,5 +1,5 @@
-import { useState } from 'preact/hooks';
-import { api, type FarmState, type Nowcast, type NowcastState } from '../api.ts';
+import { useEffect, useState } from 'preact/hooks';
+import { api, type Briefing, type FarmState, type Nowcast, type NowcastState } from '../api.ts';
 import type { Go } from '../app.tsx';
 import { NowcastChart } from '../chart.tsx';
 import { fmtClock, fmtNum } from '../labels.ts';
@@ -13,6 +13,27 @@ const BAR = { ok: '#3FB984', warning: '#F0B323', critical: '#F04438' } as const;
 const DANGER_SCORE = 5;
 
 const DONE_KEY = 'synteel.checksDone';
+
+/** One line per thing the agent looked at, so the farmer (and owner) can see why it says what it says. */
+function stepLabel(step: Briefing['steps'][number], pondName: (id: number) => string) {
+  const pond = typeof step.args.pond_id === 'number' ? pondName(step.args.pond_id) : '';
+  switch (step.tool) {
+    case 'get_ponds':
+      return 'Melihat semua kolam dan peringatannya';
+    case 'get_night_forecast':
+      return `Membaca prakiraan malam ${pond}`;
+    case 'get_weather':
+      return 'Membaca cuaca 18 jam ke depan';
+    case 'get_pond_history':
+      return `Membaca catatan ${step.args.days ?? 3} hari terakhir ${pond}`;
+    case 'search_guidance':
+      return `Mencari panduan: “${step.args.query ?? ''}”`;
+    case 'submit_briefing':
+      return 'Menyusun briefing dan jadwal cek';
+    default:
+      return step.tool;
+  }
+}
 const loadDone = (): Record<string, boolean> => {
   try {
     return JSON.parse(localStorage.getItem(DONE_KEY) ?? '{}');
@@ -27,6 +48,26 @@ export function Watch({ state, nowcast, onChanged, go }: { state: FarmState; now
   const [done, setDone] = useState(loadDone);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [briefing, setBriefing] = useState<Briefing | null>(null);
+  const [briefBusy, setBriefBusy] = useState(false);
+  const [briefError, setBriefError] = useState('');
+  const [showSteps, setShowSteps] = useState(false);
+
+  useEffect(() => {
+    api.briefing().then((r) => setBriefing(r.briefing), () => {});
+  }, []);
+
+  const makeBriefing = async () => {
+    setBriefBusy(true);
+    setBriefError('');
+    try {
+      setBriefing((await api.makeBriefing()).briefing);
+    } catch (err) {
+      setBriefError((err as Error).message);
+    } finally {
+      setBriefBusy(false);
+    }
+  };
 
   if (!nowcast)
     return (
@@ -43,11 +84,16 @@ export function Watch({ state, nowcast, onChanged, go }: { state: FarmState; now
   const ahead = focus ? focus.hours.filter((h) => h.t >= now - 3600_000).slice(0, 24) : [];
   const pondName = (id: number) => state.ponds.find((p) => p.id === id)?.name ?? 'Kolam';
 
-  const tasks = casts
-    .flatMap((nc) => nc.checks.map((c) => ({ ...c, pondId: nc.pondId, key: `${nc.pondId}-${c.t}` })))
+  // Tonight's briefing (rule checks + the agent's additions) when there is one; otherwise the rule checks.
+  const tasks = (
+    briefing
+      ? briefing.checks.map((c) => ({ t: c.t, reason: c.action, alarm: c.alarm, pondId: c.pondId, agent: c.source === 'agent', why: c.why }))
+      : casts.flatMap((nc) => nc.checks.map((c) => ({ ...c, pondId: nc.pondId, agent: false, why: undefined as string | undefined })))
+  )
+    .map((c) => ({ ...c, key: `${c.pondId}-${c.t}` }))
     .filter((c) => c.t >= now - 2 * 3600_000 && c.t <= now + 24 * 3600_000)
     .sort((a, b) => a.t - b.t)
-    .slice(0, 6);
+    .slice(0, 8);
 
   const toggle = (key: string) => {
     const next = { ...done, [key]: !done[key] };
@@ -118,6 +164,51 @@ export function Watch({ state, nowcast, onChanged, go }: { state: FarmState; now
         </section>
       )}
 
+      <section class="card">
+        <div class="row top between">
+          <div class="stack-xs">
+            <h2>Briefing malam ini</h2>
+            <span class="meta">
+              {briefing
+                ? `${briefing.source === 'agent' ? 'Disusun AI Meta (Muse Spark)' : 'Disusun dari aturan'} · ${fmtClock(briefing.generatedAt)}`
+                : 'Otomatis tiap sore jam 17.00'}
+            </span>
+          </div>
+          <span class="icon-box">
+            <Icon name="sparkle" />
+          </span>
+        </div>
+        {briefing ? (
+          <>
+            <p>{briefing.summary}</p>
+            {briefing.steps.length > 0 && (
+              <div class="stack-sm">
+                <button class="link-row" aria-expanded={showSteps} onClick={() => setShowSteps(!showSteps)}>
+                  <span>Yang dilihat AI ({briefing.steps.length} langkah)</span>
+                  <span style={{ transform: showSteps ? 'rotate(180deg)' : 'none' }}>
+                    <Icon name="down" size={20} />
+                  </span>
+                </button>
+                {showSteps && (
+                  <ol class="stack-xs label ink2" style={{ margin: 0, paddingLeft: '1.2em' }}>
+                    {briefing.steps.map((s, i) => (
+                      <li key={i}>{stepLabel(s, pondName)}</li>
+                    ))}
+                  </ol>
+                )}
+              </div>
+            )}
+            <span class="meta">Saran keputusan, bukan diagnosis. Cek dari aturan tetap ada; AI hanya boleh menambah.</span>
+          </>
+        ) : (
+          <p class="ink2">Belum ada briefing hari ini. AI Meta akan membaca catatan, prakiraan dan cuaca, lalu menyusun rencana malam.</p>
+        )}
+        {briefError && <p class="error">{briefError}</p>}
+        <button class="btn secondary" disabled={briefBusy} onClick={makeBriefing}>
+          <Icon name="sparkle" size={20} /> {briefBusy ? 'AI sedang membaca data…' : briefing ? 'Susun ulang' : 'Susun briefing sekarang'}
+        </button>
+      </section>
+
       <section class="card" style={{ gap: 4 }}>
         <div class="row between" style={{ marginBottom: 8 }}>
           <h2>Jadwal cek</h2>
@@ -144,6 +235,11 @@ export function Watch({ state, nowcast, onChanged, go }: { state: FarmState; now
               <span class="meta">
                 {fmtClock(t.t)} · {pondName(t.pondId)}
               </span>
+              {t.agent && (
+                <span class="label" style={{ color: 'var(--accent-ink)' }}>
+                  Tambahan AI{t.why ? `: ${t.why}` : ''}
+                </span>
+              )}
             </div>
             {t.alarm && (
               <span class="stack-xs" style={{ alignItems: 'flex-end' }}>

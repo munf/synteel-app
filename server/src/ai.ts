@@ -136,12 +136,12 @@ export interface Transcriber {
   model: string;
 }
 
-class Retry extends AiFailed {}
+export class Retry extends AiFailed {}
 
 // Fireworks sits behind Cloudflare, which turns away requests without a User-Agent.
 const authHeaders = (apiKey: string) => ({ Authorization: `Bearer ${apiKey}`, 'User-Agent': 'synteel-app' });
 
-async function call(url: string, apiKey: string, init: RequestInit) {
+export async function call(url: string, apiKey: string, init: RequestInit) {
   let res: Response;
   try {
     res = await fetch(url, { ...init, headers: { ...authHeaders(apiKey), ...init.headers }, signal: AbortSignal.timeout(90_000) });
