@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'preact/hooks';
 
 export interface Prefs {
-  /** 0 Normal, 1 Besar (default for older farmers), 2 Sangat besar. */
+  /** 0 Normal (default), 1 Besar, 2 Sangat besar. */
   textSize: 0 | 1 | 2;
   /** Owners who always want charts and numbers open. */
   techOpen: boolean;
@@ -11,7 +11,7 @@ export interface Prefs {
 }
 
 const KEY = 'synteel.prefs';
-const DEFAULTS: Prefs = { textSize: 1, techOpen: false, shareData: false };
+const DEFAULTS: Prefs = { textSize: 0, techOpen: false, shareData: false };
 export const TEXT_PX = [16, 18, 20] as const;
 
 function load(): Prefs {

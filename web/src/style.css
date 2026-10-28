@@ -37,7 +37,7 @@
   --shadow: 0 10px 30px rgba(19, 38, 74, 0.14);
   color-scheme: light;
   font-family: 'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', system-ui, sans-serif;
-  font-size: 18px; /* "Besar": the default for older farmers; changed from Profil */
+  font-size: 16px; /* "Normal" by default; Profil switches to Besar or Sangat besar */
   line-height: 1.5;
   color: var(--ink);
 }
