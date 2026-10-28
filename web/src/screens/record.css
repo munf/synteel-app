@@ -1,0 +1,90 @@
+/* Catat, Catat satu kolam and Cek hasil suara. Tokens from style.css; sizes per the design rules. */
+
+/* ---------- shared ---------- */
+.rp-warn-card { border: 2px solid #f0b323; }
+.icon-box.rp-warn-box { background: var(--warn-bg); color: var(--warn); }
+.rp-round-icon { width: 72px; height: 72px; flex: none; border-radius: 50%; background: var(--tint); color: var(--navy); display: flex; align-items: center; justify-content: center; }
+.rp-text-btn { min-height: 44px; border: 0; border-radius: 16px; background: transparent; font-size: 1rem; font-weight: 600; color: var(--ink-2); display: flex; align-items: center; justify-content: center; gap: 8px; }
+.rp-text-btn.bad { color: var(--bad); }
+.rp-text-btn.blue { color: var(--accent-ink); font-weight: 800; min-height: 48px; }
+.rp-link { min-height: 44px; border: 0; background: none; padding: 0; display: inline-flex; align-items: center; gap: 4px; font-size: 1rem; font-weight: 800; color: var(--accent-ink); text-align: left; }
+.rp-link.warn { color: #6b4100; font-size: 0.875rem; text-decoration: underline; text-underline-offset: 3px; align-self: flex-start; }
+.rp-quota-foot .rp-link { min-height: 0; font-size: 0.875rem; display: inline; }
+.rp-quota-foot { border-top: 1px solid #d9e1ec; padding-top: 12px; }
+.rp-quota-foot svg { flex: none; }
+.rp-cam { width: 56px; height: 56px; flex: none; border: 2px solid var(--line-2); border-radius: 16px; background: #fff; color: var(--ink); display: inline-flex; align-items: center; justify-content: center; }
+.rp-cam:disabled { opacity: 0.5; }
+.rp-shot { width: 88px; height: 66px; flex: none; border-radius: 12px; overflow: hidden; display: block; background: var(--pond); }
+.rp-shot.dark { background: #15191f; }
+.rp-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rp-shot-icon { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--accent); }
+.rp-bar { height: 12px; border-radius: 6px; background: var(--tint); position: relative; overflow: hidden; }
+.rp-bar > span { position: absolute; inset: 0 auto 0 0; border-radius: 6px; background: var(--accent); transition: width 0.3s; }
+.rp-search { position: relative; display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 0 16px; border: 2px solid var(--line-2); border-radius: 16px; background: #fff; color: var(--muted); }
+.rp-search:focus-within { border-color: var(--accent); }
+.rp-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font-size: 1rem; color: var(--ink); }
+.rp-search input::placeholder { color: #7a869c; }
+.rp-play { min-height: 48px; width: 100%; border: 0; border-radius: 16px; background: var(--bg); display: flex; align-items: center; gap: 12px; padding: 0 16px; color: var(--navy); font-size: 0.875rem; font-weight: 800; text-align: left; }
+
+/* ---------- microphone permission ---------- */
+.rp-why { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 12px; }
+.rp-why li { display: flex; gap: 12px; align-items: flex-start; }
+.rp-why-icon { width: 36px; height: 36px; flex: none; border-radius: 12px; background: var(--bg); color: var(--accent); display: flex; align-items: center; justify-content: center; }
+.rp-steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 16px; }
+.rp-steps li { display: flex; gap: 12px; align-items: flex-start; }
+.rp-step-n { width: 32px; height: 32px; flex: none; border-radius: 50%; background: var(--navy); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 0.875rem; font-weight: 800; }
+.rp-set { border-radius: 16px; border: 1px solid #d9e1ec; background: var(--soft); padding: 4px; display: flex; flex-direction: column; gap: 4px; }
+.rp-set-row { min-height: 44px; border-radius: 12px; border: 2px solid transparent; background: #fff; color: var(--muted); padding: 4px 12px; display: flex; align-items: center; gap: 8px; }
+.rp-set-row.on { border-color: var(--accent); background: var(--tint); color: var(--ink); }
+.rp-set-app { width: 24px; height: 24px; flex: none; border-radius: 8px; background: var(--navy); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 0.875rem; font-weight: 800; line-height: 1; }
+.rp-set-app.grey { background: #9aa6ba; }
+.rp-set-radio { width: 20px; height: 20px; flex: none; border-radius: 50%; border: 2px solid #9aa6ba; background: #fff; color: #fff; display: flex; align-items: center; justify-content: center; }
+.rp-set-radio.on { border-color: var(--accent); background: var(--accent); }
+.rp-set-tap { flex: none; min-height: 24px; display: inline-flex; align-items: center; padding: 0 8px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 0.875rem; font-weight: 800; }
+
+/* ---------- Catat: big Bicara card, filters, pond list ---------- */
+.talk.rp-talk .mic { box-shadow: 0 0 0 10px rgba(47, 111, 228, 0.25); }
+.talk.rp-talk.rec .mic { box-shadow: 0 0 0 10px rgba(255, 255, 255, 0.18); }
+.rp-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
+.rp-filters button {
+  min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 2px;
+  padding: 10px 4px; border-radius: 16px; border: 2px solid var(--line-2); background: #fff; color: var(--ink); line-height: 1.25;
+}
+.rp-filters button.on { background: var(--navy); border-color: var(--navy); color: #fff; }
+.rp-row { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--line-2); }
+.rp-row:last-child { border-bottom: 0; }
+.rp-row-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 14px 0; min-height: 56px; border: 0; background: none; color: var(--ink); text-align: left; }
+.rp-row-main .thumb { background: #fff; border-radius: 12px; }
+.rp-row-name { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; font-weight: 800; white-space: nowrap; }
+.rp-act { flex: none; display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 12px; background: #fff; color: var(--navy); font-size: 0.875rem; font-weight: 800; }
+.rp-act.dark { background: var(--navy); color: #fff; }
+.rp-detail { width: 44px; height: 44px; flex: none; border-radius: 12px; border: 0; background: none; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
+.rp-clip { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 56px; border: 0; border-bottom: 1px solid var(--line-2); background: none; padding: 0; color: var(--ink); text-align: left; }
+.rp-clip:last-child { border-bottom: 0; }
+.rp-clip:disabled { cursor: default; color: var(--ink); }
+.rp-clip > svg { color: var(--muted); flex: none; }
+
+/* ---------- Cek hasil suara ---------- */
+.rs-ok { color: var(--ok); }
+.rs-card { border: 2px solid #f0b323; gap: 12px; }
+.rs-card.done { border-color: #fff; }
+.rs-kind-icon { border-radius: 12px; }
+.rs-done-icon { width: 40px; height: 40px; flex: none; border-radius: 20px; background: var(--ok-bg); color: var(--ok); display: flex; align-items: center; justify-content: center; }
+.rs-small-btn { min-height: 44px; flex: none; padding: 0 12px; border: 0; border-radius: 12px; background: var(--bg); color: var(--navy); font-size: 0.875rem; font-weight: 800; }
+.rs-fixed { min-height: 44px; display: flex; align-items: center; gap: 8px; border-radius: 12px; background: var(--bg); padding: 0 12px; font-size: 0.875rem; font-weight: 600; color: var(--ok); }
+.rs-offer { background: var(--tint); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.btn.rs-48 { min-height: 48px; }
+.btn.label { font-size: 0.875rem; }
+.rs-pick { min-height: 56px; width: 100%; border-radius: 16px; border: 2px solid var(--line-2); background: #fff; display: flex; align-items: center; gap: 12px; padding: 0 16px; font-size: 1rem; font-weight: 800; color: var(--navy); text-align: left; }
+.rs-option { min-height: 56px; width: 100%; border: 0; border-radius: 16px; background: var(--bg); display: flex; align-items: center; gap: 12px; padding: 4px 12px; color: var(--ink); text-align: left; }
+.rs-radio { min-height: 56px; width: 100%; border-radius: 16px; border: 2px solid var(--line-2); background: #fff; display: flex; align-items: center; gap: 12px; padding: 8px 12px; color: var(--ink); text-align: left; }
+.rs-radio.on { border-color: var(--navy); background: var(--tint); }
+.rs-radio-dot { width: 24px; height: 24px; flex: none; border-radius: 12px; border: 2px solid #b7c4d9; background: #fff; color: #fff; display: flex; align-items: center; justify-content: center; }
+.rs-radio.on .rs-radio-dot { border-color: var(--navy); background: var(--navy); }
+.rs-rec-dot { width: 12px; height: 12px; border-radius: 6px; background: #fff; box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.3); }
+.rs-clear { background: #fff; border-radius: 16px; padding: 0 16px; display: flex; flex-direction: column; overflow-y: auto; }
+.rs-clear-row { min-height: 48px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #d9e1ec; padding: 4px 0; }
+.rs-clear-row:last-child { border-bottom: 0; }
+.rs-clear-name { width: 96px; flex: none; }
+.rp-tips { border-top: 1px solid #d9e1ec; padding-top: 16px; gap: 12px; }
+.rp-tip-icon { width: 40px; height: 40px; flex: none; border-radius: 12px; background: var(--tint); color: var(--accent-ink); display: flex; align-items: center; justify-content: center; }

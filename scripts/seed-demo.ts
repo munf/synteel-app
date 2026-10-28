@@ -43,7 +43,8 @@ if (!weather) console.warn('Weather unavailable: outdoor temperatures are synthe
 const ponds = [
   // Glass eels in indoor fiber tanks.
   { pond: r.addPond({ name: 'Kolam A', kind: 'fiber', volumeL: 870, areaM2: 2.9, setting: 'indoor', shaded: null, aeration: 'full', depthCm: 30 }), phase: 'glass_eel' as const, stocked: 23, count: 500 },
-  { pond: r.addPond({ name: 'Kolam B', kind: 'fiber', volumeL: 870, areaM2: 2.9, setting: 'indoor', shaded: null, aeration: 'full', depthCm: 30 }), phase: 'glass_eel' as const, stocked: 23, count: 500 },
+  // Farmers call it by where it is; the voice round knows both names.
+  { pond: r.addPond({ name: 'Kolam B', kind: 'fiber', volumeL: 870, areaM2: 2.9, setting: 'indoor', shaded: null, aeration: 'full', depthCm: 30, nicknames: ['kolam dekat pintu'] }), phase: 'glass_eel' as const, stocked: 23, count: 500 },
   // Elver pond as the partner farm runs it: outdoor, paranet, 24-hour aeration, 30 cm deep, about 50 eels per m².
   { pond: r.addPond({ name: 'Kolam C', kind: 'beton', volumeL: 3600, areaM2: 12, setting: 'outdoor', shaded: true, aeration: 'full', depthCm: 30 }), phase: 'elver' as const, stocked: 60, count: 650 },
 ];
@@ -86,7 +87,7 @@ for (const { pond, phase, stocked, count } of ponds) {
         data.feeding = { leftover: 'much' };
         if (d === 0 && hour === 17) data.behavior = ['surfacing'];
       }
-      r.addLog({ pondId: pond.id, batchId: batch.id, loggedAt: at.toISOString(), source: 'manual', data });
+      r.addLog({ pondId: pond.id, batchId: batch.id, loggedAt: at.toISOString(), source: 'manual', data }, demo.id);
     }
   }
 }

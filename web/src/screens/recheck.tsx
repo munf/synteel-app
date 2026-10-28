@@ -1,6 +1,6 @@
 // The follow-up to an emergency report: an hour later Beranda asks whether things improved.
 // If not, the farmer records the new deaths and is offered help at once. Deterministic: no AI.
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { api } from '../api.ts';
 import type { Go } from '../app.tsx';
 import { fmtClock } from '../labels.ts';
@@ -95,10 +95,18 @@ function Due({ r, go, onDone }: { r: Recheck; go: Go; onDone: (next?: Recheck) =
   );
 }
 
-/** Due re-checks as cards; upcoming ones as a quiet line. */
-export function Rechecks({ go }: { go: Go }) {
+/**
+ * Re-check reminders kept on this phone. `due` ones are shown as cards on top of Beranda;
+ * the next upcoming one is a line in the hero card. Re-evaluated every minute so a reminder
+ * turns into a card while the app stays open.
+ */
+export function useRechecks() {
   const [list, setList] = useState(loadRechecks);
-  const now = Date.now();
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
   // Forget reminders older than a day.
   const live = list.filter((r) => now - r.at < 24 * 3600_000);
   const update = (r: Recheck, next?: Recheck) => {
@@ -107,21 +115,19 @@ export function Rechecks({ go }: { go: Go }) {
     saveRechecks(updated);
     setList(updated);
   };
-  const due = live.filter((r) => r.dueAt <= now);
-  const soon = live.filter((r) => r.dueAt > now);
-  if (!due.length && !soon.length) return null;
+  return {
+    due: live.filter((r) => r.dueAt <= now),
+    soon: live.filter((r) => r.dueAt > now).sort((a, b) => a.dueAt - b.dueAt),
+    update,
+  };
+}
+
+/** Due re-checks as cards. */
+export function DueRechecks({ due, update, go }: { due: Recheck[]; update: (r: Recheck, next?: Recheck) => void; go: Go }) {
   return (
     <>
       {due.map((r) => (
         <Due key={r.pondId} r={r} go={go} onDone={(next) => update(r, next)} />
-      ))}
-      {soon.map((r) => (
-        <div key={r.pondId} class="note warn" style={{ alignItems: 'center' }}>
-          <Icon name="clock" />
-          <span class="grow">
-            Cek ulang {r.pondName} jam {fmtClock(r.dueAt)}
-          </span>
-        </div>
       ))}
     </>
   );

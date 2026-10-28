@@ -99,11 +99,39 @@ export function openDb(path = process.env.SYNTEEL_DB ?? defaultPath) {
       data text not null
     );
     create index if not exists logs_pond_time on logs (pond_id, logged_at);
+
+    -- Real AI reads per person per farm-local day; the farm's cap counts them all together.
+    create table if not exists ai_usage (
+      farm_id integer not null references farms(id),
+      user_id integer not null references users(id),
+      local_date text not null,
+      used integer not null default 0,
+      primary key (farm_id, user_id, local_date)
+    );
+
+    -- "Hubungi bantuan": kept even when the e-mail to the team fails.
+    create table if not exists support_tickets (
+      id integer primary key,
+      created_at text not null,
+      topic text not null,
+      message text not null,
+      reply_phone text not null,
+      account_phone text,
+      user_id integer references users(id),
+      farm_id integer references farms(id),
+      device text,
+      mailed_at text
+    );
   `);
   // Databases created before these pond columns existed.
   const pondCols = (db.prepare('pragma table_info(ponds)').all() as { name: string }[]).map((c) => c.name);
-  for (const [col, type] of [['area_m2', 'real'], ['setting', 'text'], ['shaded', 'integer'], ['aeration', 'text'], ['depth_cm', 'real'], ['farm_id', 'integer references farms(id)']]) {
+  for (const [col, type] of [['area_m2', 'real'], ['setting', 'text'], ['shaded', 'integer'], ['aeration', 'text'], ['depth_cm', 'real'], ['farm_id', 'integer references farms(id)'], ['nicknames', 'text']]) {
     if (!pondCols.includes(col)) db.exec(`alter table ponds add column ${col} ${type}`);
+  }
+  // Logs from before accounts and corrections: no maker, never deleted, no edits.
+  const logCols = (db.prepare('pragma table_info(logs)').all() as { name: string }[]).map((c) => c.name);
+  for (const [col, type] of [['created_by', 'integer references users(id)'], ['deleted_at', 'text'], ['edits', 'text']]) {
+    if (!logCols.includes(col)) db.exec(`alter table logs add column ${col} ${type}`);
   }
   db.exec('create index if not exists ponds_farm on ponds (farm_id)');
   // Single-farm databases (before accounts): the old farm becomes farm 1 and owns every pond.
@@ -133,6 +161,7 @@ const toPond = (r: Row): Pond => ({
   shaded: r.shaded === null || r.shaded === undefined ? null : Boolean(r.shaded),
   aeration: r.aeration as Aeration | null,
   depthCm: r.depth_cm as number | null,
+  nicknames: r.nicknames ? (JSON.parse(r.nicknames as string) as string[]) : [],
 });
 
 const toBatch = (r: Row): Batch => ({
@@ -150,6 +179,27 @@ const toLog = (r: Row): Log => ({
   loggedAt: r.logged_at as string,
   source: r.source as Log['source'],
   data: JSON.parse(r.data as string) as LogData,
+});
+
+/** A change to a log, for its history: who, when, and in plain words what. */
+export interface StoredEdit {
+  at: string;
+  byUserId: number;
+  text: string;
+}
+
+/** A log with who made it and what happened to it since. */
+export interface LogRecord extends Log {
+  createdBy: number | null;
+  deletedAt: string | null;
+  edits: StoredEdit[];
+}
+
+const toLogRecord = (r: Row): LogRecord => ({
+  ...toLog(r),
+  createdBy: r.created_by as number | null,
+  deletedAt: r.deleted_at as string | null,
+  edits: r.edits ? (JSON.parse(r.edits as string) as StoredEdit[]) : [],
 });
 
 const toFarm = (r: Row): Farm => ({
@@ -184,17 +234,18 @@ export function farmRepo(db: Db, farmId: number) {
       return r ? toPond(r) : null;
     },
 
-    addPond(p: Omit<Pond, 'id'>): Pond {
+    addPond(p: Omit<Pond, 'id' | 'nicknames'> & { nicknames?: string[] }): Pond {
+      const nicknames = p.nicknames ?? [];
       const { lastInsertRowid } = db
-        .prepare('insert into ponds (farm_id, name, kind, volume_l, area_m2, setting, shaded, aeration, depth_cm) values (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .run(farmId, p.name, p.kind, p.volumeL, p.areaM2, p.setting, p.shaded === null ? null : Number(p.shaded), p.aeration, p.depthCm);
-      return { id: Number(lastInsertRowid), ...p };
+        .prepare('insert into ponds (farm_id, name, kind, volume_l, area_m2, setting, shaded, aeration, depth_cm, nicknames) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(farmId, p.name, p.kind, p.volumeL, p.areaM2, p.setting, p.shaded === null ? null : Number(p.shaded), p.aeration, p.depthCm, JSON.stringify(nicknames));
+      return { id: Number(lastInsertRowid), ...p, nicknames };
     },
 
     updatePond(p: Pond) {
       db.prepare(
-        'update ponds set name = ?, kind = ?, volume_l = ?, area_m2 = ?, setting = ?, shaded = ?, aeration = ?, depth_cm = ? where id = ? and farm_id = ?',
-      ).run(p.name, p.kind, p.volumeL, p.areaM2, p.setting, p.shaded === null ? null : Number(p.shaded), p.aeration, p.depthCm, p.id, farmId);
+        'update ponds set name = ?, kind = ?, volume_l = ?, area_m2 = ?, setting = ?, shaded = ?, aeration = ?, depth_cm = ?, nicknames = ? where id = ? and farm_id = ?',
+      ).run(p.name, p.kind, p.volumeL, p.areaM2, p.setting, p.shaded === null ? null : Number(p.shaded), p.aeration, p.depthCm, JSON.stringify(p.nicknames), p.id, farmId);
     },
 
     archivePond(id: number) {
@@ -217,18 +268,67 @@ export function farmRepo(db: Db, farmId: number) {
       return { id: Number(lastInsertRowid), ...b };
     },
 
-    addLog(l: Omit<Log, 'id'>): Log {
+    /** `createdBy`: the person who recorded it; null only for logs from scripts. */
+    addLog(l: Omit<Log, 'id'>, createdBy: number | null = null): Log {
       const { lastInsertRowid } = db
-        .prepare('insert into logs (pond_id, batch_id, logged_at, source, data) values (?, ?, ?, ?, ?)')
-        .run(l.pondId, l.batchId, l.loggedAt, l.source, JSON.stringify(l.data));
+        .prepare('insert into logs (pond_id, batch_id, logged_at, source, data, created_by) values (?, ?, ?, ?, ?, ?)')
+        .run(l.pondId, l.batchId, l.loggedAt, l.source, JSON.stringify(l.data), createdBy);
       return { id: Number(lastInsertRowid), ...l };
     },
+
+    // Deleted logs stay in the table (they can be restored) but every reader below skips them.
 
     /** Logs for a pond since `sinceIso`, newest first. */
     logsSince(pondId: number, sinceIso: string): Log[] {
       return (
-        db.prepare('select * from logs where pond_id = ? and logged_at >= ? order by logged_at desc').all(pondId, sinceIso) as Row[]
+        db.prepare('select * from logs where pond_id = ? and logged_at >= ? and deleted_at is null order by logged_at desc').all(pondId, sinceIso) as Row[]
       ).map(toLog);
+    },
+
+    /** Same, with maker and edits, for the history screen. */
+    historySince(pondId: number, sinceIso: string): LogRecord[] {
+      return (
+        db.prepare('select * from logs where pond_id = ? and logged_at >= ? and deleted_at is null order by logged_at desc, id desc').all(pondId, sinceIso) as Row[]
+      ).map(toLogRecord);
+    },
+
+    /** Logs on any pond of this farm since `sinceIso`, newest first. */
+    farmLogsSince(sinceIso: string): Log[] {
+      return (
+        db
+          .prepare('select l.* from logs l join ponds p on p.id = l.pond_id where p.farm_id = ? and l.logged_at >= ? and l.deleted_at is null order by l.logged_at desc')
+          .all(farmId, sinceIso) as Row[]
+      ).map(toLog);
+    },
+
+    /** One log of this farm, deleted or not; null for another farm's log. */
+    getLog(id: number): LogRecord | null {
+      const r = db.prepare('select l.* from logs l join ponds p on p.id = l.pond_id where l.id = ? and p.farm_id = ?').get(id, farmId) as Row | undefined;
+      return r ? toLogRecord(r) : null;
+    },
+
+    /** Saves a changed log (data, pond, batch, deleted) together with its edit trail. */
+    saveLog(l: LogRecord) {
+      db.prepare('update logs set pond_id = ?, batch_id = ?, data = ?, deleted_at = ?, edits = ? where id = ?').run(
+        l.pondId,
+        l.batchId,
+        JSON.stringify(l.data),
+        l.deletedAt,
+        JSON.stringify(l.edits),
+        l.id,
+      );
+    },
+
+    // ---------- AI reads ----------
+    aiUsage(localDate: string): { userId: number; used: number }[] {
+      return (db.prepare('select user_id, used from ai_usage where farm_id = ? and local_date = ?').all(farmId, localDate) as Row[]).map((r) => ({
+        userId: r.user_id as number,
+        used: r.used as number,
+      }));
+    },
+
+    countAiUse(userId: number, localDate: string) {
+      db.prepare('insert into ai_usage (farm_id, user_id, local_date, used) values (?, ?, ?, 1) on conflict do update set used = used + 1').run(farmId, userId, localDate);
     },
 
     saveBriefing(localDate: string, briefing: unknown) {
@@ -246,7 +346,7 @@ export function farmRepo(db: Db, farmId: number) {
     },
 
     totalMortality(batchId: number): number {
-      const rows = db.prepare('select data from logs where batch_id = ?').all(batchId) as Row[];
+      const rows = db.prepare('select data from logs where batch_id = ? and deleted_at is null').all(batchId) as Row[];
       return rows.reduce((sum, r) => sum + ((JSON.parse(r.data as string) as LogData).mortality ?? 0), 0);
     },
   };
@@ -377,8 +477,32 @@ export function repo(db: Db) {
       return r ? { farmId: r.farm_id as number, role: r.role as Role, farmName: r.name as string } : null;
     },
 
+    /** Why a code does not work, for the right message: unknown, or already used / expired. */
+    inviteProblem(code: string): 'missing' | 'spent' {
+      return db.prepare('select 1 from invites where code = ?').get(code) ? 'spent' : 'missing';
+    },
+
     useInvite(code: string, userId: number) {
       db.prepare('update invites set used_by = ?, used_at = ? where code = ?').run(userId, now(), code);
+    },
+
+    // ---------- support ----------
+    addSupportTicket(t: { topic: string; message: string; replyPhone: string; accountPhone: string | null; userId: number | null; farmId: number | null; device: string | null }): number {
+      const { lastInsertRowid } = db
+        .prepare('insert into support_tickets (created_at, topic, message, reply_phone, account_phone, user_id, farm_id, device) values (?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(now(), t.topic, t.message, t.replyPhone, t.accountPhone, t.userId, t.farmId, t.device);
+      return Number(lastInsertRowid);
+    },
+
+    supportTicket(id: number): { topic: string; message: string; replyPhone: string; userId: number | null; mailedAt: string | null } | null {
+      const r = db.prepare('select * from support_tickets where id = ?').get(id) as Row | undefined;
+      return r
+        ? { topic: r.topic as string, message: r.message as string, replyPhone: r.reply_phone as string, userId: r.user_id as number | null, mailedAt: r.mailed_at as string | null }
+        : null;
+    },
+
+    supportMailed(id: number) {
+      db.prepare('update support_tickets set mailed_at = ? where id = ?').run(now(), id);
     },
   };
 }

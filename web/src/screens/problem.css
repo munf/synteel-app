@@ -1,0 +1,6 @@
+/* Ada masalah: tips after a basin photo the AI could not count. */
+.count-tips { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 0.875rem; color: var(--ink-2); }
+.count-tips li { display: flex; gap: 12px; align-items: center; }
+.count-tips svg { flex: none; }
+/* Counting by hand: the number is the one used in the report, so it is ringed. */
+.count-manual .stepper output { box-shadow: inset 0 0 0 3px var(--accent); }

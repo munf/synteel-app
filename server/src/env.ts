@@ -41,4 +41,16 @@ export const env = {
   host: process.env.HOST,
   // Example drafts instead of real AI, until Meta API access works.
   aiMock: process.env.SYNTEEL_AI_MOCK === '1',
+  // Support tickets by e-mail; without host, sender and recipient they are only stored.
+  smtp:
+    process.env.SYNTEEL_SMTP_HOST && process.env.SYNTEEL_SUPPORT_TO && (process.env.SYNTEEL_SMTP_FROM || process.env.SYNTEEL_SMTP_USER)
+      ? {
+          host: process.env.SYNTEEL_SMTP_HOST,
+          port: Number(process.env.SYNTEEL_SMTP_PORT || 587),
+          user: process.env.SYNTEEL_SMTP_USER ?? '',
+          pass: process.env.SYNTEEL_SMTP_PASS ?? '',
+          from: (process.env.SYNTEEL_SMTP_FROM || process.env.SYNTEEL_SMTP_USER)!,
+          to: process.env.SYNTEEL_SUPPORT_TO.split(',').map((a) => a.trim()).filter(Boolean),
+        }
+      : null,
 };

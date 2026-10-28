@@ -197,20 +197,21 @@ a { color: var(--accent-ink); }
 
 /* ---------- bottom navigation ---------- */
 .tabs {
-  position: fixed; z-index: 10;
-  left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px));
-  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-  max-width: 528px; margin: 0 auto;
+  /* One bar docked to the bottom edge, like WhatsApp, Instagram and X. */
+  position: fixed; z-index: 10; left: 0; right: 0; bottom: 0;
   display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px;
-  padding: 8px; border-radius: 28px; background: #fff; box-shadow: var(--shadow);
+  padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
+  background: #fff; border-top: 1px solid #d9e1ec;
 }
 .tabs button {
-  position: relative; height: 60px; border: 0; border-radius: 20px; background: none; color: var(--ink-2);
+  position: relative; min-height: 56px; border: 0; background: none; color: var(--muted);
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
   font-size: 0.875rem; font-weight: 600; line-height: 1.1;
 }
-.tabs button.active { background: var(--tint); color: var(--navy); }
-.tabs .dot { position: absolute; top: 8px; right: calc(50% - 22px); width: 8px; height: 8px; border-radius: 4px; background: var(--bad-dot); }
+.tabs .pill { position: relative; width: 56px; height: 32px; border-radius: 16px; display: flex; align-items: center; justify-content: center; }
+.tabs button.active { color: var(--navy); font-weight: 800; }
+.tabs button.active .pill { background: var(--tint); }
+.tabs .dot { position: absolute; top: 4px; right: 14px; width: 8px; height: 8px; border-radius: 4px; background: var(--bad-dot); box-shadow: 0 0 0 2px #fff; }
 
 /* ---------- pond card ---------- */
 .pond-card { background: #fff; border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 16px; border: 0; width: 100%; text-align: left; color: var(--ink); }
@@ -354,3 +355,50 @@ details.plain > summary { cursor: pointer; color: var(--accent-ink); font-weight
 .cover > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .cover .icon-btn { position: absolute; top: 12px; left: 12px; }
 .cover .cover-action { position: absolute; right: 12px; bottom: 12px; }
+
+/* ---------- round 2: shared parts ---------- */
+.note.bad { background: var(--bad-bg); color: #7a1a10; }
+/* The bold first line of a Notice; the rest stays 0.875rem. */
+.note-title { font-size: 1rem; font-weight: 800; }
+a.note, button.note { text-decoration: none; border: 0; width: 100%; text-align: left; }
+
+/* Compact buttons inside cards (44px tall, e.g. "Catat" next to a pond). */
+.btn.compact { min-height: 44px; padding: 0 16px; font-size: 0.875rem; flex: none; }
+.btn.tint { background: var(--tint); color: var(--navy); }
+/* A full-width row that opens another screen: title, one muted line, arrow. */
+.go-row {
+  min-height: 56px; width: 100%; border-radius: 16px; border: 2px solid var(--line-2); background: #fff; color: var(--navy);
+  padding: 8px 16px 8px 20px; display: flex; align-items: center; gap: 12px; text-align: left; text-decoration: none;
+}
+.go-row .meta { font-weight: 400; }
+/* Status labels in two more sizes, for lists and dense cards. */
+.pill.sm { min-height: 24px; padding: 0 8px; gap: 4px; }
+.pill.lg { min-height: 40px; padding: 0 16px; font-size: 1rem; }
+
+/* Beranda header: the whole row opens Profil. */
+.profile-link { min-height: 56px; width: 100%; display: flex; align-items: center; gap: 12px; border: 0; background: none; padding: 0; text-align: left; color: var(--ink); }
+.profile-link .more { display: inline-flex; align-items: center; gap: 4px; font-size: 0.875rem; font-weight: 600; color: var(--accent-ink); }
+.summary-link { display: flex; flex-direction: column; gap: 8px; border: 0; background: none; padding: 0; width: 100%; text-align: left; color: var(--ink); }
+.hero .recheck-line { display: flex; gap: 8px; align-items: center; font-size: 0.875rem; color: #fbd38d; }
+
+/* Connection lost while data is on screen (auto-retry every 30 s). */
+.conn-wrap { max-width: 560px; margin: 0 auto; padding: calc(16px + env(safe-area-inset-top, 0px)) max(20px, env(safe-area-inset-right, 0px)) 0 max(20px, env(safe-area-inset-left, 0px)); }
+.conn-wrap + .screen { padding-top: 24px; }
+.conn-banner { display: flex; flex-direction: column; gap: 12px; border-radius: 16px; padding: 12px 16px; background: var(--warn-bg); color: #6b4100; font-size: 0.875rem; }
+.conn-banner svg { flex: none; }
+.conn-banner button {
+  min-height: 44px; border-radius: 12px; border: 2px solid #e8c783; background: #fff; color: #6b4100;
+  display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 1rem; font-weight: 800;
+}
+
+/* Square checkbox (e.g. "Sertakan jenis HP dan versi app"). */
+.check-row { min-height: 44px; border: 0; background: transparent; padding: 0; display: flex; align-items: center; gap: 12px; text-align: left; font-size: 0.875rem; color: var(--ink-2); }
+.check-box { width: 24px; height: 24px; flex: none; border-radius: 6px; border: 2px solid #9aa6ba; background: #fff; color: #fff; display: flex; align-items: center; justify-content: center; }
+.check-box.on { background: var(--navy); border-color: var(--navy); }
+/* Read-only value in a form (user ID). */
+.readonly-box { min-height: 56px; border-radius: 16px; background: var(--bg); padding: 8px 16px; display: flex; flex-direction: column; justify-content: center; }
+.field input:disabled { background: var(--bg); }
+.field input.warn-border { border-color: var(--warn-dot); }
+.field input.accent-border { border-color: var(--accent); }
+.link-btn { min-height: 44px; border: 0; background: transparent; padding: 0; font-weight: 600; color: var(--accent-ink); }
+.inline-link { border: 0; background: none; padding: 0; font: inherit; font-weight: 800; color: var(--accent-ink); cursor: pointer; }

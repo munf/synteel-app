@@ -1,5 +1,7 @@
 // Turns a farmer's photo, voice note or daily video into a draft pond log.
 // The draft is never saved by itself: the farmer checks it in the Record form first.
+// A voice round (one recording about many ponds) is split per pond the same way; the
+// checks on its result live in round.ts.
 //
 // Three modes:
 //   meta  an API key is set: Muse Voice Transcribe (Meta) turns speech into text; Muse
@@ -11,7 +13,9 @@
 //
 // Chat follows the OpenAI-compatible API on both providers; request shapes verified live
 // on 2026-10-28.
+import type { RoundResult } from './contract.ts';
 import { READING_LIMITS, type Behavior, type LogData, type Phase, type ReadingKey } from './domain.ts';
+import { guardRound, mockRound, ROUND_SCHEMA, roundInstructions, type RoundPond } from './round.ts';
 
 export type CaptureKind = 'photo' | 'voice' | 'video';
 export type DraftField = 'temperature' | 'ph' | 'tds' | 'mortality' | 'behavior' | 'leftover' | 'color' | 'smell' | 'aeration';
@@ -37,12 +41,20 @@ export interface Draft {
   model?: string;
 }
 
+/** One voice round over many ponds: a recording, or text the farmer typed instead. */
+export interface RoundInput {
+  audio?: Blob;
+  transcript?: string;
+  ponds: RoundPond[];
+}
+
 export class AiUnavailable extends Error {}
 export class AiFailed extends Error {}
 
 export interface Ai {
   mode: 'meta' | 'mock' | 'off';
   draft(input: CaptureInput): Promise<Draft>;
+  round(input: RoundInput): Promise<RoundResult>;
 }
 
 const BEHAVIORS: Behavior[] = ['normal', 'surfacing', 'gathering_inlet', 'not_eating', 'lethargic'];
@@ -166,21 +178,20 @@ async function transcribe(t: Transcriber, audio: Blob): Promise<string> {
   return String(body.transcript ?? '').trim();
 }
 
-async function structure(p: ChatProvider, input: CaptureInput, transcript: string | undefined): Promise<Record<string, unknown>> {
-  const content: unknown[] = [{ type: 'text', text: transcript ? `Transkrip:\n${transcript}` : 'Baca gambar berikut.' }];
-  for (const image of input.images) content.push({ type: 'image_url', image_url: { url: await blobToDataUrl(image) } });
+/** One chat call that must answer with JSON matching `schema`. */
+async function chatJson(p: ChatProvider, system: string, content: unknown, name: string, schema: object, maxTokens: number): Promise<Record<string, unknown>> {
   const body = await call(`${p.base}/chat/completions`, p.apiKey, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       model: p.model,
       messages: [
-        { role: 'system', content: instructions(input) },
+        { role: 'system', content: system },
         { role: 'user', content },
       ],
-      response_format: { type: 'json_schema', json_schema: { name: 'pond_log', strict: true, schema: SCHEMA } },
+      response_format: { type: 'json_schema', json_schema: { name, strict: true, schema } },
       // Muse Spark reasons before answering; leave room for both.
-      max_tokens: 4000,
+      max_tokens: maxTokens,
       reasoning_effort: 'low',
     }),
   });
@@ -190,6 +201,30 @@ async function structure(p: ChatProvider, input: CaptureInput, transcript: strin
     throw new AiFailed('Jawaban AI tidak bisa dibaca');
   }
 }
+
+async function structure(p: ChatProvider, input: CaptureInput, transcript: string | undefined): Promise<Record<string, unknown>> {
+  const content: unknown[] = [{ type: 'text', text: transcript ? `Transkrip:\n${transcript}` : 'Baca gambar berikut.' }];
+  for (const image of input.images) content.push({ type: 'image_url', image_url: { url: await blobToDataUrl(image) } });
+  return chatJson(p, instructions(input), content, 'pond_log', SCHEMA, 4000);
+}
+
+/** Tries each provider in order; only outages and overload move on to the next one. */
+async function firstAnswer<T>(chat: ChatProvider[], ask: (p: ChatProvider) => Promise<T>): Promise<T> {
+  let lastError: Error = new AiFailed('no chat provider');
+  for (const provider of chat) {
+    try {
+      return await ask(provider);
+    } catch (err) {
+      if (!(err instanceof Retry)) throw err;
+      console.error(`${provider.name}: ${err.message}`);
+      lastError = err;
+    }
+  }
+  throw lastError;
+}
+
+// A long round (50 ponds) is a long transcript; anything beyond this is not a farm walk.
+const ROUND_TRANSCRIPT_MAX = 12_000;
 
 function liveAi(chat: ChatProvider[], transcriber?: Transcriber): Ai {
   return {
@@ -201,20 +236,28 @@ function liveAi(chat: ChatProvider[], transcriber?: Transcriber): Ai {
       }
       const transcript = input.audio && transcriber ? await transcribe(transcriber, input.audio) : undefined;
       if (input.kind === 'voice' && !transcript) throw new AiFailed('Transkrip kosong');
-      let lastError: Error = new AiFailed('no chat provider');
-      for (const provider of chat) {
-        try {
-          const draft = toDraft(await structure(provider, input, transcript), 'meta', transcript);
-          draft.model = `${provider.name}/${provider.model}`;
-          if (input.kind === 'video' && input.audio && !transcriber) draft.problems.push('Narasi video belum bisa didengar AI, hanya gambar yang dibaca.');
-          return draft;
-        } catch (err) {
-          if (!(err instanceof Retry)) throw err;
-          console.error(`${provider.name}: ${err.message}`);
-          lastError = err;
-        }
+      return firstAnswer(chat, async (provider) => {
+        const draft = toDraft(await structure(provider, input, transcript), 'meta', transcript);
+        draft.model = `${provider.name}/${provider.model}`;
+        if (input.kind === 'video' && input.audio && !transcriber) draft.problems.push('Narasi video belum bisa didengar AI, hanya gambar yang dibaca.');
+        return draft;
+      });
+    },
+    async round(input) {
+      let transcript = input.transcript?.trim();
+      if (transcript === undefined || transcript === '') {
+        if (!input.audio) return guardRound({}, input.ponds, '', { model: 'none', mode: 'meta' });
+        // 503 keeps the recording queued on the phone until speech-to-text is available.
+        if (!transcriber) throw new AiUnavailable('Rekaman keliling belum bisa dibaca AI. Rekaman disimpan di HP; isi manual dulu.');
+        transcript = await transcribe(transcriber, input.audio);
       }
-      throw lastError;
+      // Nothing heard is an answer too: the farmer sees "Suara belum terbaca", not an error.
+      if (!transcript) return guardRound({}, input.ponds, '', { model: transcriber?.model ?? 'none', mode: 'meta' });
+      const text = transcript.slice(0, ROUND_TRANSCRIPT_MAX);
+      return firstAnswer(chat, async (provider) => {
+        const raw = await chatJson(provider, roundInstructions(input.ponds), `Transkrip:\n${text}`, 'pond_round', ROUND_SCHEMA, 8000);
+        return guardRound(raw, input.ponds, transcript, { model: `${provider.name}/${provider.model}`, mode: 'meta' });
+      });
     },
   };
 }
@@ -244,6 +287,9 @@ function mockAi(): Ai {
           : { temperature: 28.4, ph: 7.1, water_color: 'green', behavior: ['normal'], feeding_leftover: 'none', low_confidence: ['color'] };
       return toDraft({ ...raw, problems }, 'mock', transcript);
     },
+    async round(input) {
+      return mockRound(input.ponds);
+    },
   };
 }
 
@@ -252,14 +298,22 @@ export function withDailyCap(ai: Ai, cap: number, now = () => new Date()): Ai {
   if (ai.mode !== 'meta' || !(cap > 0)) return ai;
   let day = '';
   let used = 0;
+  // Photos, voice notes and rounds share one count.
+  const take = () => {
+    const today = now().toISOString().slice(0, 10);
+    if (today !== day) [day, used] = [today, 0];
+    if (used >= cap) throw new AiUnavailable('Kuota AI demo hari ini habis. Rekaman disimpan di HP; isi manual tetap bisa.');
+    used++;
+  };
   return {
     mode: ai.mode,
-    draft(input) {
-      const today = now().toISOString().slice(0, 10);
-      if (today !== day) [day, used] = [today, 0];
-      if (used >= cap) return Promise.reject(new AiUnavailable('Kuota AI demo hari ini habis. Rekaman disimpan di HP; isi manual tetap bisa.'));
-      used++;
+    async draft(input) {
+      take();
       return ai.draft(input);
+    },
+    async round(input) {
+      take();
+      return ai.round(input);
     },
   };
 }
@@ -269,10 +323,8 @@ export function createAi(opts: { chat: ChatProvider[]; transcriber?: Transcriber
   if (opts.mock) return mockAi();
   const chat = opts.chat.filter((p) => p.apiKey);
   if (chat.length) return liveAi(chat, opts.transcriber?.apiKey ? opts.transcriber : undefined);
-  return {
-    mode: 'off',
-    draft: async () => {
-      throw new AiUnavailable('AI belum aktif. Isi manual dulu, atau coba lagi nanti.');
-    },
+  const off = async (): Promise<never> => {
+    throw new AiUnavailable('AI belum aktif. Isi manual dulu, atau coba lagi nanti.');
   };
+  return { mode: 'off', draft: off, round: off };
 }

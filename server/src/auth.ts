@@ -3,10 +3,16 @@
 import { createHash, randomBytes, randomInt, scryptSync, timingSafeEqual } from 'node:crypto';
 
 export class AuthError extends Error {
-  readonly status: 400 | 401 | 403 | 409 | 429;
-  constructor(message: string, status: 400 | 401 | 403 | 409 | 429 = 401) {
+  readonly status: 400 | 401 | 403 | 404 | 409 | 410 | 429;
+  /** For the app to tell cases apart: 'locked', 'phone_taken', 'invite_invalid'. */
+  readonly code: string | undefined;
+  /** With 'locked': when trying again is allowed (ISO). */
+  readonly retryAt: string | undefined;
+  constructor(message: string, status: 400 | 401 | 403 | 404 | 409 | 410 | 429 = 401, code?: string, retryAt?: string) {
     super(message);
     this.status = status;
+    this.code = code;
+    this.retryAt = retryAt;
   }
 }
 
@@ -70,12 +76,17 @@ export function tempPin(): string {
  * further tries are refused for 15 minutes. In memory: a restart clears it, which is fine
  * for a single small server.
  */
-export function attemptLimiter(max = 5, windowMs = 15 * 60_000, now = () => Date.now()) {
+export function attemptLimiter(max = 5, windowMs = 15 * 60_000, now = () => Date.now(), message = 'Terlalu banyak percobaan. Coba lagi 15 menit lagi.') {
   const fails = new Map<string, number[]>();
   const recent = (key: string) => (fails.get(key) ?? []).filter((t) => now() - t < windowMs);
   return {
+    /** Refuses with 429 'locked' and the time the oldest counted try runs out. */
     check(...keys: string[]) {
-      if (keys.some((k) => recent(k).length >= max)) throw new AuthError('Terlalu banyak percobaan. Coba lagi 15 menit lagi.', 429);
+      const full = keys.map(recent).filter((r) => r.length >= max);
+      if (full.length) {
+        const retryAt = Math.max(...full.map((r) => r[r.length - max] + windowMs));
+        throw new AuthError(message, 429, 'locked', new Date(retryAt).toISOString());
+      }
     },
     fail(...keys: string[]) {
       for (const k of keys) fails.set(k, [...recent(k), now()]);

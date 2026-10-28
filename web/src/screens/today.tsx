@@ -1,8 +1,8 @@
 import type { FarmState, Nowcast, NowcastState, PondSummary } from '../api.ts';
 import type { Go } from '../app.tsx';
-import { fmtAgo, fmtClock, fmtNum, greeting, readingWord } from '../labels.ts';
-import { EmptyState, Icon, initialOf, PondThumb, pondMeta, Shape, StatusPill, toneOf, type IconName } from '../ui.tsx';
-import { Rechecks } from './recheck.tsx';
+import { fmtAgo, fmtClock, fmtNum, greeting, phaseLabel, readingWord } from '../labels.ts';
+import { EmptyState, Icon, initialOf, PondThumb, pondMeta, Shape, StatusPill, type IconName } from '../ui.tsx';
+import { DueRechecks, useRechecks } from './recheck.tsx';
 
 const rank = { ok: 0, info: 0, warning: 1, critical: 2 } as const;
 const SHOWN = [
@@ -10,46 +10,84 @@ const SHOWN = [
   ['ph', 'pH', ''],
   ['tds', 'TDS', ''],
 ] as const;
+const BAR = { critical: '#F04438', warning: '#F0B323', ok: '#3FB984' } as const;
 
-function PondCard({ pond, go, now }: { pond: PondSummary; go: Go; now: number }) {
+/** A pond that needs attention: why, and only the readings that are not good. */
+function AttentionCard({ pond, go, now }: { pond: PondSummary; go: Go; now: number }) {
   const top = pond.findings.find((f) => f.level === 'critical' || f.level === 'warning');
   const lastAt = pond.lastLogAt ? Date.parse(pond.lastLogAt) : null;
   const staleH = lastAt === null ? null : (now - lastAt) / 3600_000;
+  const flagged = SHOWN.flatMap(([key, label, unit]) => {
+    const r = pond.latest[key];
+    const status = pond.status[key];
+    if (!r || !status || status === 'ok') return [];
+    return [{ key, label, value: `${fmtNum(r.value)}${unit}`, word: readingWord(key, r.value, status, pond.limits[key]) }];
+  });
+  const alive = pond.program?.estimatedAlive;
   return (
     <button class="pond-card" onClick={() => go({ name: 'pond', id: pond.id })}>
-      <div class="row">
+      <div class="row top">
         <PondThumb kind={pond.kind} />
         <div class="grow stack-xs">
           <span class="h2">{pond.name}</span>
-          <span class="meta">{pondMeta(pond)}</span>
+          <span class="meta num" style={{ display: 'flex', flexDirection: 'column' }}>
+            <span>{pond.batch && pond.program ? `${phaseLabel[pond.batch.phase]} · minggu ${pond.program.week}` : pondMeta(pond)}</span>
+            {alive != null && <span>sekitar {alive.toLocaleString('id-ID')} ekor</span>}
+          </span>
         </div>
         <StatusPill level={pond.level} />
       </div>
       {top && <p style={{ color: top.level === 'critical' ? '#9A2015' : '#6B4100' }}>{top.title}</p>}
-      <div class="readings">
-        {SHOWN.map(([key, label, unit]) => {
-          const r = pond.latest[key];
-          const w = r ? readingWord(key, r.value, pond.status[key], pond.limits[key]) : null;
-          return (
-            <div class="reading" key={key}>
-              <span class="k">{label}</span>
-              <span class="v">{r ? `${fmtNum(r.value)}${unit}` : '–'}</span>
-              {w ? (
-                <span class={`word ${w.tone}`}>
-                  <Shape tone={w.tone} />
-                  {w.text}
-                </span>
-              ) : (
-                <span class="meta">belum diukur</span>
-              )}
+      {flagged.length > 0 && (
+        <div class="readings">
+          {flagged.map((r) => (
+            <div class="reading" key={r.key}>
+              <span class="k">{r.label}</span>
+              <span class="v">{r.value}</span>
+              <span class={`word ${r.word.tone}`}>
+                <Shape tone={r.word.tone} />
+                {r.word.text}
+              </span>
             </div>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      )}
       <span class={staleH !== null && staleH >= 12 ? 'label stale' : 'meta'}>
         {lastAt === null ? 'Belum pernah dicatat' : `Dicatat ${fmtAgo(lastAt, now)}`}
       </span>
     </button>
+  );
+}
+
+/** Every pond is fine: say so, and point at the pond recorded longest ago. */
+function SafeCard({ ponds, go, now }: { ponds: PondSummary[]; go: Go; now: number }) {
+  const at = (p: PondSummary) => (p.lastLogAt ? Date.parse(p.lastLogAt) : -Infinity);
+  const oldest = ponds.reduce((a, b) => (at(b) < at(a) ? b : a));
+  return (
+    <section class="card">
+      <div class="row">
+        <span class="icon-box ok">
+          <Icon name="check" size={24} stroke={2.5} />
+        </span>
+        <div class="grow stack-xs">
+          <span class="h2">Semua kolam aman</span>
+          <span class="meta">{ponds.length} kolam dalam batas baik</span>
+        </div>
+      </div>
+      <hr class="rule" />
+      <div class="row">
+        <PondThumb kind={oldest.kind} size={48} />
+        <div class="grow stack-xs">
+          <span class="meta">Paling lama belum dicatat</span>
+          <span class="strong">
+            {oldest.name} · {oldest.lastLogAt ? fmtAgo(at(oldest), now) : 'belum pernah dicatat'}
+          </span>
+        </div>
+        <button class="btn compact tint" onClick={() => go({ name: 'record-pond', pondId: oldest.id })}>
+          Catat
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -163,6 +201,16 @@ function WeatherCard({ nowcast, focus, onRetry }: { nowcast: NowcastState; focus
   );
 }
 
+/** Ponds that need attention, most urgent first: level, then the night's peak risk, then the most problems, then the stalest. */
+function byUrgency(ponds: PondSummary[], nowcast: NowcastState | null) {
+  const peak = (p: PondSummary) => rank[nowcast?.ponds.find((n) => n.pondId === p.id)?.peak.level ?? 'ok'];
+  const problems = (p: PondSummary) => p.findings.filter((f) => f.level === 'critical' || f.level === 'warning').length;
+  const at = (p: PondSummary) => (p.lastLogAt ? Date.parse(p.lastLogAt) : 0);
+  return ponds
+    .filter((p) => p.level === 'critical' || p.level === 'warning')
+    .sort((a, b) => rank[b.level] - rank[a.level] || peak(b) - peak(a) || problems(b) - problems(a) || at(a) - at(b));
+}
+
 export function Today({
   state,
   userName,
@@ -177,27 +225,44 @@ export function Today({
   onRetryWeather: () => void;
 }) {
   const now = Date.now();
-  const ponds = [...state.ponds].sort((a, b) => rank[b.level] - rank[a.level]);
+  const ponds = state.ponds;
   const counts = { critical: 0, warning: 0, ok: 0 };
   for (const p of ponds) counts[p.level === 'critical' ? 'critical' : p.level === 'warning' ? 'warning' : 'ok']++;
+  const need = byUrgency(ponds, nowcast);
+  const shown = need.slice(0, 2);
   const next = nextCheck(state, nowcast);
-  const focus = nowcast?.ponds.find((n) => n.pondId === ponds[0]?.id);
+  const focus = nowcast?.ponds.find((n) => n.pondId === (need[0] ?? ponds[0])?.id);
+  const rechecks = useRechecks();
+  const soon = rechecks.soon[0];
+  const alive = ponds.reduce((s, p) => s + (p.program?.estimatedAlive ?? 0), 0);
+  const groups = (['critical', 'warning', 'ok'] as const).filter((k) => counts[k] > 0);
+
+  const recheckLine = soon && (
+    <div class="recheck-line">
+      <Icon name="clock" size={18} />
+      <span>
+        {next && soon.dueAt >= next.check.t ? 'Lalu cek' : 'Cek'} ulang {soon.pondName} jam {fmtClock(soon.dueAt)}
+      </span>
+    </div>
+  );
 
   return (
     <div class="screen">
-      <header class="row">
-        <button class="avatar" style={{ border: 0 }} aria-label="Profil" onClick={() => go({ name: 'profile' })}>
-          {initialOf(userName)}
-        </button>
-        <div class="grow stack-xs" style={{ gap: 0 }}>
-          <span class="h2">
-            {greeting()}, {userName}
+      <header>
+        <button class="profile-link" onClick={() => go({ name: 'profile' })}>
+          <span class="avatar">{initialOf(userName)}</span>
+          <span class="grow" style={{ display: 'flex', flexDirection: 'column' }}>
+            <span class="h2">
+              {greeting()}, {userName}
+            </span>
+            <span class="more">
+              Profil dan info <Icon name="next" size={16} stroke={2.5} />
+            </span>
           </span>
-          <span class="meta">{state.farm?.name}</span>
-        </div>
+        </button>
       </header>
 
-      <Rechecks go={go} />
+      <DueRechecks due={rechecks.due} update={rechecks.update} go={go} />
 
       {next ? (
         <section class="hero">
@@ -211,6 +276,7 @@ export function Today({
             {next.pond && <StatusPill level={next.check.nc.peak.level}>{next.pond.name}</StatusPill>}
           </div>
           <p>{next.check.reason}</p>
+          {recheckLine}
           <button class="btn light" onClick={() => go({ name: 'watch' })}>
             Lihat rencana malam <Icon name="arrow" size={20} />
           </button>
@@ -223,28 +289,24 @@ export function Today({
           <p class="h2" style={{ color: '#fff' }}>
             Catat kondisi kolam pagi dan sore supaya Synteel bisa ikut menjaga.
           </p>
+          {recheckLine}
           <button class="btn light" onClick={() => go({ name: 'record' })}>
             <Icon name="mic" size={20} /> Catat sekarang
           </button>
         </section>
       )}
 
-      <section class="stack-sm">
-        <div class="row between">
+      <button class="summary-link" onClick={() => go({ name: 'record' })} aria-label={`${ponds.length} kolam: ${counts.critical} bahaya, ${counts.warning} perhatian, ${counts.ok} aman. Buka daftar kolam`}>
+        <div class="row between" style={{ width: '100%' }}>
           <h2>{ponds.length} kolam</h2>
-          <span class="meta">
-            {(() => {
-              const alive = ponds.reduce((s, p) => s + (p.program?.estimatedAlive ?? 0), 0);
-              return alive ? `sekitar ${alive.toLocaleString('id-ID')} ekor` : '';
-            })()}
-          </span>
+          <span class="meta">{alive ? `sekitar ${alive.toLocaleString('id-ID')} ekor` : ''}</span>
         </div>
-        <div class="status-bar" style={{ gridTemplateColumns: `repeat(${ponds.length}, minmax(0, 1fr))` }}>
-          {ponds.map((p) => (
-            <span key={p.id} style={{ background: p.level === 'critical' ? '#F04438' : p.level === 'warning' ? '#F0B323' : '#3FB984' }} />
+        <div class="status-bar" style={{ width: '100%', gridTemplateColumns: groups.map((k) => `${counts[k]}fr`).join(' ') }}>
+          {groups.map((k) => (
+            <span key={k} style={{ background: BAR[k] }} />
           ))}
         </div>
-        <div class="grid3">
+        <div class="grid3" style={{ width: '100%' }}>
           <span class="word bad">
             <Shape tone="bad" />
             {counts.critical} Bahaya
@@ -258,17 +320,26 @@ export function Today({
             {counts.ok} Aman
           </span>
         </div>
-      </section>
+      </button>
 
-      {ponds.map((p) => (
-        <PondCard key={p.id} pond={p} go={go} now={now} />
-      ))}
-
-      {state.role === 'owner' && (
-        <button class="btn dashed" onClick={() => go({ name: 'add-pond' })}>
-          <Icon name="plus" size={20} /> Tambah kolam
-        </button>
+      {shown.length > 0 ? (
+        <section class="stack">
+          <h2>Perlu perhatian</h2>
+          {shown.map((p) => (
+            <AttentionCard key={p.id} pond={p} go={go} now={now} />
+          ))}
+        </section>
+      ) : (
+        <SafeCard ponds={ponds} go={go} now={now} />
       )}
+
+      <button class="go-row" onClick={() => go({ name: 'record' })}>
+        <span class="grow" style={{ display: 'flex', flexDirection: 'column' }}>
+          <span class="strong">Lihat semua {ponds.length} kolam</span>
+          {need.length > shown.length && <span class="meta">{need.length - shown.length} kolam lain juga perlu perhatian</span>}
+        </span>
+        <Icon name="arrow" size={20} />
+      </button>
 
       {nowcast ? <WeatherCard nowcast={nowcast} focus={focus} onRetry={onRetryWeather} /> : <p class="meta">Memuat cuaca…</p>}
 
@@ -281,6 +352,19 @@ export function Today({
           <span class="meta">Lihat hadiah rajin mencatat</span>
         </span>
         <Icon name="next" />
+      </button>
+
+      <button class="go-row" style={{ color: 'var(--ink)', paddingLeft: 16 }} onClick={() => go({ name: 'help' })}>
+        <span style={{ color: 'var(--accent)', display: 'flex' }}>
+          <Icon name="headset" />
+        </span>
+        <span class="grow" style={{ display: 'flex', flexDirection: 'column' }}>
+          <span class="strong">Hubungi bantuan</span>
+          <span class="meta">Ada kendala? Tim Synteel membalas lewat WhatsApp</span>
+        </span>
+        <span class="muted" style={{ display: 'flex' }}>
+          <Icon name="next" size={20} />
+        </span>
       </button>
     </div>
   );

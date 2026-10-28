@@ -65,7 +65,7 @@ export function Members({ farmName, owner, inviteOpen, onInviteOpen }: { farmNam
                 <span class="grow stack-xs" style={{ gap: 0 }}>
                   <span class="strong">
                     {m.name}
-                    {m.me && <span class="semi muted"> (saya)</span>}
+                    {m.me && <span class="semi muted"> (akun ini)</span>}
                   </span>
                   <span class="meta">
                     {roleLabel[m.role]}

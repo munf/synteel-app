@@ -4,12 +4,14 @@ import type { Aeration, Batch, Behavior, Farm, Finding, Level, Log, LogData, Pha
 import type { Nowcast, NowcastPoint, RiskFactor, RiskLevel, SuggestedCheck } from '../../server/src/nowcast.ts';
 import type { Limits } from '../../server/src/rules.ts';
 import type { Draft, DraftField } from '../../server/src/ai.ts';
+import type { AutoFix, HistoryLog, LogEdit, QuotaState, ReadingField, RoundDraft, RoundIssue, RoundResult, SupportRequest, SupportTopic } from '../../server/src/contract.ts';
 import type { LogSource } from '../../server/src/domain.ts';
 
 export type { Aeration, Batch, Behavior, Farm, Finding, Level, Log, LogData, Phase, Pond, Setting };
 export type { Limits, Nowcast, NowcastPoint, RiskFactor, RiskLevel, SuggestedCheck };
 export type { Draft, DraftField, LogSource };
 export type { Briefing, BriefingCheck, CountResult };
+export type { AutoFix, HistoryLog, LogEdit, QuotaState, ReadingField, RoundDraft, RoundIssue, RoundResult, SupportRequest, SupportTopic };
 
 export type ReadingKey = keyof NonNullable<LogData['readings']>;
 
@@ -50,7 +52,7 @@ export interface NowcastState {
   ponds: Nowcast[];
 }
 
-export type PondProfile = Partial<Pick<Pond, 'name' | 'kind' | 'volumeL' | 'areaM2' | 'setting' | 'shaded' | 'aeration' | 'depthCm'>>;
+export type PondProfile = Partial<Pick<Pond, 'name' | 'kind' | 'volumeL' | 'areaM2' | 'setting' | 'shaded' | 'aeration' | 'depthCm' | 'nicknames'>>;
 
 export interface Emergency {
   id: string;
@@ -110,7 +112,7 @@ export class ApiError extends Error {
 export const isAuthError = (e: unknown) => e instanceof ApiError && e.status === 401;
 
 // Sign-in routes answer 401 for a wrong PIN; that is not a lost session.
-const PUBLIC = /^\/auth\/(options|register|login|demo|invite|join)\b/;
+const PUBLIC = /^\/(auth\/(options|register|login|demo|invite|join)|support)\b/;
 let sessionLost: (() => void) | null = null;
 /** Called when any request finds the session gone (signed out elsewhere, PIN reset by the owner). */
 export const onSessionLost = (fn: (() => void) | null) => {
@@ -176,4 +178,26 @@ export const api = {
     return upload<{ result: CountResult; mock?: boolean }>(`/ponds/${pondId}/count`, form);
   },
   knowledge: () => call<{ emergencies: { emergencies: Emergency[] } }>('GET', '/knowledge'),
+
+  // Voice round: one recording that names many ponds → one draft per pond. Nothing is saved here.
+  round: (audio: Blob) => {
+    const form = new FormData();
+    form.append('audio', audio, audio.type.includes('wav') ? 'round.wav' : 'round.webm');
+    return upload<{ round: RoundResult }>('/round', form);
+  },
+  /** Same, from text (typed, or a transcript kept from an offline recording). */
+  roundText: (transcript: string) => call<{ round: RoundResult }>('POST', '/round/text', { transcript }),
+  /** Teach the voice reader another name for a pond ("kolam pojok"). */
+  addNickname: (pondId: number, nickname: string) => call<{ pond: PondSummary }>('POST', `/ponds/${pondId}/nicknames`, { nickname }),
+
+  // Record history and corrections (within 24 hours by whoever made it; the owner always).
+  history: (pondId: number) => call<{ logs: HistoryLog[] }>('GET', `/ponds/${pondId}/history`),
+  editLog: (logId: number, data: LogData) => call<{ log: HistoryLog }>('PUT', `/logs/${logId}`, data),
+  moveLog: (logId: number, pondId: number) => call<{ log: HistoryLog }>('POST', `/logs/${logId}/move`, { pondId }),
+  deleteLog: (logId: number) => call<void>('DELETE', `/logs/${logId}`),
+  restoreLog: (logId: number) => call<{ log: HistoryLog }>('POST', `/logs/${logId}/restore`),
+
+  quota: () => call<QuotaState>('GET', '/quota'),
+  /** Works signed in or out (an owner who forgot the PIN). */
+  support: (req: SupportRequest) => call<{ ticket: string }>('POST', '/support', req),
 };

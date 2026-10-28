@@ -1,7 +1,7 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Finding, Level, PondSummary } from './api.ts';
-import { levelLabel, phaseLabel } from './labels.ts';
+import { fmtClock, levelLabel, phaseLabel } from './labels.ts';
 
 // ---------- icons (stroke, 24 grid) ----------
 
@@ -49,6 +49,12 @@ const PATHS = {
   key: 'M8 10a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM11 12l9-9M17 6l3 3M14 9l2 2',
   logout: 'M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 8l-4 4 4 4M6 12h11',
   users: 'M9 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM2 21a7 7 0 0 1 14 0M16 4a4 4 0 0 1 0 8M18 14a6 6 0 0 1 4 7',
+  lock: 'M6 11h12v10H6zM8 11V7a4 4 0 0 1 8 0v4',
+  login: 'M9 4H5v16h4M14 8l4 4-4 4M18 12H9',
+  userCheck: 'M9 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM2 21a7 7 0 0 1 12.5-4.3M15 18l2 2 4-4',
+  refresh: 'M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5',
+  offline: 'M3 3l18 18M8.5 16a5 5 0 0 1 7 0M5 12.5a10 10 0 0 1 4.2-2.6M14.5 9.9a10 10 0 0 1 4.5 2.6M12 19.5h.01',
+  headset: 'M4 13a8 8 0 0 1 16 0M4 13v3a2 2 0 0 0 2 2h1v-6H6a2 2 0 0 0-2 2zM20 13v3a2 2 0 0 1-2 2h-1v-6h1a2 2 0 0 1 2 2zM17 18c0 1.5-2 3-5 3',
 } as const;
 
 export type IconName = keyof typeof PATHS;
@@ -363,6 +369,56 @@ export function EmptyState({ icon, text, action }: { icon: IconName; text: Compo
         <p class="grow">{text}</p>
       </div>
       {action}
+    </div>
+  );
+}
+
+/** A note with a bold first line: errors and states the person should read before going on. */
+export function Notice({
+  tone,
+  icon,
+  title,
+  children,
+  role,
+}: {
+  tone: 'info' | 'warn' | 'ok' | 'bad';
+  icon: IconName;
+  title: ComponentChildren;
+  children?: ComponentChildren;
+  role?: 'alert' | 'status';
+}) {
+  return (
+    <div class={`note ${tone}`} role={role}>
+      <Icon name={icon} />
+      <span class="stack-xs">
+        <span class="note-title">{title}</span>
+        {children && <span>{children}</span>}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Shown on top of the current screen when a refresh fails but data is already on screen.
+ * The app retries by itself every 30 seconds; "Coba lagi" retries at once.
+ */
+export function ConnectionBanner({ since, retrying, stillOff, onRetry }: { since: number | null; retrying: boolean; stillOff: boolean; onRetry: () => void }) {
+  return (
+    <div class="conn-banner" role="status">
+      <div class="row top">
+        <Icon name="offline" />
+        <span class="stack-xs">
+          <span class="note-title">Belum tersambung ke server</span>
+          <span>
+            Data yang sudah tampil masih bisa dibaca{since ? ` (terakhir ${fmtClock(since)})` : ''}. Catatan baru disimpan di HP dan terkirim sendiri saat tersambung.
+          </span>
+          {stillOff && <span class="semi">Masih belum tersambung. Dicoba lagi otomatis tiap 30 detik.</span>}
+        </span>
+      </div>
+      <button type="button" disabled={retrying} onClick={onRetry}>
+        <Icon name="refresh" size={20} />
+        {retrying ? 'Menyambung…' : 'Coba lagi'}
+      </button>
     </div>
   );
 }

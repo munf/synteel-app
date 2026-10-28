@@ -1,7 +1,9 @@
 import { Hono, type Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import { batchWeek, DAY_MS, LOG_SOURCES, localDate, READING_LIMITS, type Aeration, type Behavior, type LogData, type Pond, type Setting } from './domain.ts';
-import type { FarmRepo, Repo, Role } from './db.ts';
+import { batchWeek, DAY_MS, LOG_SOURCES, localDate, READING_LIMITS, type Aeration, type Behavior, type Level, type Log, type LogData, type Phase, type Pond, type Setting } from './domain.ts';
+import type { FarmRepo, LogRecord, Repo, Role } from './db.ts';
+import type { HistoryLog, QuotaState, SupportTopic } from './contract.ts';
+import type { SendMail } from './mail.ts';
 import { attemptLimiter, AuthError, checkPin, hashPin, hashToken, inviteCode, newToken, normalizePhone, tempPin, verifyPin } from './auth.ts';
 import { knowledge } from './knowledge.ts';
 import { AiFailed, AiUnavailable, type Ai, type CaptureKind, type ChatProvider } from './ai.ts';
@@ -19,6 +21,9 @@ const BEHAVIORS: Behavior[] = ['normal', 'surfacing', 'gathering_inlet', 'not_ea
 const READINGS = ['temperature', 'ph', 'tds', 'do', 'tan', 'no2'] as const;
 
 class BadRequest extends Error {}
+class NotFound extends Error {}
+/** The farm's AI reads for today are used up (429, code 'ai_quota'). */
+class AiQuota extends Error {}
 
 function num(v: unknown, field: string, { min = -Infinity, max = Infinity } = {}): number | undefined {
   if (v === undefined || v === null || v === '') return undefined;
@@ -104,6 +109,8 @@ export interface ApiDeps {
   agentProviders?: ChatProvider[];
   /** Meta Model API access for SAM 3.1 (counting dead eels in a photo). */
   sam?: SamProvider | null;
+  /** Sends support tickets to the team; null = only stored. */
+  mail?: SendMail | null;
 }
 
 const MAX_IMAGES = 24;
@@ -111,34 +118,94 @@ const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const MAX_AUDIO_BYTES = 15 * 1024 * 1024;
 const SESSION_DAYS = 90;
 const INVITE_DAYS = 7;
+const HISTORY_DAYS = 14;
+const MAX_NICKNAMES = 5;
+const MAX_NICKNAME_LENGTH = 30;
+const MAX_TRANSCRIPT = 5000;
+// Free extra AI reads (see the quota page): a photo and a video on the same day, and every 7th day in a row.
+const PHOTO_VIDEO_BONUS = 2;
+const STREAK_BONUS = 10;
+const STREAK_EVERY = 7;
+
+const SUPPORT_TOPICS: Record<SupportTopic, string> = { pin: 'Masuk dan PIN', catat: 'Catat dan suara', waspada: 'Waspada dan alarm', jatah: 'Jatah AI', lain: 'Lainnya' };
+
+/** Ponds can have other names ("kolam dekat pintu"): trimmed, single spaces, at most 30 characters. */
+function nickname(v: unknown): string {
+  const s = String(v ?? '').trim().replace(/\s+/g, ' ');
+  if (!s) throw new BadRequest('Nama lain kolam wajib diisi');
+  if (s.length > MAX_NICKNAME_LENGTH) throw new BadRequest(`Nama lain kolam terlalu panjang (maksimal ${MAX_NICKNAME_LENGTH} huruf)`);
+  return s;
+}
+
+function nicknameList(v: unknown): string[] {
+  if (!Array.isArray(v)) throw new BadRequest('nama lain kolam tidak valid');
+  return v.map(nickname);
+}
+
+// ---------- plain words for the history of a log ----------
+
+const READING_WORDS: Record<(typeof READINGS)[number], string> = { temperature: 'suhu', ph: 'pH', tds: 'TDS', do: 'oksigen terlarut', tan: 'amonia', no2: 'nitrit' };
+const LEFTOVER_WORDS = { none: 'habis', little: 'sedikit', much: 'banyak' };
+const BEHAVIOR_WORDS: Record<Behavior, string> = { normal: 'normal', surfacing: 'naik ke permukaan', gathering_inlet: 'berkumpul di air masuk', not_eating: 'tidak mau makan', lethargic: 'lemas' };
+const COLOR_WORDS = { clear: 'jernih', green: 'hijau', brown: 'cokelat', cloudy: 'keruh' };
+const SMELL_WORDS = { normal: 'normal', foul: 'busuk' };
+const AERATION_WORDS = { on: 'nyala normal', weak: 'lemah', off: 'mati' };
+
+/** Indonesian decimal comma: 28.9 → "28,9". */
+const decimal = (v: number | undefined) => (v === undefined ? undefined : String(v).replace('.', ','));
+
+/** What changed between two versions of a log: ["suhu 28,9 → 29,8", "sisa pakan habis → banyak"]. */
+export function describeChanges(before: LogData, after: LogData): string[] {
+  const parts: string[] = [];
+  const show = (label: string, a: string | undefined, b: string | undefined) => {
+    if ((a ?? '') !== (b ?? '')) parts.push(`${label} ${a || '–'} → ${b || '–'}`);
+  };
+  for (const key of READINGS) show(READING_WORDS[key], decimal(before.readings?.[key]), decimal(after.readings?.[key]));
+  show('sidat mati', decimal(before.mortality), decimal(after.mortality));
+  show('sisa pakan', before.feeding?.leftover && LEFTOVER_WORDS[before.feeding.leftover], after.feeding?.leftover && LEFTOVER_WORDS[after.feeding.leftover]);
+  show('perilaku', before.behavior?.map((b) => BEHAVIOR_WORDS[b]).join(', '), after.behavior?.map((b) => BEHAVIOR_WORDS[b]).join(', '));
+  show('warna air', before.water?.color && COLOR_WORDS[before.water.color], after.water?.color && COLOR_WORDS[after.water.color]);
+  show('bau air', before.water?.smell && SMELL_WORDS[before.water.smell], after.water?.smell && SMELL_WORDS[after.water.smell]);
+  show('ganti air', before.waterChangePct === undefined ? undefined : `${decimal(before.waterChangePct)}%`, after.waterChangePct === undefined ? undefined : `${decimal(after.waterChangePct)}%`);
+  show('aerator', before.aeration && AERATION_WORDS[before.aeration], after.aeration && AERATION_WORDS[after.aeration]);
+  // Notes can be long: say what happened, not the whole text twice.
+  if ((before.note ?? '') !== (after.note ?? '')) parts.push(!after.note ? 'catatan dihapus' : before.note ? 'catatan diubah' : 'catatan ditambah');
+  return parts;
+}
+
+/** The status of a single log on its own, for the history list. */
+function logLevel(log: Log, phase?: Phase): Level {
+  return overallLevel(assessPond([log], thresholds, new Date(log.loggedAt), { phase }).filter((f) => f.id !== 'stale'));
+}
+
+/** The next local midnight in `timezone`, as an instant. */
+function nextMidnight(now: Date, timezone: string): string {
+  const guess = Date.parse(`${localDate(new Date(now.getTime() + DAY_MS), timezone)}T00:00:00Z`);
+  // The zone's offset: its wall clock at `guess` read as if it were UTC, minus `guess`.
+  const wall = Date.parse(`${new Date(guess).toLocaleString('sv-SE', { timeZone: timezone }).replace(' ', 'T')}Z`);
+  return new Date(guess - (wall - guess)).toISOString();
+}
 
 type Env = { Variables: { userId: number; farmId: number | null; tokenHash: string; role: Role | null; r: FarmRepo } };
 
 export function createApi(
   store: Repo,
-  { clock = () => new Date(), getWeather = defaultGetWeather, geocode = defaultGeocode, ai, saveCapture, cookieName = 'synteel_session', demoPhone = null, farmAiCap = 0, agentProviders = [], sam = null }: ApiDeps = {},
+  { clock = () => new Date(), getWeather = defaultGetWeather, geocode = defaultGeocode, ai, saveCapture, cookieName = 'synteel_session', demoPhone = null, farmAiCap = 0, agentProviders = [], sam = null, mail = null }: ApiDeps = {},
 ) {
   const api = new Hono<Env>();
   const limiter = attemptLimiter();
-  const aiUse = new Map<number, { day: string; used: number }>();
-
-  /** Counts one real AI read for the farm; refuses once the farm's daily cap is reached. */
-  function useAi(farmId: number) {
-    if (!farmAiCap || ai?.mode !== 'meta') return;
-    const day = clock().toISOString().slice(0, 10);
-    const u = aiUse.get(farmId);
-    const used = u?.day === day ? u.used : 0;
-    if (used >= farmAiCap) throw new AiUnavailable('Jatah baca AI tambak ini untuk hari ini sudah habis. Rekaman disimpan di HP; ketik sendiri tetap bisa.');
-    aiUse.set(farmId, { day, used: used + 1 });
-  }
+  const supportLimiter = attemptLimiter(5, 60 * 60_000, undefined, 'Terlalu banyak pesan. Coba lagi 1 jam lagi.');
 
   api.onError((err, c) => {
     if (err instanceof BadRequest) return c.json({ error: err.message }, 400);
-    if (err instanceof AuthError) return c.json({ error: err.message, code: err.status === 401 ? 'auth' : undefined }, err.status);
-    if (err instanceof AiUnavailable) return c.json({ error: err.message }, 503);
+    if (err instanceof NotFound) return c.json({ error: err.message }, 404);
+    if (err instanceof AuthError) return c.json({ error: err.message, code: err.code ?? (err.status === 401 ? 'auth' : undefined), retryAt: err.retryAt }, err.status);
+    if (err instanceof AiQuota) return c.json({ error: err.message, code: 'ai_quota' }, 429);
+    // The server-wide demo cap (withDailyCap) is a quota too, though ai.ts throws it as AiUnavailable.
+    if (err instanceof AiUnavailable) return c.json({ error: err.message, code: /^Kuota AI/.test(err.message) ? 'ai_quota' : 'ai_unavailable' }, /^Kuota AI/.test(err.message) ? 429 : 503);
     if (err instanceof AiFailed) {
       console.error(err.message);
-      return c.json({ error: 'AI gagal membaca. Coba lagi, atau isi manual.' }, 502);
+      return c.json({ error: 'AI gagal membaca. Coba lagi, atau isi manual.', code: 'ai_unavailable' }, 503);
     }
     console.error(err);
     return c.json({ error: 'Terjadi kesalahan di server' }, 500);
@@ -215,6 +282,52 @@ export function createApi(
       day -= DAY_MS;
     }
     return streak;
+  }
+
+  // ---------- AI quota ----------
+
+  /** Today's AI reads of the farm: one cap shared by all members, plus what the farm earned today. */
+  function quotaState(r: FarmRepo): QuotaState {
+    const now = clock();
+    const tz = timezone(r);
+    const today = localDate(now, tz);
+    const todays = r.farmLogsSince(new Date(now.getTime() - DAY_MS).toISOString()).filter((l) => localDate(new Date(l.loggedAt), tz) === today);
+    const photo = todays.some((l) => l.source === 'photo');
+    const video = todays.some((l) => l.source === 'video');
+    const days = streakDays(r);
+    const measuredToday = todays.some((l) => Object.keys(l.data.readings ?? {}).length > 0);
+    // The milestone counts on the day it is reached: today has a reading and completes the 7th, 14th… day.
+    const milestone = measuredToday && days > 0 && days % STREAK_EVERY === 0;
+    const bonus = (photo && video ? PHOTO_VIDEO_BONUS : 0) + (milestone ? STREAK_BONUS : 0);
+    const usage = r.aiUsage(today);
+    const used = usage.reduce((sum, u) => sum + u.used, 0);
+    const cap = farmAiCap ? farmAiCap + bonus : 0;
+    return {
+      cap,
+      base: farmAiCap,
+      bonus,
+      used,
+      left: farmAiCap ? Math.max(0, cap - used) : 0,
+      resetsAt: nextMidnight(now, tz),
+      unlimited: !farmAiCap,
+      members: store.members(r.farmId).map((m) => ({ userId: m.id, name: m.name, role: m.role, used: usage.find((u) => u.userId === m.id)?.used ?? 0 })),
+      earn: {
+        photoVideo: { photo, video, bonus: PHOTO_VIDEO_BONUS, earned: photo && video },
+        streak: { days, nextAt: (Math.floor(days / STREAK_EVERY) + 1) * STREAK_EVERY, bonus: STREAK_BONUS },
+      },
+    };
+  }
+
+  /**
+   * Counts one AI read for this person. Refuses when AI is off, or (with real AI) once the
+   * farm's reads for today are used up. Mock reads are counted, so the quota page shows use, but never refused.
+   */
+  function useAi(r: FarmRepo, userId: number) {
+    if (!ai || ai.mode === 'off') throw new AiUnavailable('AI belum aktif. Isi manual dulu, atau coba lagi nanti.');
+    if (farmAiCap && ai.mode === 'meta' && quotaState(r).left <= 0) {
+      throw new AiQuota('Jatah baca AI tambak ini untuk hari ini sudah habis. Rekaman disimpan di HP; ketik sendiri tetap bisa.');
+    }
+    r.countAiUse(userId, localDate(clock(), timezone(r)));
   }
 
   /** Estimated conditions for every pond of one farm. Weather failures degrade the estimate, never the response. */
@@ -331,6 +444,27 @@ export function createApi(
     });
   }
 
+  /** The signed-in person, or null. */
+  function readSession(c: Context) {
+    const token = getCookie(c, cookieName);
+    const session = token ? store.session(hashToken(token)) : null;
+    if (!token || !session) return null;
+    const role = session.farmId === null ? null : store.role(session.userId, session.farmId);
+    return { tokenHash: hashToken(token), userId: session.userId, farmId: role ? session.farmId : null, role };
+  }
+
+  /** A valid invite; otherwise 404 (unknown code) or 410 (used or expired), both with code 'invite_invalid'. */
+  function validInvite(code: string) {
+    const invite = store.invite(code);
+    if (invite) return invite;
+    const spent = store.inviteProblem(code) === 'spent';
+    throw new AuthError(
+      spent ? 'Kode undangan sudah dipakai atau kedaluwarsa. Minta kode baru ke pemilik tambak.' : 'Kode undangan tidak berlaku',
+      spent ? 410 : 404,
+      'invite_invalid',
+    );
+  }
+
   function me(userId: number, farmId: number | null) {
     const farms = store.farmsOf(userId);
     return { user: store.user(userId), farm: farms.find((f) => f.id === farmId) ?? null, farms, demo: store.user(userId)?.phone === demoPhone };
@@ -345,7 +479,7 @@ export function createApi(
     const phone = normalizePhone(body.phone);
     const pin = checkPin(body.pin);
     const name = text(body.name, 'nama', true)!;
-    if (store.userByPhone(phone)) throw new AuthError('Nomor ini sudah terdaftar. Silakan masuk.', 409);
+    if (store.userByPhone(phone)) throw new AuthError('Nomor ini sudah terdaftar. Silakan masuk.', 409, 'phone_taken');
     const user = store.createUser({ phone, name, pinHash: hashPin(pin) });
     startSession(c, user.id, null);
     return c.json(me(user.id, null), 201);
@@ -377,8 +511,7 @@ export function createApi(
   });
 
   api.get('/auth/invite/:code', (c) => {
-    const invite = store.invite(c.req.param('code').toUpperCase());
-    if (!invite) throw new AuthError('Kode undangan tidak berlaku', 400);
+    const invite = validInvite(c.req.param('code').toUpperCase());
     return c.json({ farmName: invite.farmName, role: invite.role });
   });
 
@@ -386,8 +519,7 @@ export function createApi(
   api.post('/auth/join', async (c) => {
     const body = await c.req.json();
     const code = String(body.code ?? '').trim().toUpperCase();
-    const invite = store.invite(code);
-    if (!invite) throw new AuthError('Kode undangan tidak berlaku', 400);
+    const invite = validInvite(code);
     const phone = normalizePhone(body.phone);
     let user = store.userByPhone(phone);
     if (user) {
@@ -409,19 +541,75 @@ export function createApi(
 
   api.get('/ai', (c) => c.json({ mode: ai?.mode ?? 'off' }));
 
+  // "Hubungi bantuan": signed in, or signed out (an owner who forgot the PIN). The ticket is
+  // stored first; the e-mail to the team goes out after the answer and may fail without harm.
+  api.post('/support', async (c) => {
+    const body = await c.req.json();
+    const session = readSession(c);
+    const topic = oneOf(body.topic, Object.keys(SUPPORT_TOPICS) as SupportTopic[], 'topik') ?? 'lain';
+    const message = String(body.message ?? '').trim();
+    if (message.length < 5) throw new BadRequest('Ceritakan masalahnya dulu');
+    if (message.length > 2000) throw new BadRequest('Pesan terlalu panjang (maksimal 2000 huruf)');
+    const phone = (v: unknown, field: string) => {
+      try {
+        return normalizePhone(v);
+      } catch {
+        throw new BadRequest(`${field} tidak valid`);
+      }
+    };
+    const replyPhone = phone(body.replyPhone, 'Nomor WhatsApp');
+    const accountPhone = body.accountPhone ? phone(body.accountPhone, 'Nomor HP akun') : null;
+    const device = body.device ? String(body.device).trim().slice(0, 300) || null : null;
+    const keys = [`ip:${clientIp(c)}`, `phone:${replyPhone}`];
+    supportLimiter.check(...keys);
+    supportLimiter.fail(...keys);
+    const ticket = { topic, message, replyPhone, accountPhone, device, userId: session?.userId ?? null, farmId: session?.farmId ?? null };
+    const id = store.addSupportTicket(ticket);
+    const number = String(id).padStart(4, '0');
+    // Not awaited: the farmer gets the ticket number right away.
+    void Promise.resolve()
+      .then(() => mailTicket(id, number, ticket, session?.role ?? null))
+      .catch((err) => console.error(`support ticket #${number}:`, err));
+    return c.json({ ticket: number }, 201);
+  });
+
+  async function mailTicket(id: number, number: string, t: { topic: SupportTopic; message: string; replyPhone: string; accountPhone: string | null; device: string | null; userId: number | null; farmId: number | null }, role: Role | null) {
+    if (!mail) {
+      console.log(`support ticket #${number} stored (mail not configured)`);
+      return;
+    }
+    const user = t.userId === null ? null : store.user(t.userId);
+    const farm = t.farmId === null ? null : store.farm(t.farmId).getFarm();
+    const text = [
+      `Tiket: #${number}`,
+      `Topik: ${SUPPORT_TOPICS[t.topic]}`,
+      '',
+      t.message,
+      '',
+      `WhatsApp untuk balasan: +${t.replyPhone}`,
+      `Nomor HP akun: ${t.accountPhone ? `+${t.accountPhone}` : user ? `+${user.phone}` : '-'}`,
+      `Pengguna: ${user ? `${user.name} (SE-${String(user.id).padStart(6, '0')})${role ? `, ${role === 'owner' ? 'pemilik' : 'pekerja'}` : ''}` : 'belum masuk'}`,
+      `Tambak: ${farm?.name ?? '-'}`,
+      `Perangkat: ${t.device ?? 'tidak disertakan'}`,
+    ].join('\n');
+    try {
+      await mail({ subject: `[Synteel] Tiket #${number}: ${SUPPORT_TOPICS[t.topic]}`, text });
+      store.supportMailed(id);
+    } catch (err) {
+      console.error(`support ticket #${number} stored, mail failed: ${(err as Error).message}`);
+    }
+  }
+
   // ---------- everything below needs a session ----------
 
   api.use('*', async (c, next) => {
-    const token = getCookie(c, cookieName);
-    const session = token ? store.session(hashToken(token)) : null;
-    if (!token || !session) throw new AuthError('Silakan masuk dulu');
-    const role = session.farmId === null ? null : store.role(session.userId, session.farmId);
-    const farmId = role ? session.farmId : null;
+    const session = readSession(c);
+    if (!session) throw new AuthError('Silakan masuk dulu');
     c.set('userId', session.userId);
-    c.set('tokenHash', hashToken(token));
-    c.set('farmId', farmId);
-    c.set('role', role);
-    if (farmId !== null) c.set('r', store.farm(farmId));
+    c.set('tokenHash', session.tokenHash);
+    c.set('farmId', session.farmId);
+    c.set('role', session.role);
+    if (session.farmId !== null) c.set('r', store.farm(session.farmId));
     await next();
   });
 
@@ -551,16 +739,46 @@ export function createApi(
 
   // ---------- ponds ----------
 
+  /**
+   * Adds names to a pond's nicknames: duplicates (any case) and the pond's own name are skipped,
+   * a name another pond already goes by is refused (the voice round could not tell them apart).
+   */
+  function addNicknames(r: FarmRepo, pond: { id: number | null; name: string; nicknames: string[] }, names: string[]): string[] {
+    const list = [...pond.nicknames];
+    const others = r.listPonds().filter((p) => p.id !== pond.id);
+    for (const name of names) {
+      const key = name.toLowerCase();
+      if (key === pond.name.toLowerCase() || list.some((n) => n.toLowerCase() === key)) continue;
+      const other = others.find((p) => [p.name, ...p.nicknames].some((n) => n.toLowerCase() === key));
+      if (other) throw new BadRequest(`"${name}" sudah dipakai untuk ${other.name}`);
+      if (list.length >= MAX_NICKNAMES) throw new BadRequest(`Sudah ada ${MAX_NICKNAMES} nama lain untuk kolam ini`);
+      list.push(name);
+    }
+    return list;
+  }
+
   api.post('/ponds', async (c) => {
     const r = needOwner(c);
     const body = await c.req.json();
+    const name = text(body.name, 'nama kolam', true)!;
     const pond = r.addPond({
-      name: text(body.name, 'nama kolam', true)!,
+      name,
       kind: text(body.kind, 'jenis kolam'),
       volumeL: num(body.volumeL, 'volume', { min: 0 }) ?? null,
       ...pondProfile(body),
+      nicknames: 'nicknames' in body ? addNicknames(r, { id: null, name, nicknames: [] }, nicknameList(body.nicknames)) : [],
     });
     return c.json({ pond: pondSummary(r, pond) }, 201);
+  });
+
+  // Any member may teach the voice round another name for a pond.
+  api.post('/ponds/:id/nicknames', async (c) => {
+    const r = needFarm(c);
+    const pond = r.getPond(Number(c.req.param('id')));
+    if (!pond) return c.json({ error: 'Kolam tidak ditemukan' }, 404);
+    const name = nickname((await c.req.json()).nickname);
+    r.updatePond({ ...pond, nicknames: addNicknames(r, pond, [name]) });
+    return c.json({ pond: pondSummary(r, r.getPond(pond.id)!) });
   });
 
   api.put('/ponds/:id', async (c) => {
@@ -571,10 +789,13 @@ export function createApi(
     // Only fields present in the body change.
     const profile = pondProfile(body);
     const kept = Object.fromEntries(Object.entries(profile).map(([k, v]) => [k, k in body ? v : pond[k as keyof typeof profile]]));
+    const name = text(body.name, 'nama kolam') ?? pond.name;
     r.updatePond({
       ...pond,
       ...(kept as typeof profile),
-      name: text(body.name, 'nama kolam') ?? pond.name,
+      name,
+      // The list given replaces the old one.
+      nicknames: 'nicknames' in body ? addNicknames(r, { id: pond.id, name, nicknames: [] }, nicknameList(body.nicknames)) : pond.nicknames,
       kind: 'kind' in body ? text(body.kind, 'jenis kolam') : pond.kind,
       volumeL: 'volumeL' in body ? (num(body.volumeL, 'volume', { min: 0 }) ?? null) : pond.volumeL,
     });
@@ -634,7 +855,7 @@ export function createApi(
     if (kind === 'voice' && !audio) throw new BadRequest('Rekaman suara belum ada');
     if (kind === 'video' && !images.length && !audio) throw new BadRequest('Video belum ada');
 
-    useAi(r.farmId);
+    useAi(r, c.get('userId'));
     const batch = r.activeBatch(pond.id);
     const started = Date.now();
     const draft = await ai.draft({ kind, field, images, audio, pondName: pond.name, phase: batch?.phase });
@@ -672,14 +893,150 @@ export function createApi(
     const body = await c.req.json();
     const loggedAt = body.loggedAt ? new Date(body.loggedAt) : clock();
     if (Number.isNaN(loggedAt.getTime())) throw new BadRequest('waktu catat tidak valid');
-    const log = r.addLog({
-      pondId: pond.id,
-      batchId: r.activeBatch(pond.id)?.id ?? null,
-      loggedAt: loggedAt.toISOString(),
-      source: oneOf(body.source, LOG_SOURCES, 'sumber') ?? 'manual',
-      data: parseLogData(body),
-    });
+    const log = r.addLog(
+      {
+        pondId: pond.id,
+        batchId: r.activeBatch(pond.id)?.id ?? null,
+        loggedAt: loggedAt.toISOString(),
+        source: oneOf(body.source, LOG_SOURCES, 'sumber') ?? 'manual',
+        data: parseLogData(body),
+      },
+      c.get('userId'),
+    );
     return c.json({ log, pond: pondSummary(r, pond) }, 201);
+  });
+
+  // ---------- record history and corrections ----------
+
+  /**
+   * Who may change a log: the person who recorded it, within 24 hours of its time; the owner
+   * always. Logs from before accounts (no maker) only the owner.
+   */
+  function access(log: LogRecord, userId: number, role: Role | null) {
+    if (role === 'owner') return { canEdit: true, lockReason: null, editableUntil: null };
+    const until = Date.parse(log.loggedAt) + DAY_MS;
+    if (log.createdBy === userId) {
+      return clock().getTime() < until
+        ? { canEdit: true, lockReason: null, editableUntil: new Date(until).toISOString() }
+        : { canEdit: false, lockReason: 'Terkunci: sudah lewat 24 jam. Kalau ada yang salah, minta pemilik tambak mengubahnya.', editableUntil: null };
+    }
+    const maker = log.createdBy === null ? null : store.user(log.createdBy)?.name;
+    return {
+      canEdit: false,
+      lockReason: maker
+        ? `Terkunci: dicatat ${maker}. Hanya yang mencatat (dalam 24 jam) atau pemilik tambak yang bisa mengubah.`
+        : 'Terkunci: catatan lama. Hanya pemilik tambak yang bisa mengubah.',
+      editableUntil: null,
+    };
+  }
+
+  function historyLog(c: Context<Env>, log: LogRecord): HistoryLog {
+    const r = c.get('r');
+    const name = (id: number) => store.user(id)?.name ?? 'Anggota lama';
+    const maker = log.createdBy === null ? null : store.user(log.createdBy);
+    return {
+      id: log.id,
+      pondId: log.pondId,
+      loggedAt: log.loggedAt,
+      source: log.source,
+      data: log.data,
+      by: maker ? { id: maker.id, name: maker.name, role: store.role(maker.id, r.farmId) ?? 'worker' } : null,
+      edits: log.edits.map((e) => ({ at: e.at, byName: name(e.byUserId), text: e.text })),
+      ...access(log, c.get('userId'), c.get('role')),
+      level: logLevel(log, r.activeBatch(log.pondId)?.phase),
+    };
+  }
+
+  /** The log in the URL if this person may change it now: 404 for unknown or another farm's, 403 when locked. */
+  function editableLog(c: Context<Env>, { deleted = false } = {}) {
+    const r = needFarm(c);
+    const log = r.getLog(Number(c.req.param('id')));
+    if (!log || (log.deletedAt !== null && !deleted)) throw new NotFound('Catatan tidak ditemukan');
+    const a = access(log, c.get('userId'), c.get('role'));
+    if (!a.canEdit) throw new AuthError(a.lockReason!, 403);
+    return { r, log };
+  }
+
+  const edited = (c: Context<Env>, log: LogRecord, text: string): LogRecord => ({ ...log, edits: [...log.edits, { at: clock().toISOString(), byUserId: c.get('userId'), text }] });
+
+  api.get('/ponds/:id/history', (c) => {
+    const r = needFarm(c);
+    const pond = r.getPond(Number(c.req.param('id')));
+    if (!pond) return c.json({ error: 'Kolam tidak ditemukan' }, 404);
+    const since = new Date(clock().getTime() - HISTORY_DAYS * DAY_MS).toISOString();
+    return c.json({ logs: r.historySince(pond.id, since).map((l) => historyLog(c, l)) });
+  });
+
+  // New values replace the old; the old ones stay readable in the edit trail.
+  api.put('/logs/:id', async (c) => {
+    const { r, log } = editableLog(c);
+    const data = parseLogData(await c.req.json());
+    const changes = describeChanges(log.data, data);
+    if (!changes.length) return c.json({ log: historyLog(c, log) });
+    r.saveLog(edited(c, { ...log, data }, changes.join(', ')));
+    return c.json({ log: historyLog(c, r.getLog(log.id)!) });
+  });
+
+  // A reading taken at the wrong pond: it moves, with its time, to another pond of the same farm.
+  api.post('/logs/:id/move', async (c) => {
+    const { r, log } = editableLog(c);
+    const target = r.getPond(Number((await c.req.json()).pondId));
+    if (!target) throw new NotFound('Kolam tidak ditemukan');
+    if (target.id === log.pondId) throw new BadRequest('Catatan sudah ada di kolam ini');
+    const from = r.getPond(log.pondId)?.name ?? 'kolam lain';
+    r.saveLog(edited(c, { ...log, pondId: target.id, batchId: r.activeBatch(target.id)?.id ?? null }, `dipindahkan dari ${from}`));
+    return c.json({ log: historyLog(c, r.getLog(log.id)!) });
+  });
+
+  // Soft delete: the log leaves charts, alerts and history but can be restored.
+  api.delete('/logs/:id', (c) => {
+    const { r, log } = editableLog(c, { deleted: true });
+    if (log.deletedAt === null) r.saveLog(edited(c, { ...log, deletedAt: clock().toISOString() }, 'dihapus'));
+    return c.body(null, 204);
+  });
+
+  api.post('/logs/:id/restore', (c) => {
+    const { r, log } = editableLog(c, { deleted: true });
+    if (log.deletedAt !== null) r.saveLog(edited(c, { ...log, deletedAt: null }, 'dikembalikan'));
+    return c.json({ log: historyLog(c, r.getLog(log.id)!) });
+  });
+
+  // ---------- AI quota ----------
+
+  api.get('/quota', (c) => c.json(quotaState(needFarm(c))));
+
+  // ---------- voice round: one recording that names many ponds ----------
+
+  /** Drafts for every pond named, from a recording or its transcript. Nothing is saved to the ponds here. */
+  async function round(c: Context<Env>, input: { audio?: File; transcript?: string }) {
+    const r = needFarm(c);
+    const ponds = r.listPonds().map(({ id, name, nicknames }) => ({ id, name, nicknames }));
+    if (!ponds.length) throw new BadRequest('Belum ada kolam');
+    if (!ai || ai.mode === 'off' || typeof ai.round !== 'function') throw new AiUnavailable('AI belum aktif. Isi manual dulu, atau coba lagi nanti.');
+    useAi(r, c.get('userId'));
+    const started = Date.now();
+    const result = await ai.round({ ...input, ponds });
+    const audio = input.audio;
+    await saveCapture?.(
+      { farmId: r.farmId, pondId: 0, userId: c.get('userId'), kind: 'round', at: clock().toISOString(), ms: Date.now() - started, transcript: input.transcript, round: result },
+      audio ? [{ name: `audio.${audio.type.includes('wav') ? 'wav' : 'webm'}`, blob: audio }] : [],
+    ).catch((err) => console.error('capture not stored:', err));
+    return c.json({ round: result });
+  }
+
+  api.post('/round', async (c) => {
+    const form = await c.req.parseBody();
+    const audio = form.audio instanceof File ? form.audio : undefined;
+    if (!audio) throw new BadRequest('Rekaman suara belum ada');
+    if (audio.size > MAX_AUDIO_BYTES) throw new BadRequest('Rekaman suara terlalu panjang');
+    return round(c, { audio });
+  });
+
+  api.post('/round/text', async (c) => {
+    const transcript = String((await c.req.json()).transcript ?? '').trim();
+    if (!transcript) throw new BadRequest('Teks keliling masih kosong');
+    if (transcript.length > MAX_TRANSCRIPT) throw new BadRequest('Teks keliling terlalu panjang');
+    return round(c, { transcript });
   });
 
   // For the server's own background monitor, which has no session.

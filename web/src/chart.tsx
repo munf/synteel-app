@@ -1,11 +1,17 @@
 import { useState } from 'preact/hooks';
 import type { Nowcast, NowcastPoint } from './api.ts';
-import { fmtClock, fmtNum, riskLabel } from './labels.ts';
+import { fmtNum, riskLabel } from './labels.ts';
+import { StatusPill } from './ui.tsx';
 
 const W = 340;
-const H = 180;
-const PAD = { left: 30, right: 8, top: 10, bottom: 46 };
-const STRIP_H = 10;
+const H = 196;
+const PAD = { left: 30, right: 8, top: 10, bottom: 62 };
+const STRIP_H = 12;
+// Tick text in viewBox units: about 14 px on a phone-wide chart, the smallest size in the design.
+const TICK = { fontSize: '15.4px' };
+
+const clock = (t: number) => new Date(t).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' });
+const dayClock = (t: number) => new Date(t).toLocaleString('id-ID', { weekday: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' });
 
 /**
  * Estimated water temperature from 12 hours ago to 24 hours ahead: the line is the
@@ -15,7 +21,7 @@ const STRIP_H = 10;
 export function NowcastChart({ nc }: { nc: Nowcast }) {
   const points = nc.hours.filter((h) => h.temp !== null);
   const [active, setActive] = useState<NowcastPoint | null>(null);
-  if (points.length < 2) return <p class="muted small">Belum cukup data untuk grafik perkiraan.</p>;
+  if (points.length < 2) return <p class="meta">Belum cukup data untuk grafik perkiraan.</p>;
 
   const t0 = nc.hours[0].t;
   const t1 = nc.hours.at(-1)!.t;
@@ -38,7 +44,7 @@ export function NowcastChart({ nc }: { nc: Nowcast }) {
   for (let v = lo; v <= hi; v += step) ticks.push(v);
   // Clock labels every 6 hours, on farm-local hours divisible by 6.
   const clockTicks = nc.hours.filter((h) => new Date(h.t + 7 * 3600_000).getUTCHours() % 6 === 0);
-  const stripY = plotBottom + 18;
+  const stripY = plotBottom + 32;
   const cellW = (W - PAD.left - PAD.right) / nc.hours.length;
 
   const pick = (e: PointerEvent) => {
@@ -62,14 +68,14 @@ export function NowcastChart({ nc }: { nc: Nowcast }) {
         {ticks.map((v) => (
           <g key={v}>
             <line class="grid" x1={PAD.left} x2={W - PAD.right} y1={y(v)} y2={y(v)} />
-            <text class="tick" x={PAD.left - 6} y={y(v) + 4} text-anchor="end">
+            <text class="tick" style={TICK} x={PAD.left - 6} y={y(v) + 5} text-anchor="end">
               {v}°
             </text>
           </g>
         ))}
         {clockTicks.map((h) => (
-          <text key={h.t} class="tick" x={x(h.t)} y={plotBottom + 13} text-anchor="middle">
-            {fmtClock(h.t)}
+          <text key={h.t} class="tick" style={TICK} x={x(h.t)} y={plotBottom + 22} text-anchor="middle">
+            {clock(h.t)}
           </text>
         ))}
 
@@ -78,7 +84,7 @@ export function NowcastChart({ nc }: { nc: Nowcast }) {
         <path class="est future" d={path(future)} />
 
         <line class="now" x1={x(nc.now.t)} x2={x(nc.now.t)} y1={PAD.top} y2={plotBottom} />
-        <text class="tick now-label" x={x(nc.now.t) + 4} y={PAD.top + 9}>
+        <text class="tick now-label" style={TICK} x={x(nc.now.t) + 5} y={PAD.top + 12}>
           sekarang
         </text>
 
@@ -89,7 +95,7 @@ export function NowcastChart({ nc }: { nc: Nowcast }) {
         {nc.hours.map((h) => (
           <rect key={h.t} class={`risk lv-${h.level}`} x={x(h.t) - cellW / 2 + 1} y={stripY} width={Math.max(1, cellW - 2)} height={STRIP_H} rx={2} />
         ))}
-        <text class="tick" x={PAD.left - 6} y={stripY + 9} text-anchor="end">
+        <text class="tick" style={TICK} x={PAD.left - 8} y={stripY + 11} text-anchor="end">
           O₂
         </text>
 
@@ -101,23 +107,22 @@ export function NowcastChart({ nc }: { nc: Nowcast }) {
         )}
       </svg>
 
-      <figcaption class="chart-readout" aria-live="polite">
-        <strong>{active ? fmtClock(shown.t, true) : `Puncak risiko ${fmtClock(shown.t, true)}`}</strong>
-        {shown.temp !== null && (
-          <span>
-            {' '}· air ±{fmtNum(shown.temp)} °C (±{fmtNum(shown.sigma!)})
-          </span>
-        )}
-        <span class={`risk-text lv-${shown.level}`}> · {riskLabel[shown.level]}</span>
-        {shown.factors[0] && <span class="muted"> · {shown.factors[0].label}</span>}
+      <figcaption class="stack-xs label" aria-live="polite">
+        <span class="row between">
+          <strong class="num">{active ? dayClock(shown.t) : `Puncak risiko ${dayClock(shown.t)}`}</strong>
+          <StatusPill level={shown.level}>{riskLabel[shown.level]}</StatusPill>
+        </span>
+        <span class="ink2">
+          {[shown.temp !== null && `Air ±${fmtNum(shown.temp)}\u00a0°C (±${fmtNum(shown.sigma!)})`, shown.factors[0]?.label].filter(Boolean).join(' · ')}
+        </span>
       </figcaption>
-      <p class="chart-key small muted">
+      <p class="chart-key">
         <span class="key-line" /> perkiraan suhu air <span class="key-dot" /> hasil ukur <span class="key-cell lv-ok" />
         <span class="key-cell lv-warning" />
         <span class="key-cell lv-critical" /> risiko oksigen rendah, sedang, tinggi
       </p>
 
-      <details class="small">
+      <details class="plain">
         <summary>Lihat sebagai tabel</summary>
         <table class="table">
           <thead>
@@ -133,7 +138,7 @@ export function NowcastChart({ nc }: { nc: Nowcast }) {
               .filter((_, i) => i % 2 === 0)
               .map((h) => (
                 <tr key={h.t}>
-                  <td>{fmtClock(h.t, true)}</td>
+                  <td>{dayClock(h.t)}</td>
                   <td>{h.temp === null ? '–' : `${fmtNum(h.temp)} ±${fmtNum(h.sigma!)} °C`}</td>
                   <td>{riskLabel[h.level]}</td>
                 </tr>

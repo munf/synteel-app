@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'preact/hooks';
+import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { api, isAuthError, onSessionLost, type FarmState, type Me, type NowcastState } from './api.ts';
 import { PondDetail } from './screens/pond.tsx';
 import { Problem } from './screens/problem.tsx';
@@ -8,7 +8,14 @@ import { AddPond, FarmSetup, NoPonds } from './screens/setup.tsx';
 import { SignIn } from './screens/signin.tsx';
 import { Today } from './screens/today.tsx';
 import { Watch } from './screens/watch.tsx';
-import { Icon, type IconName } from './ui.tsx';
+import { RecordPond } from './screens/record-pond.tsx';
+import { Round } from './screens/round.tsx';
+import { History } from './screens/history.tsx';
+import { Quota } from './screens/quota.tsx';
+import { Help } from './screens/help.tsx';
+import { Alarm } from './screens/alarm.tsx';
+import { useAlarms } from './alarms.ts';
+import { ConnectionBanner, Icon, type IconName } from './ui.tsx';
 
 export type Route =
   | { name: 'today' }
@@ -18,7 +25,16 @@ export type Route =
   | { name: 'watch' }
   | { name: 'problem'; pondId?: number }
   | { name: 'profile'; invite?: boolean }
-  | { name: 'rewards' };
+  | { name: 'rewards' }
+  /** Record one pond (from a row in the Catat list, or a pond page). */
+  | { name: 'record-pond'; pondId: number }
+  /** Check what a voice round heard; `queued` = a recording read later (offline or out of quota). */
+  | { name: 'round'; queued?: string }
+  | { name: 'history'; pondId: number }
+  | { name: 'quota' }
+  | { name: 'help' }
+  /** The night-check alarm, full screen. */
+  | { name: 'alarm'; at: number; pondId: number };
 
 export type Go = (r: Route) => void;
 
@@ -29,7 +45,11 @@ const tabs: { name: 'today' | 'record' | 'watch' | 'problem'; label: string; ico
   { name: 'problem', label: 'Masalah', icon: 'alert' },
 ];
 
-const tabOf = (r: Route) => (r.name === 'pond' || r.name === 'add-pond' || r.name === 'profile' || r.name === 'rewards' ? 'today' : r.name);
+const TAB_OF: Partial<Record<Route['name'], (typeof tabs)[number]['name']>> = {
+  pond: 'today', 'add-pond': 'today', profile: 'today', rewards: 'today', history: 'today', quota: 'today', help: 'today',
+  'record-pond': 'record', round: 'record',
+};
+const tabOf = (r: Route) => TAB_OF[r.name] ?? (r.name as (typeof tabs)[number]['name']);
 
 export function App() {
   /** undefined while checking the session; null when nobody is signed in. */
@@ -38,6 +58,15 @@ export function App() {
   const [error, setError] = useState('');
   const [route, setRoute] = useState<Route>({ name: 'today' });
   const [nowcast, setNowcast] = useState<NowcastState | null>(null);
+  /** Signed out because the session was lost (PIN reset, signed in elsewhere): Masuk says why. */
+  const [ended, setEnded] = useState<{ phone: string } | null>(null);
+  /** Last time the farm data loaded, for the connection banner. */
+  const [syncedAt, setSyncedAt] = useState<number | null>(null);
+  const [retrying, setRetrying] = useState(false);
+  /** A retry has failed since the banner appeared: say it keeps trying by itself. */
+  const [retried, setRetried] = useState(false);
+  const meRef = useRef(me);
+  meRef.current = me;
 
   const signedOut = useCallback(() => {
     setMe(null);
@@ -46,17 +75,30 @@ export function App() {
     setRoute({ name: 'today' });
   }, []);
 
-  const refresh = useCallback(() => {
-    api.farm().then(
-      (s) => {
-        setState(s);
-        setError('');
-        // The estimate is a bonus: if it fails, the rest of the app still works.
-        if (s.farm) api.nowcast().then(setNowcast, () => {});
-      },
-      (e) => !isAuthError(e) && setError(e.message),
-    );
-  }, []);
+  const sessionLost = useCallback(() => {
+    // Only a session that existed can end; a first visit without one is just signed out.
+    // The shared demo account has no PIN to type, so its number is not filled in.
+    if (meRef.current) setEnded({ phone: meRef.current.demo ? '' : meRef.current.user.phone });
+    signedOut();
+  }, [signedOut]);
+
+  const refresh = useCallback(
+    () =>
+      api.farm().then(
+        (s) => {
+          setState(s);
+          setError('');
+          setSyncedAt(Date.now());
+          // The estimate is a bonus: if it fails, the rest of the app still works.
+          if (s.farm) api.nowcast().then(setNowcast, () => {});
+        },
+        (e) => {
+          if (isAuthError(e)) return;
+          setError(e.message);
+        },
+      ),
+    [],
+  );
 
   const loadMe = useCallback(() => {
     setError('');
@@ -72,10 +114,37 @@ export function App() {
 
   useEffect(() => {
     // Any request that finds the session gone (PIN reset by the owner, signed out) returns to sign-in.
-    onSessionLost(signedOut);
+    onSessionLost(sessionLost);
     loadMe();
     return () => onSessionLost(null);
-  }, [loadMe, signedOut]);
+  }, [loadMe, sessionLost]);
+
+  // Data on screen but the server is out of reach: retry by itself every 30 seconds,
+  // and at once when the phone says it is back online.
+  const offline = Boolean(error && me && state);
+  const retry = useCallback(() => {
+    setRetrying(true);
+    refresh().finally(() => {
+      setRetrying(false);
+      setRetried(true);
+    });
+  }, [refresh]);
+  useEffect(() => {
+    if (!offline) return setRetried(false);
+    const timer = setInterval(retry, 30_000);
+    return () => clearInterval(timer);
+  }, [offline, retry]);
+  useEffect(() => {
+    const lost = () => meRef.current && setError('HP tidak tersambung ke internet');
+    const back = () => meRef.current && refresh();
+    window.addEventListener('offline', lost);
+    window.addEventListener('online', back);
+    return () => {
+      window.removeEventListener('offline', lost);
+      window.removeEventListener('online', back);
+    };
+  }, [refresh]);
+
 
   const userId = me?.user.id;
   const farmId = me?.farm?.id;
@@ -94,6 +163,7 @@ export function App() {
   };
 
   const signedIn = (m: Me) => {
+    setEnded(null);
     setState(null);
     setNowcast(null);
     setRoute({ name: 'today' });
@@ -107,6 +177,8 @@ export function App() {
   };
 
   const role = state?.role ?? null;
+  // Night-check alarms ring from app start, on any screen, while the app is open.
+  useAlarms(go, nowcast, state?.ponds);
   const owner = role === 'owner';
 
   let body;
@@ -120,7 +192,8 @@ export function App() {
       </div>
     );
   } else if (me === null) {
-    body = <SignIn onSignedIn={signedIn} />;
+    // Help is reachable signed out too: an owner who forgot the PIN has no one else to ask.
+    body = route.name === 'help' ? <Help me={null} go={go} /> : <SignIn key={ended ? `ended:${ended.phone}` : 'signin'} onSignedIn={signedIn} onHelp={() => go({ name: 'help' })} sessionEnded={ended !== null} lastPhone={ended?.phone || undefined} />;
   } else if (!me || !state) {
     body = (
       <div class="screen">
@@ -132,6 +205,10 @@ export function App() {
   } else if (route.name === 'add-pond' && owner) {
     body = (
       <AddPond
+        onHome={() => {
+          refresh();
+          go({ name: 'today' });
+        }}
         today={state.today}
         ponds={state.ponds}
         onDone={(id) => {
@@ -142,19 +219,31 @@ export function App() {
       />
     );
   } else if (route.name === 'profile') {
-    body = <Profile key={farmId} state={state} me={me} go={go} invite={route.invite} onSwitch={switchFarm} onLogout={signedOut} />;
+    body = <Profile key={farmId} state={state} me={me} go={go} invite={route.invite} onSwitch={switchFarm} onLogout={signedOut} onFarmChanged={refresh} />;
   } else if (state.ponds.length === 0) {
     body = <NoPonds farm={state.farm} userName={me.user.name} onAdd={owner ? () => go({ name: 'add-pond' }) : undefined} onProfile={() => go({ name: 'profile' })} />;
   } else if (route.name === 'pond') {
-    body = <PondDetail key={route.id} id={route.id} nowcast={nowcast} go={go} />;
+    body = <PondDetail key={route.id} id={route.id} nowcast={nowcast} role={role} go={go} />;
   } else if (route.name === 'record') {
-    body = <Record key={route.pondId ?? 0} ponds={state.ponds} initialPondId={route.pondId} onSaved={refresh} />;
+    body = <Record key={route.pondId ?? 0} state={state} initialPondId={route.pondId} onSaved={refresh} go={go} />;
   } else if (route.name === 'watch') {
     body = <Watch state={state} nowcast={nowcast} onChanged={refresh} go={go} />;
   } else if (route.name === 'problem') {
     body = <Problem key={route.pondId ?? 0} ponds={state.ponds} initialPondId={route.pondId} onSaved={refresh} go={go} />;
   } else if (route.name === 'rewards') {
     body = <Rewards state={state} go={go} />;
+  } else if (route.name === 'record-pond') {
+    body = <RecordPond key={route.pondId} ponds={state.ponds} pondId={route.pondId} onSaved={refresh} go={go} />;
+  } else if (route.name === 'round') {
+    body = <Round ponds={state.ponds} queued={route.queued} onSaved={refresh} go={go} />;
+  } else if (route.name === 'history') {
+    body = <History key={route.pondId} ponds={state.ponds} pondId={route.pondId} role={role} onChanged={refresh} go={go} />;
+  } else if (route.name === 'quota') {
+    body = <Quota role={role} go={go} />;
+  } else if (route.name === 'help') {
+    body = <Help me={me} go={go} />;
+  } else if (route.name === 'alarm') {
+    body = <Alarm ponds={state.ponds} at={route.at} pondId={route.pondId} role={role} onSaved={refresh} go={go} />;
   } else {
     body = <Today state={state} userName={me.user.name} nowcast={nowcast} go={go} onRetryWeather={refresh} />;
   }
@@ -164,14 +253,23 @@ export function App() {
 
   return (
     <div class="shell">
-      <main>{body}</main>
+      <main>
+        {offline && (
+          <div class="conn-wrap">
+            <ConnectionBanner since={syncedAt} retrying={retrying} stillOff={retried} onRetry={retry} />
+          </div>
+        )}
+        {body}
+      </main>
       {ready && (
         <nav class="tabs" aria-label="Menu utama">
           {tabs.map((t) => (
             <button key={t.name} class={tabOf(route) === t.name ? 'active' : ''} aria-current={tabOf(route) === t.name ? 'page' : undefined} onClick={() => go({ name: t.name })}>
-              <Icon name={t.icon} />
+              <span class="pill">
+                <Icon name={t.icon} />
+                {t.name === 'watch' && alerts && <span class="dot" aria-label="ada peringatan" />}
+              </span>
               {t.label}
-              {t.name === 'watch' && alerts && <span class="dot" aria-label="ada peringatan" />}
             </button>
           ))}
         </nav>

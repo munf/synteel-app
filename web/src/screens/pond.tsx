@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'preact/hooks';
-import { api, type Limits, type Log, type NowcastState, type PondSummary } from '../api.ts';
+import { api, ApiError, type Limits, type Log, type NowcastState, type PondProfile, type PondSummary, type Role } from '../api.ts';
 import type { Go } from '../app.tsx';
-import { aerationLabel, fmtAgo, fmtNum, fmtTime, readingWord, settingLabel, sourceLabel, summarizeLog } from '../labels.ts';
+import { aerationLabel, fmtAgo, fmtNum, fmtTime, phaseLabel, readingWord, settingLabel, sourceLabel, summarizeLog } from '../labels.ts';
 import { usePrefs } from '../prefs.ts';
-import { Icon, kindLabel, pondMeta, Shape, Soon, StatusPill, tankPath, TickBox, toneOf } from '../ui.tsx';
+import { Icon, kindLabel, Shape, Soon, StatusPill, tankPath, TickBox, toneOf } from '../ui.tsx';
+import './pond.css';
 
 type Key = 'temperature' | 'ph' | 'tds';
 const METRICS: { key: Key; label: string; unit: string; scale: [number, number] }[] = [
@@ -20,6 +21,15 @@ const targetText = (l: Limits | undefined, unit: string) => {
   if (t.max !== undefined) return `batas ${fmtNum(t.max)}${unit}`;
   return `minimal ${fmtNum(t.min!)}${unit}`;
 };
+
+const READING_WORD: Record<string, string> = { temperature: 'suhu', ph: 'pH', tds: 'TDS', do: 'oksigen', tan: 'amonia', no2: 'nitrit', no3: 'nitrat' };
+
+/** Source names in plain words: "(temperature)" → "(suhu)", "DO rendah" → "oksigen rendah". */
+export const plainSource = (s: string) =>
+  s.replace(/\(([a-z0-9_]+)\)/g, (m, id) => (READING_WORD[id] ? `(${READING_WORD[id]})` : m)).replace(/\bDO\b/g, 'oksigen');
+
+/** Program text in plain words: NO₂ is "nitrit" on the farm. */
+const plainWater = (s: string) => s.replace(/NO₂/g, 'nitrit').replace(/NO₃/g, 'nitrat').replace(/\bTAN\b/g, 'amonia');
 
 /** Last value per day for the past 7 days, oldest first. */
 function daily(logs: Log[], key: Key) {
@@ -66,20 +76,20 @@ function MetricCard({ pond, logs }: { pond: PondSummary; logs: Log[] }) {
           </button>
         ))}
       </div>
-      <div class="row top between">
-        <div class="stack-sm">
+      <div class="stack-sm">
+        <div class="row between">
           <span class="big">{latest ? `${fmtNum(latest.value)}${m.unit}` : '–'}</span>
-          <span class="meta">
-            {latest ? `diukur ${fmtAgo(Date.parse(latest.at))}` : 'belum diukur'}
-            {limits && ` · ${targetText(limits, m.unit)}`}
-          </span>
+          {word && (
+            <span class={`pill ${word.tone}`} style={{ flex: 'none' }}>
+              <Shape tone={word.tone} />
+              {word.text}
+            </span>
+          )}
         </div>
-        {word && (
-          <span class={`pill ${word.tone}`}>
-            <Shape tone={word.tone} />
-            {word.text}
-          </span>
-        )}
+        <span class="meta">
+          {latest ? `diukur ${fmtAgo(Date.parse(latest.at))}` : 'belum diukur'}
+          {limits && ` · ${targetText(limits, m.unit)}`}
+        </span>
       </div>
       {days.length > 0 && (
         <div class="stack-sm">
@@ -99,7 +109,99 @@ function MetricCard({ pond, logs }: { pond: PondSummary; logs: Log[] }) {
   );
 }
 
-export function PondDetail({ id, nowcast, go }: { id: number; nowcast: NowcastState | null; go: Go }) {
+/** "12 catatan sejak Jumat · terakhir Rab 17.15" for the row that opens the full history. */
+function historyLine(logs: Log[]) {
+  if (logs.length === 0) return 'Belum ada catatan 14 hari terakhir';
+  const oldest = Date.parse(logs.at(-1)!.loggedAt);
+  const since =
+    Date.now() - oldest < 6 * 86400_000
+      ? new Date(oldest).toLocaleDateString('id-ID', { weekday: 'long', timeZone: 'Asia/Jakarta' })
+      : new Date(oldest).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'Asia/Jakarta' });
+  return `${logs.length} catatan sejak ${since} · terakhir ${fmtTime(logs[0].loggedAt)}`;
+}
+
+/**
+ * Other names for the pond that the voice reader understands ("kolam pojok"). The owner edits
+ * the whole list; others can add a name.
+ */
+function Nicknames({ pond, role, onSaved }: { pond: PondSummary; role?: Role | null; onSaved: (p: PondSummary) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const names = pond.nicknames ?? [];
+  // Unknown role (older app shell): try the owner's way, fall back to adding one.
+  const owner = role !== 'worker';
+
+  const start = () => {
+    setDraft(owner ? names.join(', ') : '');
+    setError('');
+    setEditing(true);
+  };
+
+  const save = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const typed = draft.split(',').map((n) => n.trim()).filter(Boolean);
+      let saved: PondSummary;
+      try {
+        if (!owner) throw new ApiError('', 403);
+        saved = (await api.updatePond(pond.id, { nicknames: typed } as PondProfile)).pond;
+      } catch (err) {
+        if (!(err instanceof ApiError && err.status === 403)) throw err;
+        const added = typed.filter((n) => !names.includes(n));
+        if (added.length === 0) {
+          setEditing(false);
+          return;
+        }
+        saved = pond;
+        for (const n of added) saved = (await api.addNickname(pond.id, n)).pond;
+      }
+      onSaved(saved);
+      setEditing(false);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!editing)
+    return (
+      <div class="row" style={{ background: 'var(--bg)', borderRadius: 16, padding: '8px 8px 8px 16px' }}>
+        <span class="grow stack-xs" style={{ gap: 0 }}>
+          <span class="meta">Nama panggilan</span>
+          <span class="strong">{names.length ? names.join(', ') : 'Belum ada'}</span>
+        </span>
+        <button type="button" class="nick-btn" onClick={start}>
+          <Icon name={owner || names.length === 0 ? 'pencil' : 'plus'} size={16} stroke={2.5} />
+          {owner || names.length === 0 ? 'Ubah' : 'Tambah'}
+        </button>
+      </div>
+    );
+
+  return (
+    <div class="stack">
+      <label class="field">
+        <span class="meta">{owner ? 'Nama panggilan (boleh kosong)' : 'Nama panggilan baru'}</span>
+        <input value={draft} onInput={(e) => setDraft(e.currentTarget.value)} placeholder="mis. kolam pojok" />
+        <span class="field-hint">{owner && names.length > 1 ? 'Pisahkan dengan koma. ' : ''}AI memakai ini saat mendengar suara.</span>
+      </label>
+      {error && <p class="error">{error}</p>}
+      <div class="grid2" style={{ gap: 8 }}>
+        <button type="button" class="btn primary" disabled={busy} onClick={save}>
+          {busy ? 'Menyimpan…' : 'Simpan'}
+        </button>
+        <button type="button" class="btn secondary" onClick={() => setEditing(false)}>
+          Batal
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: NowcastState | null; role?: Role | null; go: Go }) {
   const prefs = usePrefs();
   const [data, setData] = useState<{ pond: PondSummary; logs: Log[] } | null>(null);
   const [error, setError] = useState('');
@@ -135,7 +237,7 @@ export function PondDetail({ id, nowcast, go }: { id: number; nowcast: NowcastSt
     <div class="screen">
       <section class="cover">
         <svg viewBox="0 0 350 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-          <g transform="translate(91 16) scale(3)">
+          <g transform="translate(105 8) scale(2.5)">
             <path d={tankPath(pond.kind)} fill="#8DB6D9" stroke="#FFFFFF" stroke-width="2.6" />
           </g>
         </svg>
@@ -153,7 +255,15 @@ export function PondDetail({ id, nowcast, go }: { id: number; nowcast: NowcastSt
       <header class="row top between">
         <div class="stack-xs">
           <h1>{pond.name}</h1>
-          <span class="meta">{[pond.kind && (kindLabel[pond.kind] ?? pond.kind), pondMeta(pond)].filter(Boolean).join(' · ')}</span>
+          <span class="meta">
+            {[pond.kind && (kindLabel[pond.kind] ?? pond.kind), pond.batch && phaseLabel[pond.batch.phase], pond.program && `minggu ${pond.program.week}`].filter(Boolean).join(' · ') || 'Belum ada batch'}
+            {pond.program?.estimatedAlive != null && (
+              <>
+                <br />
+                sekitar {pond.program.estimatedAlive.toLocaleString('id-ID')} ekor
+              </>
+            )}
+          </span>
         </div>
         <StatusPill level={pond.level} />
       </header>
@@ -212,7 +322,7 @@ export function PondDetail({ id, nowcast, go }: { id: number; nowcast: NowcastSt
             <span class="strong">
               Minggu ke-{pond.program!.week}: {stage.name}
             </span>
-            <span class="ink2">Pakan {stage.feed.toLowerCase()}. Air: {stage.water.toLowerCase()}.</span>
+            <span class="ink2">Pakan {stage.feed.toLowerCase()}. Air: {plainWater(stage.water).toLowerCase()}.</span>
           </div>
         </section>
       )}
@@ -253,6 +363,21 @@ export function PondDetail({ id, nowcast, go }: { id: number; nowcast: NowcastSt
       )}
 
       <MetricCard pond={pond} logs={logs} />
+
+      {!tech && (
+        <button class="card history-row" onClick={() => go({ name: 'history', pondId: pond.id })}>
+          <span class="icon-box">
+            <Icon name="clock" />
+          </span>
+          <span class="grow stack-xs" style={{ gap: 2 }}>
+            <span class="strong">Riwayat catatan</span>
+            <span class="meta">{historyLine(logs)}</span>
+          </span>
+          <span style={{ color: 'var(--muted)', display: 'inline-flex' }}>
+            <Icon name="next" size={20} />
+          </span>
+        </button>
+      )}
 
       {!tech && (
         <div class="stack-sm">
@@ -316,6 +441,10 @@ export function PondDetail({ id, nowcast, go }: { id: number; nowcast: NowcastSt
                 <span class="label ink2">{summarizeLog(l.data) || 'Cek: tidak ada catatan angka'}</span>
               </div>
             ))}
+            <button class="link-row" style={{ marginTop: 8 }} onClick={() => go({ name: 'history', pondId: pond.id })}>
+              <span>Ubah, pindahkan atau hapus catatan</span>
+              <Icon name="next" size={20} />
+            </button>
           </section>
 
           <section class="card" style={{ gap: 4 }}>
@@ -330,13 +459,14 @@ export function PondDetail({ id, nowcast, go }: { id: number; nowcast: NowcastSt
                     {f.level === 'critical' ? 'Bahaya' : f.level === 'warning' ? 'Perhatian' : 'Catatan'}
                   </span>
                 </div>
-                <span class="meta">Sumber: {f.source}</span>
+                <span class="meta">Sumber: {plainSource(f.source)}</span>
               </div>
             ))}
           </section>
 
           <section class="card">
             <h2>Profil kolam</h2>
+            <Nicknames pond={pond} role={role} onSaved={(p) => setData({ ...data, pond: p })} />
             <p class="ink2">
               {[
                 pond.setting && settingLabel[pond.setting] + (pond.setting === 'outdoor' && pond.shaded ? ', berpeneduh' : ''),

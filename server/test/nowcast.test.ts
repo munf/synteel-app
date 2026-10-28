@@ -26,7 +26,7 @@ function weather(opts: { rainAt?: number } = {}): WeatherHour[] {
 
 const pond = (p: Partial<Pond> = {}): Pond => ({
   id: 1, name: 'Kolam C', kind: 'beton', volumeL: 3600, areaM2: 12,
-  setting: 'outdoor', shaded: true, aeration: 'full', depthCm: 30, ...p,
+  setting: 'outdoor', shaded: true, aeration: 'full', depthCm: 30, nicknames: [], ...p,
 });
 
 let nextId = 1;

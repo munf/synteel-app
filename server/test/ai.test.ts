@@ -69,7 +69,11 @@ test('falls back to the next provider when the first is down', async () => {
 
 test('daily cap stops real AI reads until the next day', async () => {
   let clock = new Date('2026-10-28T10:00:00Z');
-  const inner: Ai = { mode: 'meta', draft: async () => toDraft({}, 'meta') };
+  const inner: Ai = {
+    mode: 'meta',
+    draft: async () => toDraft({}, 'meta'),
+    round: async () => ({ transcript: '', drafts: [], loose: null, empty: true, model: 'test', mode: 'meta' }),
+  };
   const ai = withDailyCap(inner, 2, () => clock);
   const input = { kind: 'photo' as const, images: [], pondName: 'Kolam C' };
   await ai.draft(input);

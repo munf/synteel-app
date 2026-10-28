@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { api, type Behavior, type CountResult, type Emergency, type LogData, type PondSummary } from '../api.ts';
+import { api, ApiError, type Behavior, type CountResult, type Emergency, type LogData, type PondSummary } from '../api.ts';
 import { prepareImage } from '../capture/media.ts';
 import type { Go } from '../app.tsx';
 import { fmtClock, fmtNum } from '../labels.ts';
-import { Icon, PondPicker, PondThumb, Soon, Stepper, TickBox, type IconName } from '../ui.tsx';
+import { phaseLabel } from '../labels.ts';
+import { Icon, PondThumb, Shape, Soon, Stepper, Tick, TickBox, toneOf, type IconName } from '../ui.tsx';
+import './problem.css';
 
 type Sign = 'dead' | 'surface' | 'inlet' | 'feed' | 'skin' | 'water' | 'power' | 'other';
 
@@ -21,11 +23,191 @@ const SIGNS: { id: Sign; label: string; icon: IconName }[] = [
 // Which emergency SOP (knowledge/emergencies.json) answers which sign. Deterministic: works without the AI.
 const SOP: Partial<Record<Sign, string>> = { dead: 'low_do', surface: 'low_do', inlet: 'low_do', power: 'power_outage', water: 'heavy_rain' };
 
+// Steps in the words a farmer uses at the pond; the same step from two sources shows once.
 const PLAIN: Record<string, string> = {
   'Cek aerator, diffuser dan selang udara': 'Cek aerator, batu aerasi dan selang udara',
+  'Cek aerator, batu aerasi dan selang udara; jangan beri pakan dulu': 'Cek aerator, batu aerasi dan selang udara',
   'Tambah aerasi atau oksigen darurat': 'Nyalakan aerator cadangan atau oksigen darurat kalau ada',
+  'Nyalakan aerator cadangan atau oksigen darurat': 'Nyalakan aerator cadangan atau oksigen darurat kalau ada',
   'Tunda pemberian pakan': 'Jangan beri pakan dulu sampai sidat berenang normal',
+  'Cek kapasitas pemanas/pendingin dan kondisi ruangan': 'Cek kapasitas pemanas atau pendingin dan kondisi ruangan',
+  'Cek pemanas/pendingin dan kondisi ruangan': 'Cek kapasitas pemanas atau pendingin dan kondisi ruangan',
 };
+const plain = (a: string) => {
+  const t = a.trim().replace(/\.$/, '');
+  return PLAIN[t] ?? t;
+};
+
+// ---------- working without signal ----------
+// The emergency steps must show at the pond even with no signal, so the last copy is kept on the phone.
+// A report made without signal waits on the phone and is sent (with its own time) once there is signal.
+
+const EMERGENCIES_KEY = 'synteel.emergencies';
+const QUEUE_KEY = 'synteel.pendingReports';
+
+interface PendingReport {
+  pondId: number;
+  pondName: string;
+  data: LogData;
+  at: number;
+}
+
+function readJson<T>(key: string, fallback: T): T {
+  try {
+    return JSON.parse(localStorage.getItem(key) ?? 'null') ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+function writeJson(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // private mode: kept for this page only
+  }
+}
+
+/** No answer from the server at all (no signal), as opposed to an error it answered with. fetch() fails with a TypeError. */
+const noSignal = (e: unknown) => e instanceof TypeError;
+
+let sending: Promise<number> | null = null;
+/** Send reports waiting on this phone. Resolves to how many were sent. */
+export function sendPendingReports(): Promise<number> {
+  if (sending) return sending;
+  sending = (async () => {
+    const queue = readJson<PendingReport[]>(QUEUE_KEY, []);
+    if (!queue.length || !navigator.onLine) return 0;
+    // A report is only sent to the farm it was made on: same pond id and name.
+    const { ponds } = await api.farm();
+    let sent = 0;
+    for (const r of queue) {
+      if (!ponds.some((p) => p.id === r.pondId && p.name === r.pondName)) continue;
+      try {
+        await api.addLog(r.pondId, { ...r.data, loggedAt: new Date(r.at).toISOString() } as LogData);
+        sent++;
+      } catch (err) {
+        if (noSignal(err)) break;
+        if (err instanceof ApiError && (err.status === 401 || err.status >= 500)) break;
+        // Refused for good (e.g. the pond was removed): drop it rather than retry forever.
+      }
+      writeJson(QUEUE_KEY, readJson<PendingReport[]>(QUEUE_KEY, []).filter((x) => x.at !== r.at));
+    }
+    return sent;
+  })()
+    .catch(() => 0)
+    .finally(() => {
+      sending = null;
+    });
+  return sending;
+}
+const isQueued = (at: number) => readJson<PendingReport[]>(QUEUE_KEY, []).some((r) => r.at === at);
+if (typeof window !== 'undefined') window.addEventListener('online', () => void sendPendingReports());
+
+/** Sends waiting reports now and whenever signal comes back; `onSent` refreshes the farm. */
+function useSendPending(onSent: () => void) {
+  useEffect(() => {
+    const run = () => sendPendingReports().then((n) => n > 0 && onSent());
+    run();
+    window.addEventListener('online', run);
+    return () => window.removeEventListener('online', run);
+  }, []);
+}
+
+// ---------- pond picker: name, then phase and week, then the count, each on its own line ----------
+
+function metaLines(p: PondSummary): [string, string | null] {
+  if (!p.batch || !p.program) return ['Belum ada batch', null];
+  const count = p.program.estimatedAlive !== null ? `sekitar ${p.program.estimatedAlive.toLocaleString('id-ID')} ekor` : null;
+  return [`${phaseLabel[p.batch.phase]} · minggu ${p.program.week}`, count];
+}
+
+function Meta({ p }: { p: PondSummary | undefined }) {
+  const [a, b] = p ? metaLines(p) : ['Belum dipilih', null];
+  return (
+    <span class="meta num stack-xs" style={{ gap: 0 }}>
+      <span>{a}</span>
+      {b && <span>{b}</span>}
+    </span>
+  );
+}
+
+function PondChooser({ ponds, value, onChange }: { ponds: PondSummary[]; value: number | null; onChange: (id: number) => void }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+  const cur = ponds.find((p) => p.id === value);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: Event) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
+  }, [open]);
+
+  const q = query.trim().toLowerCase();
+  const shown = q ? ponds.filter((p) => p.name.toLowerCase().includes(q)) : ponds;
+
+  return (
+    <div class="picker" ref={ref}>
+      <button type="button" class={`picker-btn${open ? ' open' : cur ? '' : ' empty'}`} aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen(!open)}>
+        {cur ? (
+          <PondThumb kind={cur.kind} />
+        ) : (
+          <span class="thumb" style={{ width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)' }}>
+            <Icon name="plus" />
+          </span>
+        )}
+        <span class="grow stack-xs">
+          <span class="h2">{cur ? cur.name : 'Pilih kolam'}</span>
+          <Meta p={cur} />
+        </span>
+        <Icon name="down" />
+      </button>
+      {open && (
+        <div class="picker-menu">
+          {ponds.length > 5 && (
+            <label class="picker-search">
+              <Icon name="search" size={20} />
+              <input aria-label="Cari kolam" placeholder="Cari nama kolam" value={query} onInput={(e) => setQuery(e.currentTarget.value)} />
+            </label>
+          )}
+          <div role="listbox" aria-label="Daftar kolam" class="stack-xs">
+            {shown.map((p) => (
+              <button
+                type="button"
+                key={p.id}
+                role="option"
+                aria-selected={p.id === value}
+                class={`picker-option${p.id === value ? ' on' : ''}`}
+                style={{ padding: '8px' }}
+                onClick={() => {
+                  onChange(p.id);
+                  setOpen(false);
+                  setQuery('');
+                }}
+              >
+                <PondThumb kind={p.kind} size={40} />
+                <span class="grow stack-xs" style={{ gap: 0 }}>
+                  <span class="strong">{p.name}</span>
+                  <Meta p={p} />
+                </span>
+                <span class={`word ${toneOf(p.level)}`}>
+                  <Shape tone={toneOf(p.level)} />
+                </span>
+                {p.id === value && <Tick />}
+              </button>
+            ))}
+            {shown.length === 0 && (
+              <p class="meta" style={{ padding: '16px 8px' }}>
+                Tidak ada kolam dengan nama itu.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface Counted {
   url: string;
@@ -41,6 +223,8 @@ interface Report {
   dead: number;
   at: number;
   counted: Counted | null;
+  /** Made without signal: waiting on this phone. */
+  offline: boolean;
 }
 
 /** Re-check reminders live on this phone; Beranda shows them when they are due. */
@@ -93,8 +277,20 @@ function CountedPhoto({ c }: { c: Counted }) {
   );
 }
 
-function Result({ report, emergencies, go, onBack }: { report: Report; emergencies: Emergency[]; go: Go; onBack: () => void }) {
+function Result({ report, emergencies, go, onBack, onSaved }: { report: Report; emergencies: Emergency[]; go: Go; onBack: () => void; onSaved: () => void }) {
   const [done, setDone] = useState<Record<string, boolean>>({});
+  const [queued, setQueued] = useState(report.offline);
+  // Signal back while this screen is open: the waiting report goes out and the notice says so.
+  useEffect(() => {
+    if (!report.offline) return;
+    const check = () =>
+      sendPendingReports().then((n) => {
+        if (n > 0) onSaved();
+        if (!isQueued(report.at)) setQueued(false);
+      });
+    window.addEventListener('online', check);
+    return () => window.removeEventListener('online', check);
+  }, []);
   const { pond, signs } = report;
   const steps = [
     ...new Set([
@@ -102,7 +298,7 @@ function Result({ report, emergencies, go, onBack }: { report: Report; emergenci
       ...pond.findings.filter((f) => f.level !== 'info').flatMap((f) => f.actions),
     ]),
   ]
-    .map((a) => PLAIN[a] ?? a)
+    .map(plain)
     .filter((a, i, all) => all.indexOf(a) === i)
     .slice(0, 5);
   if (signs.includes('skin')) steps.push('Pisahkan sidat yang luka atau berjamur ke kolam karantina');
@@ -136,15 +332,27 @@ function Result({ report, emergencies, go, onBack }: { report: Report; emergenci
         </div>
       </header>
 
-      <div class="note ok">
-        <Icon name="check" />
-        <span class="grow">Laporan tersimpan di catatan kolam.</span>
-      </div>
-      <div class="note warn" style={{ alignItems: 'center' }}>
-        <Icon name="chat" />
-        <span class="grow">Kabar otomatis ke pemilik tambak</span>
-        <Soon />
-      </div>
+      {queued ? (
+        <div class="note info" role="status" style={{ fontSize: '1rem' }}>
+          <Icon name="nowifi" />
+          <span class="grow stack-xs" style={{ gap: 0 }}>
+            <span class="strong">Belum ada sinyal</span>
+            <span>Laporan disimpan di HP, terkirim otomatis saat ada sinyal.</span>
+          </span>
+        </div>
+      ) : (
+        <>
+          <div class="note ok" role="status">
+            <Icon name="check" />
+            <span class="grow">Laporan tersimpan di catatan kolam.</span>
+          </div>
+          <div class="note warn" style={{ alignItems: 'center' }}>
+            <Icon name="chat" />
+            <span class="grow">Kabar otomatis ke pemilik tambak</span>
+            <Soon />
+          </div>
+        </>
+      )}
 
       {steps.length > 0 && (
         <section class="hero">
@@ -170,7 +378,7 @@ function Result({ report, emergencies, go, onBack }: { report: Report; emergenci
             </button>
           ))}
           <span class="label" style={{ color: '#9FB0CF' }}>
-            Langkah ini tetap muncul walau tanpa internet.
+            {report.offline ? 'Langkah ini tersimpan di HP, tetap muncul tanpa sinyal.' : 'Langkah ini tetap muncul walau tanpa internet.'}
           </span>
         </section>
       )}
@@ -190,14 +398,20 @@ function Result({ report, emergencies, go, onBack }: { report: Report; emergenci
           </div>
         </div>
         <a class="btn danger" href={`https://wa.me/?text=${encodeURIComponent(summary)}`} target="_blank" rel="noopener">
-          <Icon name="chat" size={20} /> Kirim ringkasan lewat WhatsApp
+          <Icon name="chat" size={20} /> Kirim ringkasan ke WhatsApp
         </a>
-        <div class="row between">
-          <span class="btn secondary grow" aria-disabled="true" style={{ opacity: 0.7 }}>
-            <Icon name="phone" size={20} /> Telepon penyuluh
+        {queued ? (
+          <span class="label" style={{ color: '#5C1A12' }}>
+            Tetap bisa tanpa sinyal: WhatsApp mengirim pesan begitu ada sinyal.
           </span>
-          <Soon />
-        </div>
+        ) : (
+          <div class="row between">
+            <span class="btn secondary grow" aria-disabled="true" style={{ opacity: 0.7 }}>
+              <Icon name="phone" size={20} /> Telepon penyuluh
+            </span>
+            <Soon />
+          </div>
+        )}
       </section>
 
       {report.counted && (
@@ -249,6 +463,54 @@ function Result({ report, emergencies, go, onBack }: { report: Report; emergenci
   );
 }
 
+/** Basin photo the AI found no eel in, or could not count: tips, try again, or count by hand. */
+function CountFailed({ failed, onRetake, onManual }: { failed: Failed; onRetake: () => void; onManual: () => void }) {
+  return (
+    <section class="card">
+      <div class="row top">
+        {failed.url ? (
+          <img src={failed.url} alt="Foto baskom" style={{ width: 88, height: 66, flex: 'none', borderRadius: 12, objectFit: 'cover', background: '#20252c' }} />
+        ) : (
+          <span style={{ width: 88, height: 66, flex: 'none', borderRadius: 12, background: '#20252c' }} />
+        )}
+        <span class="grow stack-xs">
+          <span class="h2">AI belum melihat sidat di foto ini</span>
+          <span class="label ink2">
+            {failed.offline ? 'Foto belum terkirim karena belum ada sinyal. Isi jumlah sendiri, atau foto ulang saat ada sinyal.' : 'Foto terlalu gelap, atau sidat tertutup bayangan.'}
+          </span>
+        </span>
+      </div>
+      <ul class="count-tips">
+        {TIPS.map((t) => (
+          <li key={t.text}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d={t.d} />
+            </svg>
+            {t.text}
+          </li>
+        ))}
+      </ul>
+      <button type="button" class="btn primary" onClick={onRetake}>
+        <Icon name="camera" size={20} /> Foto ulang
+      </button>
+      <button type="button" class="btn secondary" onClick={onManual}>
+        Isi jumlah sendiri
+      </button>
+    </section>
+  );
+}
+
+const TIPS = [
+  { d: 'M3 9h18l-2 9H5zM6 9V7h12v2', text: 'Taruh sidat di baskom putih' },
+  { d: 'M12 4v10M8 10l4 4 4-4M5 20h14', text: 'Foto lurus dari atas' },
+  { d: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4', text: 'Cari tempat cukup terang, atau nyalakan senter HP' },
+];
+
+interface Failed {
+  url: string | null;
+  offline: boolean;
+}
+
 export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSummary[]; initialPondId?: number; onSaved: () => void; go: Go }) {
   // No pond preselected unless the farmer came from that pond's page: the wrong pond is worse than one more tap.
   const [pondId, setPondId] = useState<number | null>(initialPondId ?? null);
@@ -257,43 +519,63 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [report, setReport] = useState<Report | null>(null);
-  const [emergencies, setEmergencies] = useState<Emergency[]>([]);
+  // The last copy kept on this phone first, so the steps show even without signal.
+  const [emergencies, setEmergencies] = useState<Emergency[]>(() => readJson<Emergency[]>(EMERGENCIES_KEY, []));
   const [counted, setCounted] = useState<Counted | null>(null);
   const [counting, setCounting] = useState(false);
-  const [countError, setCountError] = useState('');
+  const [failed, setFailed] = useState<Failed | null>(null);
+  const [manual, setManual] = useState(false);
   const photo = useRef<HTMLInputElement>(null);
+
+  useSendPending(onSaved);
 
   // The basin photo → SAM 3.1 count with outlines; the stepper below starts from it.
   const onBasinPhoto = async (file: File | undefined) => {
     if (!file || pondId === null) return;
     setCounting(true);
-    setCountError('');
+    setFailed(null);
+    setManual(false);
+    let url: string | null = null;
     try {
       const { blob } = await prepareImage(file, 1280);
-      const url = URL.createObjectURL(blob);
+      url = URL.createObjectURL(blob);
       const img = new Image();
       img.src = url;
       await img.decode();
       const { result, mock } = await api.countEels(pondId, blob);
-      setCounted({ url, w: img.naturalWidth, h: img.naturalHeight, result, mock });
-      if (result.count > 0) setDead(result.count);
+      if (!mock && result.count === 0) {
+        setCounted(null);
+        setFailed({ url, offline: false });
+      } else {
+        setCounted({ url, w: img.naturalWidth, h: img.naturalHeight, result, mock });
+        if (result.count > 0) setDead(result.count);
+      }
     } catch (err) {
-      setCountError((err as Error).message);
+      setCounted(null);
+      setFailed({ url, offline: noSignal(err) });
     } finally {
       setCounting(false);
     }
   };
 
   useEffect(() => {
-    api.knowledge().then((k) => setEmergencies(Array.isArray(k.emergencies?.emergencies) ? k.emergencies.emergencies : []), () => {});
+    api.knowledge().then(
+      (k) => {
+        const list = Array.isArray(k.emergencies?.emergencies) ? k.emergencies.emergencies : [];
+        setEmergencies(list);
+        if (list.length) writeJson(EMERGENCIES_KEY, list);
+      },
+      () => {},
+    );
   }, []);
 
-  if (report) return <Result report={report} emergencies={emergencies} go={go} onBack={() => setReport(null)} />;
+  if (report) return <Result report={report} emergencies={emergencies} go={go} onBack={() => setReport(null)} onSaved={onSaved} />;
 
   const toggle = (s: Sign) => setSigns(signs.includes(s) ? signs.filter((x) => x !== s) : [...signs, s]);
 
   const submit = async () => {
-    if (pondId === null) return;
+    const chosen = ponds.find((p) => p.id === pondId);
+    if (!chosen) return;
     setBusy(true);
     setError('');
     const behavior: Behavior[] = [];
@@ -310,16 +592,25 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
           .map((s) => s.label.toLowerCase())
           .join(', '),
     };
-    try {
-      const { pond } = await api.addLog(pondId, data);
-      onSaved();
-      const at = Date.now();
-      const deadNow = signs.includes('dead') ? dead : 0;
-      setReport({ pond, signs, dead: deadNow, at, counted: signs.includes('dead') ? counted : null });
+    const at = Date.now();
+    const deadNow = signs.includes('dead') ? dead : 0;
+    const show = (pond: PondSummary, offline: boolean) => {
+      setReport({ pond, signs, dead: deadNow, at, counted: signs.includes('dead') ? counted : null, offline });
       // Remind on Beranda in an hour; one reminder per pond.
       saveRechecks([...loadRechecks().filter((r) => r.pondId !== pond.id), { pondId: pond.id, pondName: pond.name, at, dueAt: at + 3600_000, dead: deadNow }]);
+    };
+    try {
+      const { pond } = await api.addLog(chosen.id, data);
+      onSaved();
+      show(pond, false);
     } catch (err) {
-      setError((err as Error).message);
+      if (!noSignal(err)) {
+        setError((err as Error).message);
+      } else {
+        // No signal: keep the report on this phone and still show what to do now.
+        writeJson(QUEUE_KEY, [...readJson<PendingReport[]>(QUEUE_KEY, []), { pondId: chosen.id, pondName: chosen.name, data, at }]);
+        show(chosen, true);
+      }
     } finally {
       setBusy(false);
     }
@@ -334,7 +625,7 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
 
       <div class="field">
         <span class="field-label">Kolam mana?</span>
-        <PondPicker ponds={ponds} value={pondId} onChange={setPondId} placeholder="Pilih kolam" />
+        <PondChooser ponds={ponds} value={pondId} onChange={setPondId} />
       </div>
 
       <div class="row between" style={{ background: 'var(--navy)', color: '#fff', borderRadius: 16, padding: '12px 16px', minHeight: 64 }}>
@@ -364,16 +655,24 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
       </section>
 
       {signs.includes('dead') && (
-        <div class="field">
+        <div class={`field${manual ? ' count-manual' : ''}`}>
           <span class="field-label">Berapa ekor mati?</span>
           <Stepper value={dead} onChange={(n) => setDead(Math.max(1, n))} />
-          <span class="field-hint">Taruh sidat mati di baskom putih, lalu foto dari atas supaya AI bisa menghitung.</span>
-          <button type="button" class="btn secondary" disabled={pondId === null || counting} onClick={() => photo.current?.click()}>
-            <Icon name="camera" size={20} /> {counting ? 'AI sedang menghitung…' : counted ? 'Foto ulang' : 'Foto baskom untuk dihitung AI'}
-          </button>
-          {pondId === null && <span class="field-hint">Pilih kolam dulu.</span>}
+          {manual && (
+            <span role="status" class="label semi" style={{ color: 'var(--accent-ink)' }}>
+              Isi dengan − dan +. Jumlah ini yang dipakai di laporan.
+            </span>
+          )}
           <input ref={photo} type="file" accept="image/*" capture="environment" hidden onChange={(e) => (onBasinPhoto(e.currentTarget.files?.[0]), (e.currentTarget.value = ''))} />
-          {countError && <p class="error">{countError}</p>}
+          {!failed && (
+            <>
+              <span class="field-hint">Taruh sidat mati di baskom putih, lalu foto dari atas supaya AI bisa menghitung.</span>
+              <button type="button" class="btn secondary" disabled={pondId === null || counting} onClick={() => photo.current?.click()}>
+                <Icon name="camera" size={20} /> {counting ? 'AI sedang menghitung…' : counted ? 'Foto ulang' : 'Foto baskom untuk dihitung AI'}
+              </button>
+              {pondId === null && <span class="field-hint">Pilih kolam dulu.</span>}
+            </>
+          )}
           {counted && (
             <div class="stack-sm">
               <CountedPhoto c={counted} />
@@ -390,6 +689,10 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
             </div>
           )}
         </div>
+      )}
+
+      {signs.includes('dead') && failed && (
+        <CountFailed failed={failed} onRetake={() => photo.current?.click()} onManual={() => setManual(true)} />
       )}
 
       {error && <p class="error">{error}</p>}

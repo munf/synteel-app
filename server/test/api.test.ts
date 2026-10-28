@@ -151,6 +151,7 @@ test('capture without AI answers 503 with a friendly message', async () => {
   const pond = (await call('POST', '/ponds', { name: 'Kolam C' })).json.pond;
   const res = await call('POST', `/ponds/${pond.id}/capture`, {});
   assert.equal(res.status, 503);
+  assert.equal(res.json.code, 'ai_unavailable');
   assert.match(res.json.error, /AI belum aktif/);
 });
 
@@ -170,13 +171,18 @@ test('register, sign out, sign in again; PINs are checked and guessing is slowed
   const reg = await call('POST', '/auth/register', { name: 'Pak Joko', phone: '0812-3456-7890', pin: '246810' });
   assert.equal(reg.status, 201);
   assert.equal(reg.json.user.phone, '6281234567890');
-  assert.equal((await call('POST', '/auth/register', { name: 'B', phone: '+62 812 3456 7890', pin: '135790' })).status, 409);
+  const taken = await call('POST', '/auth/register', { name: 'B', phone: '+62 812 3456 7890', pin: '135790' });
+  assert.equal(taken.status, 409);
+  assert.equal(taken.json.code, 'phone_taken');
   assert.equal((await call('POST', '/auth/logout')).status, 204);
   assert.equal((await call('GET', '/farm')).status, 401);
 
   const other = client();
   for (let i = 0; i < 5; i++) assert.equal((await other('POST', '/auth/login', { phone: '081234567890', pin: '000001' })).status, 401);
-  assert.equal((await other('POST', '/auth/login', { phone: '081234567890', pin: '246810' })).status, 429);
+  const locked = await other('POST', '/auth/login', { phone: '081234567890', pin: '246810' });
+  assert.equal(locked.status, 429);
+  assert.equal(locked.json.code, 'locked');
+  assert.ok(Date.parse(locked.json.retryAt) > Date.now() + 14 * 60_000);
   assert.equal((await client()('POST', '/auth/login', { phone: '081234567890', pin: '246810' })).status, 429);
 });
 
@@ -193,7 +199,12 @@ test('owner invites a worker; the worker logs but cannot change ponds; other far
   assert.equal((await worker('GET', `/auth/invite/${code}`)).json.farmName, 'Tambak Mitra');
   const joined = await worker('POST', '/auth/join', { code, name: 'Pak Slamet', phone: '082222222222', pin: '135790' });
   assert.equal(joined.json.farm.role, 'worker');
-  assert.equal((await worker('POST', '/auth/join', { code, name: 'X', phone: '083333333333', pin: '135790' })).status, 400); // used
+  const used = await worker('POST', '/auth/join', { code, name: 'X', phone: '083333333333', pin: '135790' });
+  assert.equal(used.status, 410);
+  assert.equal(used.json.code, 'invite_invalid');
+  const unknown = await client()('GET', '/auth/invite/ZZZZZZ');
+  assert.equal(unknown.status, 404);
+  assert.equal(unknown.json.code, 'invite_invalid');
   assert.equal((await worker('POST', `/ponds/${pond.id}/logs`, { mortality: 1 })).status, 201);
   assert.equal((await worker('POST', '/ponds', { name: 'Kolam Z' })).status, 403);
   assert.equal((await worker('GET', '/farm/members')).json.members.find((m: { role: string }) => m.role === 'owner').phone, undefined);
@@ -247,7 +258,11 @@ test('a single-farm database from before accounts becomes farm 1 with its ponds'
 
 test('each farm has its own daily AI cap', async () => {
   const { toDraft } = await import('../src/ai.ts');
-  const ai = { mode: 'meta' as const, draft: async () => toDraft({ temperature: 27 }, 'meta') };
+  const ai = {
+    mode: 'meta' as const,
+    draft: async () => toDraft({ temperature: 27 }, 'meta'),
+    round: async () => ({ transcript: '', drafts: [], loose: null, empty: true, model: 'test', mode: 'meta' as const }),
+  };
   const { client } = server(undefined, { ai, farmAiCap: 1 });
   const photo = () => {
     const f = new FormData();
@@ -266,7 +281,8 @@ test('each farm has its own daily AI cap', async () => {
   const b = await farmer('082222222222');
   assert.equal((await a()).status, 200);
   const refused = await a();
-  assert.equal(refused.status, 503);
+  assert.equal(refused.status, 429);
+  assert.equal(refused.json.code, 'ai_quota');
   assert.match(refused.json.error, /Jatah baca AI/);
   assert.equal((await b()).status, 200);
 });

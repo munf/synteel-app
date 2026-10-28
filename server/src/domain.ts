@@ -24,6 +24,8 @@ export interface Pond {
   shaded: boolean | null; // paranet or roof over an outdoor pond
   aeration: Aeration | null; // 'full' = 24 hours a day
   depthCm: number | null;
+  /** Other names farmers use for the pond ("kolam dekat pintu"), for the voice round. */
+  nicknames: string[];
 }
 
 export interface Batch {

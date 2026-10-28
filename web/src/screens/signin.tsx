@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
-import { api, type Me, type Role } from '../api.ts';
-import { Field, Icon, PinInput, roleLabel, Wordmark } from '../ui.tsx';
+import { api, API, ApiError, type Me, type Role } from '../api.ts';
+import { fmtClock } from '../labels.ts';
+import { Field, fmtPhone, Icon, Notice, PinInput, roleLabel, Wordmark } from '../ui.tsx';
 
 type Mode = 'login' | 'register' | 'join';
 
@@ -10,20 +11,59 @@ const TITLES: Record<Mode, { title: string; sub: string; button: string }> = {
   join: { title: 'Gabung dengan kode', sub: 'Kode undangan didapat dari pemilik tambak.', button: 'Gabung' },
 };
 
-function PhoneInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  return <input type="tel" inputMode="tel" autoComplete="tel" value={value} onInput={(e) => onChange(e.currentTarget.value)} placeholder="mis. 0812 3456 7890" required />;
+/** How long the server locks the PIN when it gives no time (matches its limiter). */
+const LOCK_FALLBACK_MS = 15 * 60_000;
+
+function PhoneInput({ value, onChange, class: cls }: { value: string; onChange: (v: string) => void; class?: string }) {
+  return <input type="tel" inputMode="tel" autoComplete="tel" class={cls} value={value} onInput={(e) => onChange(e.currentTarget.value)} placeholder="mis. 0812 3456 7890" required />;
 }
 
-export function SignIn({ onSignedIn }: { onSignedIn: (me: Me) => void }) {
+/** Login, keeping the lockout time the server sends with a 429 (api.ts drops extra fields). */
+async function login(phone: string, pin: string): Promise<Me> {
+  const res = await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ phone, pin }) });
+  const json = await res.json().catch(() => ({}));
+  if (res.ok) return json as Me;
+  if (res.status === 429 || json.code === 'locked') throw new Locked(json.retryAt ? Date.parse(json.retryAt) : Date.now() + LOCK_FALLBACK_MS);
+  throw new ApiError(json.error ?? `Gagal (${res.status})`, res.status, json.code);
+}
+
+class Locked extends Error {
+  until: number;
+  constructor(until: number) {
+    super('Terlalu banyak percobaan');
+    this.until = until;
+  }
+}
+
+const isPhoneTaken = (e: unknown) => e instanceof ApiError && (e.code === 'phone_taken' || e.status === 409);
+const isInviteInvalid = (e: unknown) => e instanceof ApiError && (e.code === 'invite_invalid' || [400, 404, 410].includes(e.status));
+
+export function SignIn({
+  onSignedIn,
+  onHelp,
+  sessionEnded,
+  lastPhone,
+}: {
+  onSignedIn: (me: Me) => void;
+  /** Opens Bantuan (an owner who forgot the PIN has nobody else to ask). */
+  onHelp: () => void;
+  /** The app came back here because the session was lost, not because of a manual sign-out. */
+  sessionEnded?: boolean;
+  /** The phone number of the session that ended, so only the PIN is needed. */
+  lastPhone?: string;
+}) {
   const [mode, setMode] = useState<Mode>('login');
   const [demo, setDemo] = useState(false);
   const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState(lastPhone ? fmtPhone(lastPhone) : '');
   const [pin, setPin] = useState('');
   const [pin2, setPin2] = useState('');
   const [code, setCode] = useState('');
   const [invite, setInvite] = useState<{ farmName: string; role: Role } | null>(null);
+  const [inviteBad, setInviteBad] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [lockedUntil, setLockedUntil] = useState<number | null>(null);
+  const [taken, setTaken] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -31,9 +71,17 @@ export function SignIn({ onSignedIn }: { onSignedIn: (me: Me) => void }) {
     api.authOptions().then((o) => setDemo(o.demo), () => {});
   }, []);
 
+  // Unlock the form by itself when the lockout ends.
+  useEffect(() => {
+    if (lockedUntil === null) return;
+    const timer = setTimeout(() => setLockedUntil(null), Math.max(0, lockedUntil - Date.now()));
+    return () => clearTimeout(timer);
+  }, [lockedUntil]);
+
   // Look the code up as soon as it is complete, so the person sees which farm they join.
   useEffect(() => {
     setInvite(null);
+    setInviteBad(false);
     if (mode !== 'join') return;
     setError('');
     if (code.length !== 6) return;
@@ -41,7 +89,7 @@ export function SignIn({ onSignedIn }: { onSignedIn: (me: Me) => void }) {
     setChecking(true);
     api.invite(code).then(
       (i) => live && setInvite(i),
-      (e) => live && setError(e.message),
+      (e) => live && (isInviteInvalid(e) ? setInviteBad(true) : setError(e.message)),
     ).finally(() => live && setChecking(false));
     return () => {
       live = false;
@@ -51,6 +99,7 @@ export function SignIn({ onSignedIn }: { onSignedIn: (me: Me) => void }) {
   const choose = (m: Mode) => {
     setMode(m);
     setError('');
+    setTaken(false);
     setPin('');
     setPin2('');
   };
@@ -61,15 +110,20 @@ export function SignIn({ onSignedIn }: { onSignedIn: (me: Me) => void }) {
     try {
       onSignedIn(await fn());
     } catch (err) {
-      setError((err as Error).message);
+      if (err instanceof Locked) setLockedUntil(err.until);
+      else if (mode === 'register' && isPhoneTaken(err)) setTaken(true);
+      else if (mode === 'join' && isInviteInvalid(err)) setInviteBad(true);
+      else setError((err as Error).message);
       setBusy(false);
     }
   };
 
   const submit = (e: Event) => {
     e.preventDefault();
+    if (locked) return;
+    if (taken) return choose('login');
     if (pin.length !== 6) return setError('PIN harus 6 angka');
-    if (mode === 'login') return run(() => api.login(phone, pin));
+    if (mode === 'login') return run(() => login(phone, pin));
     if (mode === 'register') {
       if (pin !== pin2) return setError('PIN ulang tidak sama. Ketik lagi.');
       return run(() => api.register(name, phone, pin));
@@ -79,7 +133,9 @@ export function SignIn({ onSignedIn }: { onSignedIn: (me: Me) => void }) {
   };
 
   const t = TITLES[mode];
+  const locked = mode === 'login' && lockedUntil !== null;
   const showForm = mode !== 'join' || invite !== null;
+  const askOwner = `Halo, kode undangan Synteel ${code} sudah tidak berlaku. Boleh minta kode baru?`;
 
   return (
     <form class="screen" onSubmit={submit} style={{ paddingBottom: 48 }}>
@@ -100,6 +156,12 @@ export function SignIn({ onSignedIn }: { onSignedIn: (me: Me) => void }) {
         </div>
       )}
 
+      {sessionEnded && mode === 'login' && (
+        <Notice tone="info" icon="login" title="Akun ini sudah keluar" role="status">
+          Karena PIN diatur ulang oleh pemilik tambak, atau akun ini masuk di HP lain. Masuk lagi untuk lanjut.
+        </Notice>
+      )}
+
       <section class="stack-sm">
         <h1>{t.title}</h1>
         <p class="ink2">{t.sub}</p>
@@ -109,7 +171,7 @@ export function SignIn({ onSignedIn }: { onSignedIn: (me: Me) => void }) {
         {mode === 'join' && (
           <Field label="Kode undangan" hint="6 huruf dan angka">
             <input
-              class="code-input"
+              class={`code-input${inviteBad ? ' warn-border' : ''}`}
               value={code}
               maxLength={6}
               autoCapitalize="characters"
@@ -126,11 +188,17 @@ export function SignIn({ onSignedIn }: { onSignedIn: (me: Me) => void }) {
           </Field>
         )}
         {mode === 'join' && checking && <p class="working">Memeriksa kode…</p>}
+        {mode === 'join' && inviteBad && (
+          <Notice tone="warn" icon="alert" title="Kode ini sudah tidak berlaku" role="alert">
+            Kode undangan berlaku 7 hari dan hanya bisa dipakai sekali. Kode ini sudah lewat 7 hari atau sudah dipakai.
+          </Notice>
+        )}
         {mode === 'join' && invite && (
           <div class="note ok" style={{ fontSize: '1rem' }}>
             <Icon name="check" stroke={3} />
-            <span>
-              Bergabung ke <b>{invite.farmName}</b> sebagai {roleLabel[invite.role].toLowerCase()}
+            <span style={{ display: 'flex', flexDirection: 'column' }}>
+              <b>{invite.farmName}</b>
+              <span>Bergabung sebagai {roleLabel[invite.role].toLowerCase()}</span>
             </span>
           </div>
         )}
@@ -142,18 +210,43 @@ export function SignIn({ onSignedIn }: { onSignedIn: (me: Me) => void }) {
         )}
         {showForm && (
           <Field label="Nomor HP">
-            <PhoneInput value={phone} onChange={setPhone} />
+            <PhoneInput
+              value={phone}
+              class={taken ? 'accent-border' : undefined}
+              onChange={(v) => {
+                setPhone(v);
+                setTaken(false);
+              }}
+            />
           </Field>
         )}
-        {showForm && (
-          <Field label="PIN" hint={mode === 'register' ? '6 angka yang mudah diingat, tapi jangan 123456 atau 111111.' : undefined}>
-            <PinInput value={pin} onChange={setPin} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
-          </Field>
+        {taken ? (
+          <Notice tone="info" icon="userCheck" title="Nomor ini sudah punya akun" role="status">
+            Tidak perlu daftar lagi. Masuk dengan PIN yang biasa dipakai.
+          </Notice>
+        ) : (
+          showForm && (
+            <Field
+              label={<span class={locked ? 'muted' : undefined}>PIN</span>}
+              hint={mode === 'register' ? '6 angka yang mudah diingat, tapi jangan 123456 atau 111111.' : sessionEnded && mode === 'login' ? 'PIN baru dari pemilik tambak, kalau baru diatur ulang.' : undefined}
+            >
+              {locked ? (
+                <input class="pin-input" type="password" disabled placeholder="••••••" aria-label="PIN dikunci" />
+              ) : (
+                <PinInput value={pin} onChange={setPin} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
+              )}
+            </Field>
+          )
         )}
-        {showForm && mode === 'register' && (
+        {showForm && mode === 'register' && !taken && (
           <Field label="Ulangi PIN">
             <PinInput value={pin2} onChange={setPin2} autoComplete="new-password" />
           </Field>
+        )}
+        {locked && (
+          <Notice tone="warn" icon="lock" title="Terlalu banyak percobaan" role="alert">
+            Coba lagi {Math.max(1, Math.ceil((lockedUntil! - Date.now()) / 60_000))} menit lagi (jam {fmtClock(lockedUntil!)}). PIN dikunci sebentar supaya akun aman.
+          </Notice>
         )}
       </section>
 
@@ -163,21 +256,57 @@ export function SignIn({ onSignedIn }: { onSignedIn: (me: Me) => void }) {
         </p>
       )}
 
-      {showForm && (
-        <button class="btn primary" disabled={busy}>
-          {busy ? 'Tunggu…' : t.button}
+      {taken ? (
+        <div class="stack-sm">
+          <button class="btn primary">Masuk dengan nomor ini</button>
+          <button
+            type="button"
+            class="link-btn"
+            onClick={() => {
+              setPhone('');
+              setTaken(false);
+            }}
+          >
+            Pakai nomor lain
+          </button>
+        </div>
+      ) : locked ? (
+        <button class="btn primary" disabled>
+          Masuk lagi jam {fmtClock(lockedUntil!)}
         </button>
+      ) : (
+        showForm && (
+          <button class="btn primary" disabled={busy}>
+            {busy ? 'Tunggu…' : t.button}
+          </button>
+        )
       )}
 
-      {mode === 'login' && <p class="meta center">Lupa PIN? Minta pemilik tambak mengatur ulang PIN.</p>}
+      {mode === 'join' && inviteBad && (
+        <div class="stack-sm">
+          <a class="btn primary" href={`https://wa.me/?text=${encodeURIComponent(askOwner)}`} target="_blank" rel="noopener">
+            <Icon name="chat" size={20} /> Minta kode baru ke pemilik tambak
+          </a>
+          <p class="meta center">Membuka WhatsApp dengan pesan yang siap dikirim.</p>
+        </div>
+      )}
 
-      {mode !== 'join' && (
+      {mode === 'login' && (
+        <p class="meta center">
+          Lupa PIN? Minta pemilik tambak mengatur ulang PIN. Pemilik lupa PIN?{' '}
+          <button type="button" class="inline-link" onClick={onHelp}>
+            Hubungi bantuan
+          </button>
+        </p>
+      )}
+
+      {mode !== 'join' && !taken && (
         <button type="button" class="btn dashed" onClick={() => choose('join')}>
           <Icon name="users" size={20} /> Punya kode undangan?
         </button>
       )}
 
-      {demo && mode !== 'join' && (
+      {demo && mode !== 'join' && !taken && (
         <div class="stack-sm">
           <button type="button" class="btn secondary" disabled={busy} onClick={() => run(api.demo)}>
             Coba demo
