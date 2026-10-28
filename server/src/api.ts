@@ -6,6 +6,7 @@ import { attemptLimiter, AuthError, checkPin, hashPin, hashToken, inviteCode, ne
 import { knowledge } from './knowledge.ts';
 import { AiFailed, AiUnavailable, type Ai, type CaptureKind, type ChatProvider } from './ai.ts';
 import { runBriefing, type Briefing, type BriefingInput } from './agent.ts';
+import { countDeadEels, type SamProvider } from './sam.ts';
 import type { SaveCapture } from './captures.ts';
 import { computeNowcast } from './nowcast.ts';
 import { assessPond, classifyReading, limitsFor, overallLevel, type Limits, type Threshold } from './rules.ts';
@@ -101,6 +102,8 @@ export interface ApiDeps {
   farmAiCap?: number;
   /** Models for the evening briefing agent, tried in order; empty = rules-only briefings. */
   agentProviders?: ChatProvider[];
+  /** Meta Model API access for SAM 3.1 (counting dead eels in a photo). */
+  sam?: SamProvider | null;
 }
 
 const MAX_IMAGES = 24;
@@ -113,7 +116,7 @@ type Env = { Variables: { userId: number; farmId: number | null; tokenHash: stri
 
 export function createApi(
   store: Repo,
-  { clock = () => new Date(), getWeather = defaultGetWeather, geocode = defaultGeocode, ai, saveCapture, cookieName = 'synteel_session', demoPhone = null, farmAiCap = 0, agentProviders = [] }: ApiDeps = {},
+  { clock = () => new Date(), getWeather = defaultGetWeather, geocode = defaultGeocode, ai, saveCapture, cookieName = 'synteel_session', demoPhone = null, farmAiCap = 0, agentProviders = [], sam = null }: ApiDeps = {},
 ) {
   const api = new Hono<Env>();
   const limiter = attemptLimiter();
@@ -640,6 +643,26 @@ export function createApi(
       [...images.map((blob, i) => ({ name: `image-${i}.jpg`, blob })), ...(audio ? [{ name: `audio.${audio.type.includes('wav') ? 'wav' : 'webm'}`, blob: audio }] : [])],
     ).catch((err) => console.error('capture not stored:', err));
     return c.json({ draft });
+  });
+
+  // Dead eels laid in a white basin → a count with one outline per eel (Meta SAM 3.1).
+  // Like a capture, nothing is saved: the farmer confirms or corrects the count first.
+  api.post('/ponds/:id/count', async (c) => {
+    const r = needFarm(c);
+    const pond = r.getPond(Number(c.req.param('id')));
+    if (!pond) return c.json({ error: 'Kolam tidak ditemukan' }, 404);
+    const form = await c.req.parseBody();
+    const image = form.image instanceof File ? form.image : null;
+    if (!image) throw new BadRequest('Foto belum ada');
+    if (image.size > MAX_IMAGE_BYTES) throw new BadRequest('Foto terlalu besar');
+    if (ai?.mode === 'mock') return c.json({ result: { count: 0, eels: [], review: true, model: 'mock', ms: 0 }, mock: true });
+    if (ai?.mode !== 'meta' || !sam?.apiKey) throw new AiUnavailable('Hitung otomatis belum aktif. Hitung manual dulu.');
+    // Part of an emergency report: it does not use the farm's daily AI quota (the app promises that).
+    const result = await countDeadEels(image, sam);
+    await saveCapture?.({ farmId: r.farmId, pondId: pond.id, kind: 'count', at: clock().toISOString(), ms: result.ms, count: result.count, review: result.review }, [{ name: 'image-0.jpg', blob: image }]).catch((err) =>
+      console.error('capture not stored:', err),
+    );
+    return c.json({ result });
   });
 
   api.post('/ponds/:id/logs', async (c) => {

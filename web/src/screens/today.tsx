@@ -2,6 +2,7 @@ import type { FarmState, Nowcast, NowcastState, PondSummary } from '../api.ts';
 import type { Go } from '../app.tsx';
 import { fmtAgo, fmtClock, fmtNum, greeting, readingWord } from '../labels.ts';
 import { EmptyState, Icon, initialOf, PondThumb, pondMeta, Shape, StatusPill, toneOf, type IconName } from '../ui.tsx';
+import { Rechecks } from './recheck.tsx';
 
 const rank = { ok: 0, info: 0, warning: 1, critical: 2 } as const;
 const SHOWN = [
@@ -195,6 +196,8 @@ export function Today({
           <span class="meta">{state.farm?.name}</span>
         </div>
       </header>
+
+      <Rechecks go={go} />
 
       {next ? (
         <section class="hero">

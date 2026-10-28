@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'preact/hooks';
-import { api, type Behavior, type Emergency, type LogData, type PondSummary } from '../api.ts';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { api, type Behavior, type CountResult, type Emergency, type LogData, type PondSummary } from '../api.ts';
+import { prepareImage } from '../capture/media.ts';
 import type { Go } from '../app.tsx';
 import { fmtClock, fmtNum } from '../labels.ts';
 import { Icon, PondPicker, PondThumb, Soon, Stepper, TickBox, type IconName } from '../ui.tsx';
@@ -26,11 +27,70 @@ const PLAIN: Record<string, string> = {
   'Tunda pemberian pakan': 'Jangan beri pakan dulu sampai sidat berenang normal',
 };
 
+interface Counted {
+  url: string;
+  w: number;
+  h: number;
+  result: CountResult;
+  mock?: boolean;
+}
+
 interface Report {
   pond: PondSummary;
   signs: Sign[];
   dead: number;
   at: number;
+  counted: Counted | null;
+}
+
+/** Re-check reminders live on this phone; Beranda shows them when they are due. */
+export interface Recheck {
+  pondId: number;
+  pondName: string;
+  at: number;
+  dueAt: number;
+  dead: number;
+}
+const RECHECK_KEY = 'synteel.rechecks';
+export function loadRechecks(): Recheck[] {
+  try {
+    return JSON.parse(localStorage.getItem(RECHECK_KEY) ?? '[]');
+  } catch {
+    return [];
+  }
+}
+export function saveRechecks(list: Recheck[]) {
+  try {
+    localStorage.setItem(RECHECK_KEY, JSON.stringify(list));
+  } catch {
+    // private mode: the reminder only lives until the page closes
+  }
+}
+
+const COLORS = ['#E5484D', '#2F6FE4', '#12A594', '#C27C00', '#8E4EC6', '#D6409F', '#0D74CE', '#F76B15'];
+
+/** The basin photo with one numbered outline per eel SAM found. */
+function CountedPhoto({ c }: { c: Counted }) {
+  const stroke = Math.max(2, c.w / 320);
+  const r = Math.max(12, c.w / 45);
+  return (
+    <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', background: 'var(--bg)' }}>
+      <img src={c.url} alt="Foto sidat mati di baskom" style={{ display: 'block', width: '100%' }} />
+      <svg viewBox={`0 0 ${c.w} ${c.h}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} role="img" aria-label={`${c.result.count} sidat ditandai`}>
+        {c.result.eels.map((e, i) => (
+          <path key={`p${i}`} d={e.path} transform={`translate(${e.left} ${e.top})`} fill={COLORS[i % COLORS.length]} fill-opacity="0.25" stroke={COLORS[i % COLORS.length]} stroke-width={stroke} />
+        ))}
+        {c.result.eels.map((e, i) => (
+          <g key={`l${i}`}>
+            <circle cx={e.label.x} cy={e.label.y} r={r} fill="#fff" stroke={COLORS[i % COLORS.length]} stroke-width={stroke} />
+            <text x={e.label.x} y={e.label.y + r * 0.38} text-anchor="middle" font-size={r * 1.1} font-weight="800" fill="#13203A">
+              {i + 1}
+            </text>
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
 }
 
 function Result({ report, emergencies, go, onBack }: { report: Report; emergencies: Emergency[]; go: Go; onBack: () => void }) {
@@ -140,13 +200,15 @@ function Result({ report, emergencies, go, onBack }: { report: Report; emergenci
         </div>
       </section>
 
-      {signs.includes('dead') && (
-        <section class="card dashed">
-          <div class="row between">
-            <h2>Hitung dari foto</h2>
-            <Soon />
-          </div>
-          <p class="ink2">Foto sidat mati di baskom putih, lalu AI menghitungnya otomatis (Meta SAM 3.1).</p>
+      {report.counted && (
+        <section class="card">
+          <h2>Dari foto</h2>
+          <CountedPhoto c={report.counted} />
+          <p>
+            <strong>{report.counted.result.count} sidat mati terhitung</strong>
+            {report.dead !== report.counted.result.count && `, dicatat ${report.dead} setelah dicek`}.
+          </p>
+          <span class="meta">Dihitung AI (Meta SAM 3.1). Sidat yang bertumpuk bisa terlewat.</span>
         </section>
       )}
 
@@ -175,17 +237,13 @@ function Result({ report, emergencies, go, onBack }: { report: Report; emergenci
             <Icon name="clock" />
           </span>
           <div class="stack-xs grow">
-            <span class="strong">Cek ulang 1 jam lagi</span>
-            <span class="label ink2">Sidat sudah turun dan berenang normal?</span>
+            <span class="strong">Cek ulang jam {fmtClock(report.at + 3600_000)}</span>
+            <span class="label ink2">Pengingat muncul di Beranda: sidat sudah turun dan berenang normal?</span>
           </div>
         </div>
-        <button class="btn primary" onClick={() => go({ name: 'record', pondId: pond.id })}>
-          Catat kondisi sekarang
+        <button class="btn primary" onClick={() => go({ name: 'today' })}>
+          Selesai, kembali ke Beranda
         </button>
-        <div class="row between">
-          <span class="meta">Pengingat otomatis</span>
-          <Soon />
-        </div>
       </section>
     </div>
   );
@@ -200,6 +258,31 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
   const [error, setError] = useState('');
   const [report, setReport] = useState<Report | null>(null);
   const [emergencies, setEmergencies] = useState<Emergency[]>([]);
+  const [counted, setCounted] = useState<Counted | null>(null);
+  const [counting, setCounting] = useState(false);
+  const [countError, setCountError] = useState('');
+  const photo = useRef<HTMLInputElement>(null);
+
+  // The basin photo → SAM 3.1 count with outlines; the stepper below starts from it.
+  const onBasinPhoto = async (file: File | undefined) => {
+    if (!file || pondId === null) return;
+    setCounting(true);
+    setCountError('');
+    try {
+      const { blob } = await prepareImage(file, 1280);
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      const { result, mock } = await api.countEels(pondId, blob);
+      setCounted({ url, w: img.naturalWidth, h: img.naturalHeight, result, mock });
+      if (result.count > 0) setDead(result.count);
+    } catch (err) {
+      setCountError((err as Error).message);
+    } finally {
+      setCounting(false);
+    }
+  };
 
   useEffect(() => {
     api.knowledge().then((k) => setEmergencies(Array.isArray(k.emergencies?.emergencies) ? k.emergencies.emergencies : []), () => {});
@@ -230,7 +313,11 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
     try {
       const { pond } = await api.addLog(pondId, data);
       onSaved();
-      setReport({ pond, signs, dead: signs.includes('dead') ? dead : 0, at: Date.now() });
+      const at = Date.now();
+      const deadNow = signs.includes('dead') ? dead : 0;
+      setReport({ pond, signs, dead: deadNow, at, counted: signs.includes('dead') ? counted : null });
+      // Remind on Beranda in an hour; one reminder per pond.
+      saveRechecks([...loadRechecks().filter((r) => r.pondId !== pond.id), { pondId: pond.id, pondName: pond.name, at, dueAt: at + 3600_000, dead: deadNow }]);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -280,7 +367,28 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
         <div class="field">
           <span class="field-label">Berapa ekor mati?</span>
           <Stepper value={dead} onChange={(n) => setDead(Math.max(1, n))} />
-          <span class="field-hint">Taruh sidat mati di baskom putih supaya mudah dihitung.</span>
+          <span class="field-hint">Taruh sidat mati di baskom putih, lalu foto dari atas supaya AI bisa menghitung.</span>
+          <button type="button" class="btn secondary" disabled={pondId === null || counting} onClick={() => photo.current?.click()}>
+            <Icon name="camera" size={20} /> {counting ? 'AI sedang menghitung…' : counted ? 'Foto ulang' : 'Foto baskom untuk dihitung AI'}
+          </button>
+          {pondId === null && <span class="field-hint">Pilih kolam dulu.</span>}
+          <input ref={photo} type="file" accept="image/*" capture="environment" hidden onChange={(e) => (onBasinPhoto(e.currentTarget.files?.[0]), (e.currentTarget.value = ''))} />
+          {countError && <p class="error">{countError}</p>}
+          {counted && (
+            <div class="stack-sm">
+              <CountedPhoto c={counted} />
+              {counted.mock ? (
+                <p class="note warn">Mode contoh: hitung otomatis tidak aktif di server ini. Hitung manual.</p>
+              ) : (
+                <>
+                  <p>
+                    <strong>{counted.result.count} sidat mati terhitung.</strong> Angka di atas sudah diisi; ubah kalau berbeda.
+                  </p>
+                  {counted.result.review && <p class="note warn">Sidat bertumpuk atau kurang jelas bisa terlewat. Cek lagi hitungannya.</p>}
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
 

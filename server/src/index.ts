@@ -19,7 +19,7 @@ const ai = withDailyCap(createAi({ chat: env.aiChat, transcriber: env.aiTranscri
 const chain = env.aiChat.filter((p) => p.apiKey).map((p) => p.name).join(' → ');
 console.log(`AI mode: ${ai.mode}${ai.mode === 'meta' ? ` (${chain}${env.aiTranscriber.apiKey ? ', voice: meta' : ', no voice'}${env.aiDailyCap ? `, cap ${env.aiDailyCap}/day` : ''})` : ''}`);
 const store = repo(openDb());
-const api = createApi(store, { ai, saveCapture: captureStore(), cookieName: env.cookieName, demoPhone: env.demoPhone, farmAiCap: env.farmAiCap, agentProviders: env.aiChat.filter((p) => p.apiKey) });
+const api = createApi(store, { ai, saveCapture: captureStore(), cookieName: env.cookieName, demoPhone: env.demoPhone, farmAiCap: env.farmAiCap, agentProviders: env.aiChat.filter((p) => p.apiKey), sam: env.aiTranscriber.apiKey ? { apiKey: env.aiTranscriber.apiKey, base: env.aiTranscriber.base } : null });
 app.route('/', api);
 
 // Routes must all be registered before the first request, which the monitor makes.

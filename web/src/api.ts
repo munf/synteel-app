@@ -1,4 +1,5 @@
 import type { Briefing, BriefingCheck } from '../../server/src/agent.ts';
+import type { CountResult } from '../../server/src/sam.ts';
 import type { Aeration, Batch, Behavior, Farm, Finding, Level, Log, LogData, Phase, Pond, Setting } from '../../server/src/domain.ts';
 import type { Nowcast, NowcastPoint, RiskFactor, RiskLevel, SuggestedCheck } from '../../server/src/nowcast.ts';
 import type { Limits } from '../../server/src/rules.ts';
@@ -8,7 +9,7 @@ import type { LogSource } from '../../server/src/domain.ts';
 export type { Aeration, Batch, Behavior, Farm, Finding, Level, Log, LogData, Phase, Pond, Setting };
 export type { Limits, Nowcast, NowcastPoint, RiskFactor, RiskLevel, SuggestedCheck };
 export type { Draft, DraftField, LogSource };
-export type { Briefing, BriefingCheck };
+export type { Briefing, BriefingCheck, CountResult };
 
 export type ReadingKey = keyof NonNullable<LogData['readings']>;
 
@@ -131,6 +132,16 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   return json as T;
 }
 
+async function upload<T>(path: string, form: FormData): Promise<T> {
+  const res = await fetch(`${API}${path}`, { method: 'POST', body: form });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    if (res.status === 401) sessionLost?.();
+    throw new ApiError(json.error ?? `Gagal (${res.status})`, res.status, json.code);
+  }
+  return json as T;
+}
+
 export const api = {
   authOptions: () => call<{ demo: boolean }>('GET', '/auth/options'),
   me: () => call<Me>('GET', '/auth/me'),
@@ -159,5 +170,10 @@ export const api = {
   aiMode: () => call<{ mode: 'meta' | 'mock' | 'off' }>('GET', '/ai'),
   briefing: () => call<{ briefing: Briefing | null }>('GET', '/briefing'),
   makeBriefing: () => call<{ briefing: Briefing }>('POST', '/briefing'),
+  countEels: (pondId: number, image: Blob) => {
+    const form = new FormData();
+    form.append('image', image, 'basin.jpg');
+    return upload<{ result: CountResult; mock?: boolean }>(`/ponds/${pondId}/count`, form);
+  },
   knowledge: () => call<{ emergencies: { emergencies: Emergency[] } }>('GET', '/knowledge'),
 };
