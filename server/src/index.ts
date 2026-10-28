@@ -18,13 +18,16 @@ app.get('/knowledge', (c) => c.json(knowledge));
 const ai = withDailyCap(createAi({ chat: env.aiChat, transcriber: env.aiTranscriber, mock: env.aiMock }), env.aiDailyCap);
 const chain = env.aiChat.filter((p) => p.apiKey).map((p) => p.name).join(' → ');
 console.log(`AI mode: ${ai.mode}${ai.mode === 'meta' ? ` (${chain}${env.aiTranscriber.apiKey ? ', voice: meta' : ', no voice'}${env.aiDailyCap ? `, cap ${env.aiDailyCap}/day` : ''})` : ''}`);
-app.route('/', createApi(repo(openDb()), { ai, saveCapture: captureStore() }));
+const store = repo(openDb());
+const api = createApi(store, { ai, saveCapture: captureStore(), cookieName: env.cookieName, demoPhone: env.demoPhone, farmAiCap: env.farmAiCap });
+app.route('/', api);
 
 // Routes must all be registered before the first request, which the monitor makes.
 app.get('/monitor', (c) => c.json({ intervalMs: MONITOR_INTERVAL_MS, ...monitor.status }));
 
 const monitor = startMonitor(
-  async () => (await (await app.request('/api/nowcast')).json()) as { ponds: Nowcast[] },
+  // Every farm, not just the ones somebody has open. Pond ids are unique across farms.
+  async () => ({ ponds: (await Promise.all(store.farmIds().map((id) => api.nowcastFarm(id)))).flatMap((n) => n.ponds as Nowcast[]) }),
   (change) => console.log(`risk up: pond ${change.pondId} ${change.from} → ${change.to}: ${change.reasons.join('; ')}`),
 );
 

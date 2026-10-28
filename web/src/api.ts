@@ -55,16 +55,64 @@ export interface Emergency {
   operator_actions: string[];
 }
 
+export type Role = 'owner' | 'worker';
+
 export interface FarmState {
   farm: Farm | null;
   ponds: PondSummary[];
   today: string;
   /** Days in a row with at least one measured reading. */
   streak: number;
+  /** The signed-in person's role on this farm; null before a farm exists. */
+  role: Role | null;
+}
+
+export interface FarmRef {
+  id: number;
+  name: string;
+  role: Role;
+}
+
+export interface Me {
+  user: { id: number; phone: string; name: string };
+  farm: FarmRef | null;
+  farms: FarmRef[];
+  demo: boolean;
+}
+
+export interface Member {
+  id: number;
+  name: string;
+  role: Role;
+  /** Only sent to owners. */
+  phone?: string;
+  me: boolean;
 }
 
 // Relative to the page, so the app also works under a sub-path such as eel.synt.fun/preview/.
 export const API = `${import.meta.env.BASE_URL}api`;
+
+/** An error from the server, with its Indonesian message and the HTTP status. */
+export class ApiError extends Error {
+  status: number;
+  code: string | undefined;
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+export const isAuthError = (e: unknown) => e instanceof ApiError && e.status === 401;
+
+// Sign-in routes answer 401 for a wrong PIN; that is not a lost session.
+const PUBLIC = /^\/auth\/(options|register|login|demo|invite|join)\b/;
+let sessionLost: (() => void) | null = null;
+/** Called when any request finds the session gone (signed out elsewhere, PIN reset by the owner). */
+export const onSessionLost = (fn: (() => void) | null) => {
+  sessionLost = fn;
+};
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${API}${path}`, {
@@ -74,11 +122,28 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   });
   if (res.status === 204) return undefined as T;
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.error ?? `Gagal (${res.status})`);
+  if (!res.ok) {
+    if (res.status === 401 && !PUBLIC.test(path)) sessionLost?.();
+    throw new ApiError(json.error ?? `Gagal (${res.status})`, res.status, json.code);
+  }
   return json as T;
 }
 
 export const api = {
+  authOptions: () => call<{ demo: boolean }>('GET', '/auth/options'),
+  me: () => call<Me>('GET', '/auth/me'),
+  login: (phone: string, pin: string) => call<Me>('POST', '/auth/login', { phone, pin }),
+  register: (name: string, phone: string, pin: string) => call<Me>('POST', '/auth/register', { name, phone, pin }),
+  demo: () => call<Me>('POST', '/auth/demo'),
+  invite: (code: string) => call<{ farmName: string; role: Role }>('GET', `/auth/invite/${encodeURIComponent(code)}`),
+  join: (code: string, name: string, phone: string, pin: string) => call<Me>('POST', '/auth/join', { code, name, phone, pin }),
+  logout: () => call<void>('POST', '/auth/logout'),
+  switchFarm: (farmId: number) => call<Me>('POST', '/auth/switch', { farmId }),
+  changePin: (pin: string, newPin: string) => call<void>('PUT', '/auth/pin', { pin, newPin }),
+  members: () => call<{ members: Member[] }>('GET', '/farm/members'),
+  createInvite: (role: Role) => call<{ code: string; role: Role; expiresInDays: number }>('POST', '/farm/invites', { role }),
+  removeMember: (userId: number) => call<void>('DELETE', `/farm/members/${userId}`),
+  resetPin: (userId: number) => call<{ pin: string }>('POST', `/farm/members/${userId}/pin`),
   farm: () => call<FarmState>('GET', '/farm'),
   saveFarm: (farm: Partial<Farm>) => call<{ farm: Farm }>('PUT', '/farm', farm),
   addPond: (pond: PondProfile & { name: string }) => call<{ pond: PondSummary }>('POST', '/ponds', pond),

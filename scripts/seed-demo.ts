@@ -3,6 +3,7 @@
 // stop the server before resetting, or it keeps writing to the deleted file)
 import { existsSync, rmSync } from 'node:fs';
 import { DAY_MS, localDate, type LogData } from '../server/src/domain.ts';
+import { hashPin, newToken } from '../server/src/auth.ts';
 import { openDb, repo } from '../server/src/db.ts';
 import { simulate, thermalParams } from '../server/src/nowcast.ts';
 import { getWeather } from '../server/src/weather.ts';
@@ -15,7 +16,7 @@ if (process.argv.includes('--reset')) {
   process.exit(1);
 }
 
-const r = repo(openDb(dbPath));
+const store = repo(openDb(dbPath));
 const tz = 'Asia/Jakarta';
 const now = new Date();
 const daysAgo = (d: number) => localDate(new Date(now.getTime() - d * DAY_MS), tz);
@@ -25,7 +26,11 @@ const rand = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
 const around = (base: number, spread: number, digits = 1) => Number((base + (rand() - 0.5) * 2 * spread).toFixed(digits));
 
 const farm = { name: 'Tambak Sidat Mitra', locationName: 'Sleman, Yogyakarta', lat: -7.72, lon: 110.36, timezone: tz };
-r.saveFarm(farm);
+// The shared demo account behind "Coba demo" (SYNTEEL_DEMO_PHONE). Its PIN is random and never
+// shown: the demo is entered through the button only.
+const demoPhone = process.env.SYNTEEL_DEMO_PHONE || '620000000000';
+const demo = store.createUser({ phone: demoPhone, name: 'Petani Demo', pinHash: hashPin(newToken()) });
+const r = store.farm(store.createFarm(farm, demo.id));
 
 // Real weather for the last week, so outdoor readings follow the actual days and nights
 // and the nowcast has something sensible to calibrate against. Offline: synthetic values.

@@ -1,7 +1,7 @@
 import type { FarmState, Nowcast, NowcastState, PondSummary } from '../api.ts';
 import type { Go } from '../app.tsx';
 import { fmtAgo, fmtClock, fmtNum, greeting, readingWord } from '../labels.ts';
-import { EmptyState, Icon, PondThumb, pondMeta, Shape, StatusPill, toneOf, type IconName } from '../ui.tsx';
+import { EmptyState, Icon, initialOf, PondThumb, pondMeta, Shape, StatusPill, toneOf, type IconName } from '../ui.tsx';
 
 const rank = { ok: 0, info: 0, warning: 1, critical: 2 } as const;
 const SHOWN = [
@@ -162,24 +162,37 @@ function WeatherCard({ nowcast, focus, onRetry }: { nowcast: NowcastState; focus
   );
 }
 
-export function Today({ state, nowcast, go, onRetryWeather }: { state: FarmState; nowcast: NowcastState | null; go: Go; onRetryWeather: () => void }) {
+export function Today({
+  state,
+  userName,
+  nowcast,
+  go,
+  onRetryWeather,
+}: {
+  state: FarmState;
+  userName: string;
+  nowcast: NowcastState | null;
+  go: Go;
+  onRetryWeather: () => void;
+}) {
   const now = Date.now();
   const ponds = [...state.ponds].sort((a, b) => rank[b.level] - rank[a.level]);
   const counts = { critical: 0, warning: 0, ok: 0 };
   for (const p of ponds) counts[p.level === 'critical' ? 'critical' : p.level === 'warning' ? 'warning' : 'ok']++;
   const next = nextCheck(state, nowcast);
   const focus = nowcast?.ponds.find((n) => n.pondId === ponds[0]?.id);
-  const initial = (state.farm?.name ?? 'S').replace(/^tambak\s+/i, '').trim().charAt(0).toUpperCase() || 'S';
 
   return (
     <div class="screen">
       <header class="row">
         <button class="avatar" style={{ border: 0 }} aria-label="Profil" onClick={() => go({ name: 'profile' })}>
-          {initial}
+          {initialOf(userName)}
         </button>
         <div class="grow stack-xs" style={{ gap: 0 }}>
-          <span class="meta">{greeting()},</span>
-          <span class="h2">{state.farm?.name}</span>
+          <span class="h2">
+            {greeting()}, {userName}
+          </span>
+          <span class="meta">{state.farm?.name}</span>
         </div>
       </header>
 
@@ -248,9 +261,11 @@ export function Today({ state, nowcast, go, onRetryWeather }: { state: FarmState
         <PondCard key={p.id} pond={p} go={go} now={now} />
       ))}
 
-      <button class="btn dashed" onClick={() => go({ name: 'add-pond' })}>
-        <Icon name="plus" size={20} /> Tambah kolam
-      </button>
+      {state.role === 'owner' && (
+        <button class="btn dashed" onClick={() => go({ name: 'add-pond' })}>
+          <Icon name="plus" size={20} /> Tambah kolam
+        </button>
+      )}
 
       {nowcast ? <WeatherCard nowcast={nowcast} focus={focus} onRetry={onRetryWeather} /> : <p class="meta">Memuat cuaca…</p>}
 

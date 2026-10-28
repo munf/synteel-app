@@ -1,9 +1,9 @@
 import { useState } from 'preact/hooks';
 import { api, type Aeration, type Farm, type Phase, type PondSummary, type Setting } from '../api.ts';
 import { aerationLabel, phaseLabel, settingLabel } from '../labels.ts';
-import { Chips, Field, Icon, Soon, tankPath } from '../ui.tsx';
+import { Chips, Field, Icon, initialOf, Soon, tankPath, Wordmark } from '../ui.tsx';
 
-export function FarmSetup({ onDone }: { onDone: () => void }) {
+export function FarmSetup({ onDone, onLogout }: { onDone: () => void; onLogout?: () => void }) {
   const [name, setName] = useState('');
   const [locationName, setLocationName] = useState('');
   const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
@@ -43,14 +43,7 @@ export function FarmSetup({ onDone }: { onDone: () => void }) {
 
   return (
     <form class="screen" onSubmit={submit}>
-      <div class="row" style={{ gap: 8 }}>
-        <span class="icon-box" style={{ width: 36, height: 36, borderRadius: 12, background: 'var(--navy)', color: '#fff' }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
-            <path d="M3 13c3-4 5-4 8 0s5 4 10-2" />
-          </svg>
-        </span>
-        <span class="title">synteel</span>
-      </div>
+      <Wordmark />
       <section class="stack-sm">
         <h1>Siapkan tambak</h1>
         <p class="ink2">Cukup sekali. Setelah ini, tambahkan kolam.</p>
@@ -70,15 +63,39 @@ export function FarmSetup({ onDone }: { onDone: () => void }) {
       <button class="btn primary" disabled={busy}>
         Simpan
       </button>
+      {onLogout && (
+        <div class="stack-sm">
+          <p class="meta center">Diundang ke tambak orang lain? Keluar dulu, lalu pilih "Punya kode undangan?".</p>
+          <button type="button" class="btn secondary" onClick={onLogout}>
+            <Icon name="logout" size={20} /> Keluar
+          </button>
+        </div>
+      )}
     </form>
   );
 }
 
 /** Empty state for a new farm: one picture, one sentence, one action. */
-export function NoPonds({ farm, onAdd }: { farm: Farm; onAdd: () => void }) {
+export function NoPonds({
+  farm,
+  userName,
+  onAdd,
+  onProfile,
+}: {
+  farm: Farm;
+  userName: string;
+  /** Missing for workers: only an owner adds ponds. */
+  onAdd?: () => void;
+  onProfile: () => void;
+}) {
   return (
     <div class="screen" style={{ minHeight: '100dvh' }}>
-      <span class="meta">{farm.name}</span>
+      <header class="row">
+        <button class="avatar" style={{ border: 0 }} aria-label="Profil" onClick={onProfile}>
+          {initialOf(userName)}
+        </button>
+        <span class="meta grow">{farm.name}</span>
+      </header>
       <section class="stack center" style={{ alignItems: 'center', flex: 1, justifyContent: 'center' }}>
         <svg width="200" height="150" viewBox="0 0 200 150" aria-hidden="true">
           <ellipse cx="100" cy="132" rx="80" ry="10" fill="#DCE3EC" />
@@ -89,11 +106,15 @@ export function NoPonds({ farm, onAdd }: { farm: Farm; onAdd: () => void }) {
           <path d="M148 21v18M139 30h18" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" />
         </svg>
         <h1>Belum ada kolam</h1>
-        <p class="ink2">Tambahkan kolam pertama, lalu Synteel ikut memantau cuaca dan risiko oksigen.</p>
+        <p class="ink2">
+          {onAdd ? 'Tambahkan kolam pertama, lalu Synteel ikut memantau cuaca dan risiko oksigen.' : 'Pemilik tambak belum menambahkan kolam. Setelah kolam ditambahkan, kolam muncul di sini.'}
+        </p>
       </section>
-      <button class="btn primary" onClick={onAdd}>
-        <Icon name="plus" size={20} /> Tambah kolam
-      </button>
+      {onAdd && (
+        <button class="btn primary" onClick={onAdd}>
+          <Icon name="plus" size={20} /> Tambah kolam
+        </button>
+      )}
     </div>
   );
 }

@@ -1,7 +1,9 @@
-import type { FarmState } from '../api.ts';
+import { useState } from 'preact/hooks';
+import { api, type FarmState, type Me } from '../api.ts';
 import type { Go } from '../app.tsx';
 import { setPrefs, usePrefs, type Prefs } from '../prefs.ts';
-import { Icon, Soon, Switch, Tick, type IconName } from '../ui.tsx';
+import { Icon, initialOf, roleLabel, Soon, Switch, Tick, type IconName } from '../ui.tsx';
+import { ChangePin, Members } from './members.tsx';
 
 const DAY_NAMES = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
 
@@ -17,19 +19,60 @@ function week(streak: number, todayLogged: boolean) {
   });
 }
 
-const initialOf = (name: string | undefined) => (name ?? 'S').replace(/^tambak\s+/i, '').trim().charAt(0).toUpperCase() || 'S';
-
-export function Profile({ state, go }: { state: FarmState; go: Go }) {
+export function Profile({
+  state,
+  me,
+  go,
+  invite = false,
+  onSwitch,
+  onLogout,
+}: {
+  state: FarmState;
+  me: Me;
+  go: Go;
+  /** Opened from "Undang anggota": start with the invite form open. */
+  invite?: boolean;
+  onSwitch: (farmId: number) => Promise<void>;
+  onLogout: () => void;
+}) {
   const prefs = usePrefs();
+  const owner = state.role === 'owner';
+  const [inviteOpen, setInviteOpen] = useState(invite && owner);
+  const [switching, setSwitching] = useState<number | null>(null);
+  const [error, setError] = useState('');
+  const [leaving, setLeaving] = useState(false);
+
+  const openInvite = () => {
+    setInviteOpen(true);
+    document.getElementById('anggota')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  const switchTo = async (farmId: number) => {
+    setSwitching(farmId);
+    setError('');
+    try {
+      await onSwitch(farmId);
+    } catch (err) {
+      setError((err as Error).message);
+      setSwitching(null);
+    }
+  };
+  const logout = async () => {
+    setLeaving(true);
+    // Signed out on the server or not, this phone forgets the session either way.
+    await api.logout().catch(() => {});
+    onLogout();
+  };
   const todayLogged = state.ponds.some((p) =>
     Object.values(p.latest).some((r) => r && new Date(r.at).toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' }) === state.today),
   );
   const days = week(state.streak, todayLogged);
-  const actions: { label: string; sub: string; icon: IconName; onClick?: () => void }[] = [
+  const actions: { label: string; sub: string; icon: IconName; onClick?: () => void; soon?: boolean }[] = [
     { label: 'Catat sekarang', sub: 'Suara, foto atau ketik', icon: 'mic', onClick: () => go({ name: 'record' }) },
-    { label: 'Telepon ahli', sub: 'Penyuluh perikanan', icon: 'phone' },
-    { label: 'Laporan mingguan', sub: 'Mati, suhu, pakan', icon: 'chart' },
-    { label: 'Undang anggota', sub: 'Pemilik atau pekerja', icon: 'user' },
+    { label: 'Telepon ahli', sub: 'Penyuluh perikanan', icon: 'phone', soon: true },
+    { label: 'Laporan mingguan', sub: 'Mati, suhu, pakan', icon: 'chart', soon: true },
+    owner
+      ? { label: 'Undang anggota', sub: 'Pemilik atau pekerja', icon: 'user', onClick: openInvite }
+      : { label: 'Undang anggota', sub: 'Hanya pemilik tambak', icon: 'user' },
   ];
   const sizes: { label: string; px: number }[] = [
     { label: 'Normal', px: 18 },
@@ -47,16 +90,16 @@ export function Profile({ state, go }: { state: FarmState; go: Go }) {
 
       <section class="hero" style={{ gap: 16 }}>
         <div class="row" style={{ gap: 16 }}>
-          <span class="avatar lg">{initialOf(state.farm?.name)}</span>
-          <div class="stack-xs">
-            <span class="label" style={{ color: 'var(--on-navy-2)' }}>
-              Halo,
+          <span class="avatar lg">{initialOf(me.user.name)}</span>
+          <div class="stack-xs" style={{ minWidth: 0 }}>
+            <span class="title" style={{ lineHeight: 1.1, overflowWrap: 'anywhere' }}>
+              Halo, {me.user.name}
             </span>
-            <span class="title" style={{ lineHeight: 1.1 }}>
+            <span class="semi" style={{ color: '#fff' }}>
               {state.farm?.name}
             </span>
             <span class="label" style={{ color: '#C9D4EA' }}>
-              {state.farm?.locationName ?? 'Lokasi belum diatur'}
+              {[state.role && roleLabel[state.role], state.farm?.locationName ?? 'Lokasi belum diatur'].filter(Boolean).join(' · ')}
             </span>
           </div>
         </div>
@@ -104,6 +147,12 @@ export function Profile({ state, go }: { state: FarmState; go: Go }) {
         </button>
       </section>
 
+      {me.demo && (
+        <p class="note warn">
+          <Icon name="alert" size={20} /> Akun demo: data direset tiap malam
+        </p>
+      )}
+
       <section class="grid2">
         {actions.map((a) => (
           <button key={a.label} class="card" style={{ border: 0, textAlign: 'left', gap: 12, justifyContent: 'flex-start' }} onClick={a.onClick} disabled={!a.onClick}>
@@ -111,7 +160,7 @@ export function Profile({ state, go }: { state: FarmState; go: Go }) {
               <span class="icon-box">
                 <Icon name={a.icon} />
               </span>
-              {!a.onClick && <Soon />}
+              {a.soon && <Soon />}
             </span>
             <span class="stack-xs">
               <span class="strong">{a.label}</span>
@@ -224,12 +273,50 @@ export function Profile({ state, go }: { state: FarmState; go: Go }) {
         </div>
       </section>
 
-      <section class="card">
-        <div class="row between">
-          <h2>Anggota tambak</h2>
-          <Soon />
-        </div>
-        <p class="ink2">Pemilik dan pekerja bisa memakai tambak yang sama, masing-masing dari HP sendiri.</p>
+      {me.farms.length > 1 && (
+        <section class="card list">
+          <div class="stack-xs" style={{ padding: '20px 0 8px' }}>
+            <h2>Pilih tambak</h2>
+            <span class="meta">Terdaftar di {me.farms.length} tambak</span>
+          </div>
+          {me.farms.map((f) => {
+            const on = f.id === me.farm?.id;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                class="list-row"
+                role="radio"
+                aria-checked={on}
+                disabled={switching !== null}
+                style={{ width: '100%', border: 0, borderTop: '1px solid var(--line)', background: 'none', padding: 0, textAlign: 'left', color: 'inherit' }}
+                onClick={() => !on && switchTo(f.id)}
+              >
+                <span class="grow stack-xs" style={{ gap: 0 }}>
+                  <span class="strong">{f.name}</span>
+                  <span class="meta">{switching === f.id ? 'Membuka…' : roleLabel[f.role]}</span>
+                </span>
+                <span class={`tick-box${on ? ' on' : ''}`}>{on && <Tick />}</span>
+              </button>
+            );
+          })}
+          {error && (
+            <p class="error" style={{ paddingBottom: 16 }}>
+              {error}
+            </p>
+          )}
+        </section>
+      )}
+
+      {state.farm && <Members farmName={state.farm.name} owner={owner} inviteOpen={inviteOpen} onInviteOpen={setInviteOpen} />}
+
+      {!me.demo && <ChangePin />}
+
+      <section class="stack-sm">
+        <button type="button" class="btn secondary" onClick={logout} disabled={leaving}>
+          <Icon name="logout" size={20} /> Keluar
+        </button>
+        <span class="meta center">Masuk sebagai {me.user.name}</span>
       </section>
     </div>
   );

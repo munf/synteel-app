@@ -28,8 +28,14 @@ export const env = {
   aiChat: process.env.SYNTEEL_AI_PROVIDER === 'fireworks' ? [fireworks, meta] : [meta, fireworks],
   // Speech-to-text only exists on the Meta side.
   aiTranscriber: { apiKey: metaKey, base: metaBase, model: 'muse-voice-transcribe-1.0' },
-  // Real AI reads allowed per day; unset means no cap. Set on the public preview.
+  // Real AI reads per farm per day; unset means no cap.
+  farmAiCap: Number(process.env.SYNTEEL_AI_FARM_CAP ?? 0),
+  // Real AI reads allowed per day for the whole server; unset means no cap. Set on the public preview.
   aiDailyCap: Number(process.env.SYNTEEL_AI_DAILY_CAP ?? 0),
+  // Per deployment, so two instances on one domain (preview, production) keep separate logins.
+  cookieName: process.env.SYNTEEL_COOKIE ?? 'synteel_session',
+  // Phone number of the shared demo account ("Coba demo"); unset disables demo login.
+  demoPhone: process.env.SYNTEEL_DEMO_PHONE || null,
   port: Number(process.env.PORT ?? 8787),
   // e.g. 127.0.0.1 behind a reverse proxy; unset listens on all interfaces.
   host: process.env.HOST,

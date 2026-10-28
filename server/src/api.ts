@@ -1,6 +1,8 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
+import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { batchWeek, DAY_MS, LOG_SOURCES, localDate, READING_LIMITS, type Aeration, type Behavior, type LogData, type Pond, type Setting } from './domain.ts';
-import type { Repo } from './db.ts';
+import type { FarmRepo, Repo, Role } from './db.ts';
+import { attemptLimiter, AuthError, checkPin, hashPin, hashToken, inviteCode, newToken, normalizePhone, tempPin, verifyPin } from './auth.ts';
 import { knowledge } from './knowledge.ts';
 import { AiFailed, AiUnavailable, type Ai, type CaptureKind } from './ai.ts';
 import type { SaveCapture } from './captures.ts';
@@ -90,20 +92,43 @@ export interface ApiDeps {
   geocode?: typeof defaultGeocode;
   ai?: Ai;
   saveCapture?: SaveCapture;
+  /** One name per deployment, so the preview and production on one domain keep separate logins. */
+  cookieName?: string;
+  /** Phone of the shared demo account behind "Coba demo"; unset turns the button off. */
+  demoPhone?: string | null;
+  /** Real AI reads per farm per day, so one farm cannot use up everyone's credits; 0 = no cap. */
+  farmAiCap?: number;
 }
 
 const MAX_IMAGES = 24;
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const MAX_AUDIO_BYTES = 15 * 1024 * 1024;
+const SESSION_DAYS = 90;
+const INVITE_DAYS = 7;
+
+type Env = { Variables: { userId: number; farmId: number | null; tokenHash: string; role: Role | null; r: FarmRepo } };
 
 export function createApi(
-  repo: Repo,
-  { clock = () => new Date(), getWeather = defaultGetWeather, geocode = defaultGeocode, ai, saveCapture }: ApiDeps = {},
+  store: Repo,
+  { clock = () => new Date(), getWeather = defaultGetWeather, geocode = defaultGeocode, ai, saveCapture, cookieName = 'synteel_session', demoPhone = null, farmAiCap = 0 }: ApiDeps = {},
 ) {
-  const api = new Hono();
+  const api = new Hono<Env>();
+  const limiter = attemptLimiter();
+  const aiUse = new Map<number, { day: string; used: number }>();
+
+  /** Counts one real AI read for the farm; refuses once the farm's daily cap is reached. */
+  function useAi(farmId: number) {
+    if (!farmAiCap || ai?.mode !== 'meta') return;
+    const day = clock().toISOString().slice(0, 10);
+    const u = aiUse.get(farmId);
+    const used = u?.day === day ? u.used : 0;
+    if (used >= farmAiCap) throw new AiUnavailable('Jatah baca AI tambak ini untuk hari ini sudah habis. Rekaman disimpan di HP; ketik sendiri tetap bisa.');
+    aiUse.set(farmId, { day, used: used + 1 });
+  }
 
   api.onError((err, c) => {
     if (err instanceof BadRequest) return c.json({ error: err.message }, 400);
+    if (err instanceof AuthError) return c.json({ error: err.message, code: err.status === 401 ? 'auth' : undefined }, err.status);
     if (err instanceof AiUnavailable) return c.json({ error: err.message }, 503);
     if (err instanceof AiFailed) {
       console.error(err.message);
@@ -113,18 +138,18 @@ export function createApi(
     return c.json({ error: 'Terjadi kesalahan di server' }, 500);
   });
 
-  const timezone = () => repo.getFarm()?.timezone ?? 'Asia/Jakarta';
+  const timezone = (r: FarmRepo) => r.getFarm()?.timezone ?? 'Asia/Jakarta';
 
-  function pondState(pond: Pond, now: Date) {
-    const tz = timezone();
-    const batch = repo.activeBatch(pond.id);
-    const logs = repo.logsSince(pond.id, new Date(now.getTime() - 7 * DAY_MS).toISOString());
+  function pondState(r: FarmRepo, pond: Pond, now: Date) {
+    const tz = timezone(r);
+    const batch = r.activeBatch(pond.id);
+    const logs = r.logsSince(pond.id, new Date(now.getTime() - 7 * DAY_MS).toISOString());
 
     let program = null;
     if (batch) {
       const week = batchWeek(batch, now, tz);
       const stage = batch.phase === 'glass_eel' ? (stages.find((s) => week >= s.weeks[0] && week <= s.weeks[1]) ?? null) : null;
-      const dead = repo.totalMortality(batch.id);
+      const dead = r.totalMortality(batch.id);
       const estimatedAlive = batch.initialCount !== null ? Math.max(0, batch.initialCount - dead) : null;
       program = {
         week,
@@ -138,9 +163,9 @@ export function createApi(
     return { batch, logs, program };
   }
 
-  function pondSummary(pond: Pond) {
+  function pondSummary(r: FarmRepo, pond: Pond) {
     const now = clock();
-    const { batch, logs, program } = pondState(pond, now);
+    const { batch, logs, program } = pondState(r, pond, now);
     const findings = assessPond(logs, thresholds, now, { phase: batch?.phase, density: program?.density ?? undefined });
 
     const latest: Partial<Record<(typeof READINGS)[number], { value: number; at: string }>> = {};
@@ -167,12 +192,12 @@ export function createApi(
   }
 
   /** Days in a row with at least one measured reading on any pond, counting today or, if not yet, yesterday. */
-  function streakDays() {
+  function streakDays(r: FarmRepo) {
     const now = clock();
-    const tz = timezone();
+    const tz = timezone(r);
     const days = new Set<string>();
-    for (const pond of repo.listPonds()) {
-      for (const log of repo.logsSince(pond.id, new Date(now.getTime() - 60 * DAY_MS).toISOString())) {
+    for (const pond of r.listPonds()) {
+      for (const log of r.logsSince(pond.id, new Date(now.getTime() - 60 * DAY_MS).toISOString())) {
         if (Object.keys(log.data.readings ?? {}).length) days.add(localDate(new Date(log.loggedAt), tz));
       }
     }
@@ -186,10 +211,10 @@ export function createApi(
     return streak;
   }
 
-  /** Estimated conditions for every pond. Weather failures degrade the estimate, never the response. */
-  async function nowcastAll() {
+  /** Estimated conditions for every pond of one farm. Weather failures degrade the estimate, never the response. */
+  async function nowcastAll(r: FarmRepo) {
     const now = clock();
-    const farm = repo.getFarm();
+    const farm = r.getFarm();
     let weather: Awaited<ReturnType<typeof getWeather>>['hours'] = [];
     let weatherError: string | null = null;
     if (farm?.lat != null && farm.lon != null) {
@@ -201,8 +226,8 @@ export function createApi(
     } else {
       weatherError = 'Lokasi tambak belum diatur';
     }
-    const ponds = repo.listPonds().map((pond) => {
-      const { batch, logs, program } = pondState(pond, now);
+    const ponds = r.listPonds().map((pond) => {
+      const { batch, logs, program } = pondState(r, pond, now);
       return computeNowcast({
         pond,
         phase: batch?.phase,
@@ -211,7 +236,7 @@ export function createApi(
         weather,
         thresholds,
         now: now.getTime(),
-        timezone: timezone(),
+        timezone: timezone(r),
       });
     });
     // The next hours for the weather card; the full series stays on the server.
@@ -221,11 +246,165 @@ export function createApi(
     return { generatedAt: now.getTime(), weather: { available: weather.length > 0, error: weatherError, place: farm?.locationName ?? null, hours }, ponds };
   }
 
-  api.get('/farm', (c) => {
-    const farm = repo.getFarm();
-    return c.json({ farm, ponds: farm ? repo.listPonds().map(pondSummary) : [], today: localDate(clock(), timezone()), streak: farm ? streakDays() : 0 });
+  // ---------- sessions ----------
+
+  const clientIp = (c: Context) => c.req.header('cf-connecting-ip') ?? c.req.header('x-forwarded-for')?.split(',')[0].trim() ?? 'local';
+
+  function startSession(c: Context, userId: number, farmId: number | null) {
+    const token = newToken();
+    store.createSession(hashToken(token), userId, farmId, SESSION_DAYS);
+    setCookie(c, cookieName, token, {
+      httpOnly: true,
+      sameSite: 'Lax',
+      secure: c.req.header('x-forwarded-proto') === 'https',
+      path: '/',
+      maxAge: SESSION_DAYS * 86400,
+    });
+  }
+
+  function me(userId: number, farmId: number | null) {
+    const farms = store.farmsOf(userId);
+    return { user: store.user(userId), farm: farms.find((f) => f.id === farmId) ?? null, farms, demo: store.user(userId)?.phone === demoPhone };
+  }
+
+  // ---------- public routes: everything registered before the session check below ----------
+
+  api.get('/auth/options', (c) => c.json({ demo: Boolean(demoPhone && store.userByPhone(demoPhone)) }));
+
+  api.post('/auth/register', async (c) => {
+    const body = await c.req.json();
+    const phone = normalizePhone(body.phone);
+    const pin = checkPin(body.pin);
+    const name = text(body.name, 'nama', true)!;
+    if (store.userByPhone(phone)) throw new AuthError('Nomor ini sudah terdaftar. Silakan masuk.', 409);
+    const user = store.createUser({ phone, name, pinHash: hashPin(pin) });
+    startSession(c, user.id, null);
+    return c.json(me(user.id, null), 201);
   });
 
+  api.post('/auth/login', async (c) => {
+    const body = await c.req.json();
+    const phone = normalizePhone(body.phone);
+    const keys = [`phone:${phone}`, `ip:${clientIp(c)}`];
+    limiter.check(...keys);
+    const user = store.userByPhone(phone);
+    if (!user || !verifyPin(String(body.pin ?? ''), user.pinHash)) {
+      limiter.fail(...keys);
+      throw new AuthError('Nomor HP atau PIN salah');
+    }
+    limiter.clear(`phone:${phone}`);
+    const farmId = store.farmsOf(user.id)[0]?.id ?? null;
+    startSession(c, user.id, farmId);
+    return c.json(me(user.id, farmId));
+  });
+
+  // The shared demo farm for judges and visitors: no sign-up, reset every night.
+  api.post('/auth/demo', (c) => {
+    const user = demoPhone ? store.userByPhone(demoPhone) : null;
+    if (!user) throw new AuthError('Demo tidak tersedia', 403);
+    const farmId = store.farmsOf(user.id)[0]?.id ?? null;
+    startSession(c, user.id, farmId);
+    return c.json(me(user.id, farmId));
+  });
+
+  api.get('/auth/invite/:code', (c) => {
+    const invite = store.invite(c.req.param('code').toUpperCase());
+    if (!invite) throw new AuthError('Kode undangan tidak berlaku', 400);
+    return c.json({ farmName: invite.farmName, role: invite.role });
+  });
+
+  // Join a farm with an owner's code: a new person signs up, someone with an account adds the farm.
+  api.post('/auth/join', async (c) => {
+    const body = await c.req.json();
+    const code = String(body.code ?? '').trim().toUpperCase();
+    const invite = store.invite(code);
+    if (!invite) throw new AuthError('Kode undangan tidak berlaku', 400);
+    const phone = normalizePhone(body.phone);
+    let user = store.userByPhone(phone);
+    if (user) {
+      const keys = [`phone:${phone}`, `ip:${clientIp(c)}`];
+      limiter.check(...keys);
+      if (!verifyPin(String(body.pin ?? ''), user.pinHash)) {
+        limiter.fail(...keys);
+        throw new AuthError('Nomor ini sudah terdaftar. Masukkan PIN yang benar.');
+      }
+    } else {
+      user = { ...store.createUser({ phone, name: text(body.name, 'nama', true)!, pinHash: hashPin(checkPin(body.pin)) }), pinHash: '' };
+    }
+    // Joining never demotes an owner.
+    if (store.role(user.id, invite.farmId) !== 'owner') store.addMember(user.id, invite.farmId, invite.role);
+    store.useInvite(code, user.id);
+    startSession(c, user.id, invite.farmId);
+    return c.json(me(user.id, invite.farmId));
+  });
+
+  api.get('/ai', (c) => c.json({ mode: ai?.mode ?? 'off' }));
+
+  // ---------- everything below needs a session ----------
+
+  api.use('*', async (c, next) => {
+    const token = getCookie(c, cookieName);
+    const session = token ? store.session(hashToken(token)) : null;
+    if (!token || !session) throw new AuthError('Silakan masuk dulu');
+    const role = session.farmId === null ? null : store.role(session.userId, session.farmId);
+    const farmId = role ? session.farmId : null;
+    c.set('userId', session.userId);
+    c.set('tokenHash', hashToken(token));
+    c.set('farmId', farmId);
+    c.set('role', role);
+    if (farmId !== null) c.set('r', store.farm(farmId));
+    await next();
+  });
+
+  const needFarm = (c: Context<Env>) => {
+    if (c.get('farmId') === null) throw new AuthError('Tambak belum dibuat', 409);
+    return c.get('r');
+  };
+  const needOwner = (c: Context<Env>) => {
+    const r = needFarm(c);
+    if (c.get('role') !== 'owner') throw new AuthError('Hanya pemilik tambak yang bisa mengubah ini', 403);
+    return r;
+  };
+
+  api.get('/auth/me', (c) => c.json(me(c.get('userId'), c.get('farmId'))));
+
+  api.post('/auth/logout', (c) => {
+    store.deleteSession(c.get('tokenHash'));
+    deleteCookie(c, cookieName, { path: '/' });
+    return c.body(null, 204);
+  });
+
+  api.post('/auth/switch', async (c) => {
+    const farmId = Number((await c.req.json()).farmId);
+    if (!store.role(c.get('userId'), farmId)) throw new AuthError('Bukan anggota tambak ini', 403);
+    store.setSessionFarm(c.get('tokenHash'), farmId);
+    return c.json(me(c.get('userId'), farmId));
+  });
+
+  api.put('/auth/pin', async (c) => {
+    const body = await c.req.json();
+    const user = store.userByPhone(store.user(c.get('userId'))!.phone)!;
+    if (user.phone === demoPhone) throw new AuthError('PIN akun demo tidak bisa diubah', 403);
+    const keys = [`phone:${user.phone}`];
+    limiter.check(...keys);
+    if (!verifyPin(String(body.pin ?? ''), user.pinHash)) {
+      limiter.fail(...keys);
+      throw new AuthError('PIN lama salah', 403);
+    }
+    store.setPin(user.id, hashPin(checkPin(body.newPin)));
+    // setPin ended every session, including this one: start a fresh one here.
+    startSession(c, user.id, c.get('farmId'));
+    return c.body(null, 204);
+  });
+
+  api.get('/farm', (c) => {
+    const farmId = c.get('farmId');
+    if (farmId === null) return c.json({ farm: null, ponds: [], today: localDate(clock(), 'Asia/Jakarta'), streak: 0, role: null });
+    const r = c.get('r');
+    return c.json({ farm: r.getFarm(), ponds: r.listPonds().map((p) => pondSummary(r, p)), today: localDate(clock(), timezone(r)), streak: streakDays(r), role: c.get('role') });
+  });
+
+  // Creates the person's first farm, or (owner only) updates the current one.
   api.put('/farm', async (c) => {
     const body = await c.req.json();
     const locationName = text(body.locationName, 'lokasi');
@@ -236,82 +415,129 @@ export function createApi(
       const place = await geocode(locationName).catch(() => null);
       if (place) ({ lat, lon } = place);
     }
-    repo.saveFarm({
+    const farm = {
       name: text(body.name, 'nama tambak', true)!,
       locationName,
       lat,
       lon,
       timezone: text(body.timezone, 'zona waktu') ?? 'Asia/Jakarta',
-    });
-    return c.json({ farm: repo.getFarm() });
+    };
+    if (c.get('farmId') === null) {
+      const id = store.createFarm(farm, c.get('userId'));
+      store.setSessionFarm(c.get('tokenHash'), id);
+      return c.json({ farm: store.farm(id).getFarm() }, 201);
+    }
+    const r = needOwner(c);
+    r.saveFarm(farm);
+    return c.json({ farm: r.getFarm() });
   });
 
+  // ---------- members ----------
+
+  api.get('/farm/members', (c) => {
+    needFarm(c);
+    // Workers see names only; owners also see phone numbers, to reach them.
+    const owner = c.get('role') === 'owner';
+    return c.json({ members: store.members(c.get('farmId')!).map((m) => ({ ...m, phone: owner ? m.phone : undefined, me: m.id === c.get('userId') })) });
+  });
+
+  api.post('/farm/invites', async (c) => {
+    needOwner(c);
+    const role = oneOf<Role>((await c.req.json().catch(() => ({}))).role, ['owner', 'worker'], 'peran') ?? 'worker';
+    const code = inviteCode();
+    store.createInvite({ code, farmId: c.get('farmId')!, role, createdBy: c.get('userId'), days: INVITE_DAYS });
+    return c.json({ code, role, expiresInDays: INVITE_DAYS }, 201);
+  });
+
+  api.delete('/farm/members/:userId', (c) => {
+    needOwner(c);
+    const userId = Number(c.req.param('userId'));
+    if (userId === c.get('userId')) throw new BadRequest('Tidak bisa mengeluarkan diri sendiri');
+    store.removeMember(userId, c.get('farmId')!);
+    return c.body(null, 204);
+  });
+
+  // A worker forgot their PIN: the owner gets a temporary one to pass on.
+  api.post('/farm/members/:userId/pin', (c) => {
+    needOwner(c);
+    const userId = Number(c.req.param('userId'));
+    if (!store.role(userId, c.get('farmId')!)) throw new AuthError('Bukan anggota tambak ini', 403);
+    const pin = tempPin();
+    store.setPin(userId, hashPin(pin));
+    return c.json({ pin });
+  });
+
+  // ---------- ponds ----------
+
   api.post('/ponds', async (c) => {
+    const r = needOwner(c);
     const body = await c.req.json();
-    const pond = repo.addPond({
+    const pond = r.addPond({
       name: text(body.name, 'nama kolam', true)!,
       kind: text(body.kind, 'jenis kolam'),
       volumeL: num(body.volumeL, 'volume', { min: 0 }) ?? null,
       ...pondProfile(body),
     });
-    return c.json({ pond: pondSummary(pond) }, 201);
+    return c.json({ pond: pondSummary(r, pond) }, 201);
   });
 
   api.put('/ponds/:id', async (c) => {
-    const pond = repo.getPond(Number(c.req.param('id')));
+    const r = needOwner(c);
+    const pond = r.getPond(Number(c.req.param('id')));
     if (!pond) return c.json({ error: 'Kolam tidak ditemukan' }, 404);
     const body = await c.req.json();
     // Only fields present in the body change.
     const profile = pondProfile(body);
     const kept = Object.fromEntries(Object.entries(profile).map(([k, v]) => [k, k in body ? v : pond[k as keyof typeof profile]]));
-    repo.updatePond({
+    r.updatePond({
       ...pond,
       ...(kept as typeof profile),
       name: text(body.name, 'nama kolam') ?? pond.name,
       kind: 'kind' in body ? text(body.kind, 'jenis kolam') : pond.kind,
       volumeL: 'volumeL' in body ? (num(body.volumeL, 'volume', { min: 0 }) ?? null) : pond.volumeL,
     });
-    return c.json({ pond: pondSummary(repo.getPond(pond.id)!) });
+    return c.json({ pond: pondSummary(r, r.getPond(pond.id)!) });
   });
 
-  api.get('/nowcast', async (c) => c.json(await nowcastAll()));
+  api.get('/nowcast', async (c) => c.json(await nowcastAll(needFarm(c))));
 
   api.delete('/ponds/:id', (c) => {
-    repo.archivePond(Number(c.req.param('id')));
+    needOwner(c).archivePond(Number(c.req.param('id')));
     return c.body(null, 204);
   });
 
   api.get('/ponds/:id', (c) => {
-    const pond = repo.getPond(Number(c.req.param('id')));
+    const r = needFarm(c);
+    const pond = r.getPond(Number(c.req.param('id')));
     if (!pond) return c.json({ error: 'Kolam tidak ditemukan' }, 404);
     const since = new Date(clock().getTime() - 14 * DAY_MS).toISOString();
-    return c.json({ pond: pondSummary(pond), logs: repo.logsSince(pond.id, since) });
+    return c.json({ pond: pondSummary(r, pond), logs: r.logsSince(pond.id, since) });
   });
 
   api.post('/ponds/:id/batches', async (c) => {
-    const pond = repo.getPond(Number(c.req.param('id')));
+    const r = needOwner(c);
+    const pond = r.getPond(Number(c.req.param('id')));
     if (!pond) return c.json({ error: 'Kolam tidak ditemukan' }, 404);
     const body = await c.req.json();
     const stockedAt = text(body.stockedAt, 'tanggal tebar', true)!;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(stockedAt)) throw new BadRequest('tanggal tebar tidak valid');
-    repo.startBatch(
+    r.startBatch(
       {
         pondId: pond.id,
         phase: oneOf(body.phase, ['glass_eel', 'elver'] as const, 'fase') ?? 'glass_eel',
         stockedAt,
         initialCount: num(body.initialCount, 'jumlah tebar', { min: 0 }) ?? null,
       },
-      localDate(clock(), timezone()),
+      localDate(clock(), timezone(r)),
     );
-    return c.json({ pond: pondSummary(pond) }, 201);
+    return c.json({ pond: pondSummary(r, pond) }, 201);
   });
-
-  api.get('/ai', (c) => c.json({ mode: ai?.mode ?? 'off' }));
 
   // Photo, voice note or daily video → a draft log. Nothing is saved to the pond here:
   // the farmer reviews the draft in the Record form and saves it as a normal log.
   api.post('/ponds/:id/capture', async (c) => {
-    const pond = repo.getPond(Number(c.req.param('id')));
+    const r = needFarm(c);
+    const pond = r.getPond(Number(c.req.param('id')));
     if (!pond) return c.json({ error: 'Kolam tidak ditemukan' }, 404);
     if (!ai || ai.mode === 'off') throw new AiUnavailable('AI belum aktif. Isi manual dulu, atau coba lagi nanti.');
     const form = await c.req.parseBody({ all: true });
@@ -326,31 +552,34 @@ export function createApi(
     if (kind === 'voice' && !audio) throw new BadRequest('Rekaman suara belum ada');
     if (kind === 'video' && !images.length && !audio) throw new BadRequest('Video belum ada');
 
-    const batch = repo.activeBatch(pond.id);
+    useAi(r.farmId);
+    const batch = r.activeBatch(pond.id);
     const started = Date.now();
     const draft = await ai.draft({ kind, field, images, audio, pondName: pond.name, phase: batch?.phase });
     await saveCapture?.(
-      { pondId: pond.id, kind, field, at: clock().toISOString(), ms: Date.now() - started, draft },
+      { farmId: r.farmId, pondId: pond.id, kind, field, at: clock().toISOString(), ms: Date.now() - started, draft },
       [...images.map((blob, i) => ({ name: `image-${i}.jpg`, blob })), ...(audio ? [{ name: `audio.${audio.type.includes('wav') ? 'wav' : 'webm'}`, blob: audio }] : [])],
     ).catch((err) => console.error('capture not stored:', err));
     return c.json({ draft });
   });
 
   api.post('/ponds/:id/logs', async (c) => {
-    const pond = repo.getPond(Number(c.req.param('id')));
+    const r = needFarm(c);
+    const pond = r.getPond(Number(c.req.param('id')));
     if (!pond) return c.json({ error: 'Kolam tidak ditemukan' }, 404);
     const body = await c.req.json();
     const loggedAt = body.loggedAt ? new Date(body.loggedAt) : clock();
     if (Number.isNaN(loggedAt.getTime())) throw new BadRequest('waktu catat tidak valid');
-    const log = repo.addLog({
+    const log = r.addLog({
       pondId: pond.id,
-      batchId: repo.activeBatch(pond.id)?.id ?? null,
+      batchId: r.activeBatch(pond.id)?.id ?? null,
       loggedAt: loggedAt.toISOString(),
       source: oneOf(body.source, LOG_SOURCES, 'sumber') ?? 'manual',
       data: parseLogData(body),
     });
-    return c.json({ log, pond: pondSummary(pond) }, 201);
+    return c.json({ log, pond: pondSummary(r, pond) }, 201);
   });
 
-  return api;
+  // For the server's own background monitor, which has no session.
+  return Object.assign(api, { nowcastFarm: (farmId: number) => nowcastAll(store.farm(farmId)) });
 }

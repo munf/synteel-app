@@ -45,6 +45,9 @@ const PATHS = {
   bolt: 'M13 3 5 14h6l-1 7 8-11h-6z',
   dots: 'M5 12h.01M12 12h.01M19 12h.01',
   bell: 'M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0',
+  key: 'M8 10a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM11 12l9-9M17 6l3 3M14 9l2 2',
+  logout: 'M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 8l-4 4 4 4M6 12h11',
+  users: 'M9 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM2 21a7 7 0 0 1 14 0M16 4a4 4 0 0 1 0 8M18 14a6 6 0 0 1 4 7',
 } as const;
 
 export type IconName = keyof typeof PATHS;
@@ -214,6 +217,53 @@ export function PondPicker({
 }
 
 // ---------- form parts ----------
+
+/** The Synteel wordmark at the top of setup and sign-in. */
+export function Wordmark() {
+  return (
+    <div class="row" style={{ gap: 8 }}>
+      <span class="icon-box" style={{ width: 36, height: 36, borderRadius: 12, background: 'var(--navy)', color: '#fff' }}>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+          <path d="M3 13c3-4 5-4 8 0s5 4 10-2" />
+        </svg>
+      </span>
+      <span class="title">synteel</span>
+    </div>
+  );
+}
+
+/** Six-digit PIN: hidden like a password, but the phone shows the number pad. */
+export function PinInput({ value, onChange, autoComplete = 'current-password', label }: { value: string; onChange: (v: string) => void; autoComplete?: string; label?: string }) {
+  return (
+    <input
+      type="password"
+      inputMode="numeric"
+      pattern="[0-9]*"
+      maxLength={6}
+      autoComplete={autoComplete}
+      aria-label={label}
+      class="pin-input"
+      value={value}
+      onInput={(e) => {
+        const v = e.currentTarget.value.replace(/\D/g, '').slice(0, 6);
+        e.currentTarget.value = v;
+        onChange(v);
+      }}
+      placeholder="••••••"
+      required
+    />
+  );
+}
+
+/** "6281234567890" → "0812 3456 7890", the way people write their number. */
+export function fmtPhone(phone: string) {
+  const local = phone.startsWith('62') ? '0' + phone.slice(2) : phone;
+  return local.replace(/(\d{4})(?=\d)/g, '$1 ');
+}
+
+export const initialOf = (name: string | undefined) => (name ?? 'S').replace(/^tambak\s+/i, '').trim().charAt(0).toUpperCase() || 'S';
+
+export const roleLabel: Record<'owner' | 'worker', string> = { owner: 'Pemilik', worker: 'Pekerja' };
 
 export function Chips<T extends string>(props: {
   options: Record<T, string>;
