@@ -307,16 +307,48 @@ export function Field({ label, hint, children }: { label: ComponentChildren; hin
   );
 }
 
-export function Stepper({ value, onChange }: { value: number; onChange: (n: number) => void }) {
+/**
+ * A count: − and + for small changes, the number itself can be typed (tap it), and optional
+ * quick-add buttons (+5, +10…) so 60 dead eels don't take 60 taps.
+ */
+export function Stepper({ value, onChange, min = 0, quick }: { value: number; onChange: (n: number) => void; min?: number; quick?: number[] }) {
+  // The typed text while the field has focus, so an empty field doesn't snap back to the minimum mid-typing.
+  const [typing, setTyping] = useState<string | null>(null);
+  const set = (n: number) => onChange(Math.max(min, Math.min(99_999, n)));
   return (
-    <div class="stepper">
-      <button type="button" aria-label="Kurangi" onClick={() => onChange(Math.max(0, value - 1))}>
-        −
-      </button>
-      <output>{value}</output>
-      <button type="button" aria-label="Tambah" onClick={() => onChange(value + 1)}>
-        +
-      </button>
+    <div class="stepper-wrap">
+      <div class="stepper">
+        <button type="button" aria-label="Kurangi" onClick={() => set(value - 1)}>
+          −
+        </button>
+        <input
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          aria-label="Jumlah, ketuk untuk mengetik"
+          value={typing ?? String(value)}
+          onFocus={(e) => (setTyping(String(value)), e.currentTarget.select())}
+          onInput={(e) => {
+            const t = e.currentTarget.value.replace(/\D/g, '').slice(0, 5);
+            setTyping(t);
+            if (t !== '') set(Number(t));
+          }}
+          onBlur={() => setTyping(null)}
+        />
+        <button type="button" aria-label="Tambah" onClick={() => set(value + 1)}>
+          +
+        </button>
+      </div>
+      {quick && (
+        <div class="quick-add">
+          {quick.map((q) => (
+            <button key={q} type="button" onClick={() => set(value + q)}>
+              +{q}
+            </button>
+          ))}
+          <span class="label muted">atau ketuk angkanya</span>
+        </div>
+      )}
     </div>
   );
 }

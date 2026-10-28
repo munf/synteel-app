@@ -769,7 +769,7 @@ function TypeAll({ data, onDone }: { data: LogData; onDone: (d: LogData) => void
       ))}
       <div class="field">
         <span class="field-label">Sidat mati (ekor)</span>
-        <Stepper value={dead} onChange={setDead} />
+        <Stepper value={dead} onChange={setDead} quick={[5, 10, 50]} />
       </div>
       {bad && <p class="error">Angka pengukuran tidak valid</p>}
       <button type="button" class="btn primary" disabled={bad} onClick={done}>

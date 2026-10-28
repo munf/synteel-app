@@ -80,7 +80,7 @@ function Due({ r, go, onDone }: { r: Recheck; go: Go; onDone: (next?: Recheck) =
         <>
           <div class="field">
             <span class="field-label">Ada yang mati lagi sejak tadi?</span>
-            <Stepper value={more} onChange={setMore} />
+            <Stepper value={more} onChange={setMore} quick={[5, 10]} />
           </div>
           <button class="btn danger" disabled={busy} onClick={notBetter}>
             Catat dan minta bantuan

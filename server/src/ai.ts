@@ -55,6 +55,8 @@ export interface Ai {
   mode: 'meta' | 'mock' | 'off';
   draft(input: CaptureInput): Promise<Draft>;
   round(input: RoundInput): Promise<RoundResult>;
+  /** Speech to plain text (a help message said instead of typed). Free: not counted against the quota. */
+  transcribe(audio: Blob): Promise<string>;
 }
 
 const BEHAVIORS: Behavior[] = ['normal', 'surfacing', 'gathering_inlet', 'not_eating', 'lethargic'];
@@ -229,6 +231,10 @@ const ROUND_TRANSCRIPT_MAX = 12_000;
 function liveAi(chat: ChatProvider[], transcriber?: Transcriber): Ai {
   return {
     mode: 'meta',
+    async transcribe(audio) {
+      if (!transcriber) throw new AiUnavailable('Suara belum bisa diubah jadi teks. Ketik saja dulu.');
+      return transcribe(transcriber, audio);
+    },
     async draft(input) {
       if (input.kind === 'voice' && !transcriber) {
         // 503 keeps the note queued on the phone until speech-to-text is available.
@@ -271,6 +277,9 @@ function mockAi(): Ai {
   };
   return {
     mode: 'mock',
+    async transcribe() {
+      return 'Mode contoh: suara di Kolam B tidak terbaca sejak kemarin.';
+    },
     async draft(input) {
       const problems = ['Mode contoh: AI Meta belum aktif, angka ini bukan hasil membaca.'];
       if (input.kind === 'photo') {
@@ -307,6 +316,7 @@ export function withDailyCap(ai: Ai, cap: number, now = () => new Date()): Ai {
   };
   return {
     mode: ai.mode,
+    transcribe: (audio) => ai.transcribe(audio),
     async draft(input) {
       take();
       return ai.draft(input);
@@ -326,5 +336,5 @@ export function createAi(opts: { chat: ChatProvider[]; transcriber?: Transcriber
   const off = async (): Promise<never> => {
     throw new AiUnavailable('AI belum aktif. Isi manual dulu, atau coba lagi nanti.');
   };
-  return { mode: 'off', draft: off, round: off };
+  return { mode: 'off', draft: off, round: off, transcribe: off };
 }

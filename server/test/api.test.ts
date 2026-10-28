@@ -262,6 +262,7 @@ test('each farm has its own daily AI cap', async () => {
     mode: 'meta' as const,
     draft: async () => toDraft({ temperature: 27 }, 'meta'),
     round: async () => ({ transcript: '', drafts: [], loose: null, empty: true, model: 'test', mode: 'meta' as const }),
+    transcribe: async () => ' kolam B tidak terbaca ',
   };
   const { client } = server(undefined, { ai, farmAiCap: 1 });
   const photo = () => {
@@ -285,4 +286,29 @@ test('each farm has its own daily AI cap', async () => {
   assert.equal(refused.json.code, 'ai_quota');
   assert.match(refused.json.error, /Jatah baca AI/);
   assert.equal((await b()).status, 200);
+});
+
+test('a spoken help message becomes text and does not use the farm quota', async () => {
+  const { toDraft } = await import('../src/ai.ts');
+  const ai = {
+    mode: 'meta' as const,
+    draft: async () => toDraft({ temperature: 27 }, 'meta'),
+    round: async () => ({ transcript: '', drafts: [], loose: null, empty: true, model: 'test', mode: 'meta' as const }),
+    transcribe: async () => ' kolam B tidak terbaca ',
+  };
+  const { client } = server(undefined, { ai, farmAiCap: 1 });
+  const call = client();
+  const audio = () => {
+    const f = new FormData();
+    f.append('audio', new Blob(['x'], { type: 'audio/wav' }), 'a.wav');
+    return f;
+  };
+  assert.equal((await call('POST', '/transcribe', audio())).status, 401);
+  await call('POST', '/auth/register', { name: 'P', phone: '083333333333', pin: '246810' });
+  await call('PUT', '/farm', { name: 'Tambak P' });
+  for (let i = 0; i < 3; i++) {
+    const res = await call('POST', '/transcribe', audio());
+    assert.equal(res.status, 200);
+    assert.equal(res.json.text, 'kolam B tidak terbaca');
+  }
 });

@@ -14,7 +14,7 @@ import { History } from './screens/history.tsx';
 import { Quota } from './screens/quota.tsx';
 import { Help } from './screens/help.tsx';
 import { Alarm } from './screens/alarm.tsx';
-import { useAlarms } from './alarms.ts';
+import { useAlarms, useWatchDot } from './alarms.ts';
 import { ConnectionBanner, Icon, type IconName } from './ui.tsx';
 
 export type Route =
@@ -249,7 +249,8 @@ export function App() {
   }
 
   const ready = Boolean(me && state?.farm && state.ponds.length);
-  const alerts = state?.ponds.some((p) => p.level === 'critical' || nowcast?.ponds.find((n) => n.pondId === p.id)?.peak.level === 'critical');
+  // The red dot means a check is due now (not just that a pond is risky), so it clears once checked.
+  const alerts = useWatchDot(state?.ponds);
 
   return (
     <div class="shell">

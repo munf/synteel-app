@@ -12,6 +12,7 @@ function fakeAi(mode: Ai['mode'] = 'meta') {
   const ai: Ai = {
     mode,
     draft: async () => toDraft({ temperature: 27 }, 'meta'),
+    transcribe: async () => '',
     round: async (input) => {
       rounds.push(input);
       return roundResult(input.transcript ?? 'audio');

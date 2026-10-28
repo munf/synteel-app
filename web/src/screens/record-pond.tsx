@@ -662,7 +662,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
         );
       }
       case 'mortality':
-        return <Stepper value={mortality} onChange={setMortality} />;
+        return <Stepper value={mortality} onChange={setMortality} quick={[5, 10, 50]} />;
       case 'behavior':
         return <Chips options={behaviorLabel} value={behavior} onChange={setBehavior} multiple />;
       case 'aeration':

@@ -3,7 +3,8 @@
 import { useState } from 'preact/hooks';
 import { api, type Me, type SupportTopic } from '../api.ts';
 import type { Go } from '../app.tsx';
-import { Field, fmtPhone, Icon, roleLabel, Soon, Tick } from '../ui.tsx';
+import { Field, fmtPhone, Icon, roleLabel, Tick } from '../ui.tsx';
+import { canRecordAudio, startRecording, voiceToWav } from '../capture/media.ts';
 
 const TOPICS: { key: SupportTopic; label: string; hint: string }[] = [
   { key: 'pin', label: 'Masuk dan PIN', hint: 'mis. pemilik lupa PIN dan tidak bisa masuk' },
@@ -30,6 +31,50 @@ export function deviceInfo(ua = navigator.userAgent): string {
 
 /** "SE-000123": what the team asks for on WhatsApp. */
 export const userCode = (id: number) => `SE-${String(id).padStart(6, '0')}`;
+
+/**
+ * Say the message instead of typing it: the recording is turned into text in the box, which the
+ * farmer can read and fix before sending. Only text is sent to the team, never the audio.
+ */
+function SpeakToText({ onText }: { onText: (text: string) => void }) {
+  const [rec, setRec] = useState<{ stop: () => Promise<Blob> } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState('');
+  if (!canRecordAudio()) return null;
+
+  const start = async () => {
+    setNote('');
+    try {
+      setRec(await startRecording(60));
+    } catch {
+      setNote('Mikrofon belum diizinkan. Ketik saja dulu.');
+    }
+  };
+  const stop = async () => {
+    if (!rec) return;
+    const audio = await rec.stop();
+    setRec(null);
+    setBusy(true);
+    try {
+      const { text } = await api.transcribe(await voiceToWav(audio, 60));
+      if (text) onText(text);
+      setNote(text ? 'Sudah jadi teks di atas. Periksa dulu sebelum kirim.' : 'Suara belum terbaca. Coba lagi lebih dekat, atau ketik saja.');
+    } catch (err) {
+      setNote((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div class="stack-xs" style={{ gap: 8 }}>
+      <button type="button" class={`btn ${rec ? 'danger' : 'secondary'}`} disabled={busy} onClick={rec ? stop : start}>
+        <Icon name="mic" size={20} /> {busy ? 'Mengubah suara jadi teks…' : rec ? 'Selesai bicara' : 'Bicara, nanti jadi teks'}
+      </button>
+      {note && <span class="label muted">{note}</span>}
+    </div>
+  );
+}
 
 export function Help({ me, go }: { me: Me | null; go: Go }) {
   const signedIn = me !== null;
@@ -138,10 +183,7 @@ export function Help({ me, go }: { me: Me | null; go: Go }) {
             <Field label="Ceritakan masalahnya">
               <textarea rows={4} placeholder={hint} value={message} onInput={(e) => setMessage(e.currentTarget.value)} style={{ resize: 'none' }} />
             </Field>
-            {/* No audio upload to support yet: shown so the design stays honest about what is coming. */}
-            <button type="button" class="btn secondary" disabled style={{ fontSize: '0.875rem', fontWeight: 800 }}>
-              <Icon name="mic" size={20} /> Atau kirim pesan suara <Soon />
-            </button>
+            {signedIn && <SpeakToText onText={(t) => setMessage((m) => (m.trim() ? `${m.trim()} ${t}` : t))} />}
             <Field label="Nomor WhatsApp untuk balasan">
               <input type="tel" inputMode="tel" autoComplete="tel" placeholder="mis. 0812 3456 7890" value={replyPhone} onInput={(e) => setReplyPhone(e.currentTarget.value)} />
             </Field>

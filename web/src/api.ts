@@ -198,6 +198,12 @@ export const api = {
   restoreLog: (logId: number) => call<{ log: HistoryLog }>('POST', `/logs/${logId}/restore`),
 
   quota: () => call<QuotaState>('GET', '/quota'),
+  /** Speech → text for a help message (signed in; free, not counted against the quota). */
+  transcribe: (audio: Blob) => {
+    const form = new FormData();
+    form.append('audio', audio, audio.type.includes('wav') ? 'pesan.wav' : 'pesan.webm');
+    return upload<{ text: string }>('/transcribe', form);
+  },
   /** Works signed in or out (an owner who forgot the PIN). */
   support: (req: SupportRequest) => call<{ ticket: string }>('POST', '/support', req),
 };

@@ -73,6 +73,7 @@ test('daily cap stops real AI reads until the next day', async () => {
     mode: 'meta',
     draft: async () => toDraft({}, 'meta'),
     round: async () => ({ transcript: '', drafts: [], loose: null, empty: true, model: 'test', mode: 'meta' }),
+    transcribe: async () => '',
   };
   const ai = withDailyCap(inner, 2, () => clock);
   const input = { kind: 'photo' as const, images: [], pondName: 'Kolam C' };

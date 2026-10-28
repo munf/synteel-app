@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'preact/hooks';
+import { StepList, useSteps } from '../steps.tsx';
 import { api, ApiError, type Limits, type Log, type NowcastState, type PondProfile, type PondSummary, type Role } from '../api.ts';
 import type { Go } from '../app.tsx';
 import { aerationLabel, fmtAgo, fmtNum, fmtTime, phaseLabel, readingWord, settingLabel, sourceLabel, summarizeLog } from '../labels.ts';
 import { usePrefs } from '../prefs.ts';
-import { Icon, kindLabel, Shape, Soon, StatusPill, tankPath, TickBox, toneOf } from '../ui.tsx';
+import { Icon, kindLabel, Shape, Soon, StatusPill, tankPath, toneOf } from '../ui.tsx';
 import './pond.css';
 
 type Key = 'temperature' | 'ph' | 'tds';
@@ -206,7 +207,7 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
   const [data, setData] = useState<{ pond: PondSummary; logs: Log[] } | null>(null);
   const [error, setError] = useState('');
   const [tech, setTech] = useState(prefs.techOpen);
-  const [done, setDone] = useState<Record<string, boolean>>({});
+  const { done, toggle } = useSteps(id);
 
   useEffect(() => {
     api.pond(id).then(setData, (e) => setError(e.message));
@@ -291,18 +292,7 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
                 <span class="label" style={{ color: '#C9D4EA' }}>
                   Lakukan sekarang:
                 </span>
-                {top.actions.map((a) => (
-                  <button
-                    key={a}
-                    role="checkbox"
-                    aria-checked={!!done[a]}
-                    onClick={() => setDone({ ...done, [a]: !done[a] })}
-                    style={{ display: 'flex', gap: 12, alignItems: 'center', minHeight: 56, padding: '8px 12px', border: 0, borderRadius: 16, background: 'rgba(255,255,255,0.08)', color: '#fff', textAlign: 'left' }}
-                  >
-                    <TickBox on={!!done[a]} />
-                    <span>{a}</span>
-                  </button>
-                ))}
+                <StepList steps={top.actions} done={done} toggle={toggle} onAllDone={{ label: 'Catat kondisi sekarang', run: () => go({ name: 'record-pond', pondId: id }) }} />
               </>
             )}
           </section>

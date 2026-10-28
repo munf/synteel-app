@@ -195,6 +195,7 @@ export function createApi(
   const api = new Hono<Env>();
   const limiter = attemptLimiter();
   const supportLimiter = attemptLimiter(5, 60 * 60_000, undefined, 'Terlalu banyak pesan. Coba lagi 1 jam lagi.');
+  const speechLimiter = attemptLimiter(20, 60 * 60_000, undefined, 'Terlalu sering. Ketik saja dulu, atau coba lagi 1 jam lagi.');
 
   api.onError((err, c) => {
     if (err instanceof BadRequest) return c.json({ error: err.message }, 400);
@@ -1037,6 +1038,20 @@ export function createApi(
     if (!transcript) throw new BadRequest('Teks keliling masih kosong');
     if (transcript.length > MAX_TRANSCRIPT) throw new BadRequest('Teks keliling terlalu panjang');
     return round(c, { transcript });
+  });
+
+  // A help message said instead of typed: speech → text only, nothing is read or saved.
+  // Free (no quota), but limited per person so it can't be used as a general transcriber.
+  api.post('/transcribe', async (c) => {
+    const form = await c.req.parseBody();
+    const audio = form.audio instanceof File ? form.audio : undefined;
+    if (!audio) throw new BadRequest('Rekaman suara belum ada');
+    if (audio.size > 3 * 1024 * 1024) throw new BadRequest('Rekaman terlalu panjang. Cukup satu menit.');
+    if (!ai || ai.mode === 'off') throw new AiUnavailable('Suara belum bisa diubah jadi teks. Ketik saja dulu.');
+    const key = `user:${c.get('userId')}`;
+    speechLimiter.check(key);
+    speechLimiter.fail(key);
+    return c.json({ text: (await ai.transcribe(audio)).trim() });
   });
 
   // For the server's own background monitor, which has no session.

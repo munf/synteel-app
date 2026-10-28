@@ -4,6 +4,7 @@ import { prepareImage } from '../capture/media.ts';
 import type { Go } from '../app.tsx';
 import { fmtClock, fmtNum } from '../labels.ts';
 import { phaseLabel } from '../labels.ts';
+import { StepList, useSteps } from '../steps.tsx';
 import { Icon, PondThumb, Shape, Soon, Stepper, Tick, TickBox, toneOf, type IconName } from '../ui.tsx';
 import './problem.css';
 
@@ -278,7 +279,7 @@ function CountedPhoto({ c }: { c: Counted }) {
 }
 
 function Result({ report, emergencies, go, onBack, onSaved }: { report: Report; emergencies: Emergency[]; go: Go; onBack: () => void; onSaved: () => void }) {
-  const [done, setDone] = useState<Record<string, boolean>>({});
+  const { done, toggle } = useSteps(report.pond.id);
   const [queued, setQueued] = useState(report.offline);
   // Signal back while this screen is open: the waiting report goes out and the notice says so.
   useEffect(() => {
@@ -312,7 +313,7 @@ function Result({ report, emergencies, go, onBack, onSaved }: { report: Report; 
     `Laporan ${pond.name}, ${fmtClock(report.at, true)}`,
     `Terlihat: ${signText}${report.dead ? ` (${report.dead} ekor mati)` : ''}`,
     ...(['temperature', 'ph', 'tds'] as const).filter((k) => pond.latest[k]).map((k) => `${k === 'temperature' ? 'Suhu' : k === 'ph' ? 'pH' : 'TDS'} terakhir: ${fmtNum(pond.latest[k]!.value)}`),
-    count ? `Sudah dilakukan: ${steps.filter((s) => done[s]).join('; ')}` : '',
+    count ? `Sudah dilakukan: ${steps.filter((s) => done[s]).map((s) => `${s} (${fmtClock(done[s].at)})`).join('; ')}` : '',
   ]
     .filter(Boolean)
     .join('\n');
@@ -365,18 +366,7 @@ function Result({ report, emergencies, go, onBack, onSaved }: { report: Report; 
           <span class="progress">
             <span style={{ width: `${(count / steps.length) * 100}%` }} />
           </span>
-          {steps.map((s) => (
-            <button
-              key={s}
-              role="checkbox"
-              aria-checked={!!done[s]}
-              onClick={() => setDone({ ...done, [s]: !done[s] })}
-              style={{ display: 'flex', gap: 12, alignItems: 'center', minHeight: 64, padding: '8px 12px', border: 0, borderRadius: 16, background: 'rgba(255,255,255,0.08)', color: '#fff', textAlign: 'left' }}
-            >
-              <TickBox on={!!done[s]} />
-              <span>{s}</span>
-            </button>
-          ))}
+          <StepList steps={steps} done={done} toggle={toggle} onAllDone={{ label: 'Catat kondisi sekarang', run: () => go({ name: 'record-pond', pondId: pond.id }) }} />
           <span class="label" style={{ color: '#9FB0CF' }}>
             {report.offline ? 'Langkah ini tersimpan di HP, tetap muncul tanpa sinyal.' : 'Langkah ini tetap muncul walau tanpa internet.'}
           </span>
@@ -657,7 +647,7 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
       {signs.includes('dead') && (
         <div class={`field${manual ? ' count-manual' : ''}`}>
           <span class="field-label">Berapa ekor mati?</span>
-          <Stepper value={dead} onChange={(n) => setDead(Math.max(1, n))} />
+          <Stepper value={dead} onChange={setDead} min={1} quick={[5, 10, 50]} />
           {manual && (
             <span role="status" class="label semi" style={{ color: 'var(--accent-ink)' }}>
               Isi dengan − dan +. Jumlah ini yang dipakai di laporan.

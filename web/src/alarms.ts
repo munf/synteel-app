@@ -3,7 +3,7 @@
 // open the full-screen alarm at their time, with a loud tone, vibration and a notification
 // when the phone allows it. Nothing here depends on the AI: the checks come from the rules
 // (plus any the briefing added), and the timing is plain clock arithmetic.
-import { useEffect } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { api, type Briefing, type NowcastState, type PondSummary } from './api.ts';
 import type { Go } from './app.tsx';
 import { fmtClock } from './labels.ts';
@@ -136,10 +136,40 @@ let ringing: string | null = null;
 
 /** Tonight's checks, all of them (the alarm screen shows the next one after answering). */
 export const armedChecks = () => armed;
+
+const DUE_SOON_MS = 30 * 60_000;
+/** Something to do in Waspada: a check that is due within 30 minutes (or overdue) and not ticked yet. */
+export function needsAttention(checks: ArmedCheck[], done: Record<string, boolean>, now = Date.now()) {
+  return checks.some((c) => !done[c.key] && c.t <= now + DUE_SOON_MS);
+}
+
+const armListeners = new Set<() => void>();
+/**
+ * The red dot on the Waspada tab. It used to follow pond risk alone, so it stayed on after every
+ * check was done. Now it means "there is a check to do now"; a risky pond with no checks at all
+ * (no estimate yet) still shows it.
+ */
+export function useWatchDot(ponds: PondSummary[] | undefined): boolean {
+  const [, bump] = useState(0);
+  useEffect(() => {
+    const again = () => bump((n) => n + 1);
+    armListeners.add(again);
+    const off = onDoneChange(again);
+    const t = setInterval(again, 30_000);
+    return () => {
+      armListeners.delete(again);
+      off();
+      clearInterval(t);
+    };
+  }, []);
+  if (armed.length) return needsAttention(armed, loadDone());
+  return !!ponds?.some((p) => p.level === 'critical');
+}
 export const findArmed = (at: number, pondId: number) => armed.find((c) => c.t === at && c.pondId === pondId) ?? null;
 
 /** Replace the list of checks to watch; called whenever the plan for tonight is known again. */
 export function armAlarms(checks: ArmedCheck[], go: Go) {
+  queueMicrotask(() => armListeners.forEach((l) => l()));
   armed = [...checks].sort((a, b) => a.t - b.t);
   navigate = go;
   if (!timer) {
