@@ -16,7 +16,7 @@
       "critical": {
         "below": 4
       },
-      "operator_action": "Cek aerator, diffuser dan selang udara; tunda pemberian pakan.",
+      "operator_action": "Cek aerator, batu aerasi dan selang udara; jangan beri pakan dulu.",
       "nursery_auto_action": "Buka solenoid O₂, tunda feeder, SMS"
     },
     {

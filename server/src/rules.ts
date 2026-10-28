@@ -3,7 +3,7 @@
 import { DAY_MS, type Finding, type Level, type Log, type LogData, type Phase } from './domain.ts';
 
 interface Bound { below?: number; above?: number }
-interface Limits {
+export interface Limits {
   target: { min?: number; max?: number } | null;
   warning: Bound | null;
   critical: Bound | null;
@@ -53,6 +53,19 @@ export function limitsFor(t: Threshold, phase?: Phase): Limits {
   return (phase && t.by_phase?.[phase]) || t;
 }
 
+/**
+ * Where one reading sits against its limits: 'info' means outside the target range
+ * but not yet at a warning. Used for the word shown next to each number.
+ */
+export function classifyReading(value: number, l: Limits): Level {
+  const out = (b: Bound | null) => !!b && ((b.below !== undefined && value < b.below) || (b.above !== undefined && value > b.above));
+  if (out(l.critical)) return 'critical';
+  if (out(l.warning)) return 'warning';
+  const t = l.target;
+  if (t && ((t.min !== undefined && value < t.min) || (t.max !== undefined && value > t.max))) return 'info';
+  return 'ok';
+}
+
 export function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
@@ -92,18 +105,18 @@ export function assessPond(logs: Log[], thresholds: Threshold[], now: Date, ctx:
   //    so this is often the earliest signal available.
   const behaviors = new Set(recent.flatMap((l) => l.data.behavior ?? []));
   if (behaviors.has('surfacing') || behaviors.has('gathering_inlet')) {
-    const signs = [behaviors.has('surfacing') && 'naik ke permukaan', behaviors.has('gathering_inlet') && 'berkumpul di inlet']
+    const signs = [behaviors.has('surfacing') && 'naik ke permukaan', behaviors.has('gathering_inlet') && 'berkumpul di air masuk']
       .filter(Boolean)
       .join(' dan ');
     const temp = latestReading(logs, 'temperature', last24h);
     findings.push({
       id: 'sign:low_do',
       level: 'critical',
-      title: 'Kemungkinan oksigen (DO) rendah',
+      title: 'Kemungkinan oksigen air rendah',
       detail:
         `Sidat terlihat ${signs}.` +
         (temp && temp.value > 28 ? ` Suhu ${fmt(temp.value)} °C ikut menurunkan oksigen terlarut.` : ''),
-      actions: ['Cek aerator, diffuser dan selang udara', 'Tambah aerasi atau oksigen darurat', 'Tunda pemberian pakan'],
+      actions: ['Cek aerator, batu aerasi dan selang udara', 'Nyalakan aerator cadangan atau oksigen darurat kalau ada', 'Jangan beri pakan dulu sampai sidat berenang normal'],
       source: LOW_DO_SOURCE,
     });
   }

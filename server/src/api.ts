@@ -5,7 +5,7 @@ import { knowledge } from './knowledge.ts';
 import { AiFailed, AiUnavailable, type Ai, type CaptureKind } from './ai.ts';
 import type { SaveCapture } from './captures.ts';
 import { computeNowcast } from './nowcast.ts';
-import { assessPond, overallLevel, type Threshold } from './rules.ts';
+import { assessPond, classifyReading, limitsFor, overallLevel, type Limits, type Threshold } from './rules.ts';
 import { geocode as defaultGeocode, getWeather as defaultGetWeather } from './weather.ts';
 
 const thresholds = knowledge.thresholds.parameters as Threshold[];
@@ -151,8 +151,39 @@ export function createApi(
       }
     }
 
+    // Limits and a status for the three hand-measured readings, so the app can put a word
+    // ("terlalu dingin") and a target band next to every number.
+    const limits: Partial<Record<'temperature' | 'ph' | 'tds', Limits>> = {};
+    const status: Partial<Record<'temperature' | 'ph' | 'tds', ReturnType<typeof classifyReading>>> = {};
+    for (const key of ['temperature', 'ph', 'tds'] as const) {
+      const t = thresholds.find((x) => x.id === key);
+      if (!t) continue;
+      limits[key] = limitsFor(t, batch?.phase);
+      if (latest[key]) status[key] = classifyReading(latest[key]!.value, limits[key]!);
+    }
+
     const lastLogAt = logs[0]?.loggedAt ?? null;
-    return { ...pond, batch, program, latest, lastLogAt, findings, level: overallLevel(findings) };
+    return { ...pond, batch, program, latest, limits, status, lastLogAt, findings, level: overallLevel(findings) };
+  }
+
+  /** Days in a row with at least one measured reading on any pond, counting today or, if not yet, yesterday. */
+  function streakDays() {
+    const now = clock();
+    const tz = timezone();
+    const days = new Set<string>();
+    for (const pond of repo.listPonds()) {
+      for (const log of repo.logsSince(pond.id, new Date(now.getTime() - 60 * DAY_MS).toISOString())) {
+        if (Object.keys(log.data.readings ?? {}).length) days.add(localDate(new Date(log.loggedAt), tz));
+      }
+    }
+    let streak = 0;
+    let day = now.getTime();
+    if (!days.has(localDate(new Date(day), tz))) day -= DAY_MS;
+    while (days.has(localDate(new Date(day), tz))) {
+      streak++;
+      day -= DAY_MS;
+    }
+    return streak;
   }
 
   /** Estimated conditions for every pond. Weather failures degrade the estimate, never the response. */
@@ -183,12 +214,16 @@ export function createApi(
         timezone: timezone(),
       });
     });
-    return { generatedAt: now.getTime(), weather: { available: weather.length > 0, error: weatherError }, ponds };
+    // The next hours for the weather card; the full series stays on the server.
+    const hours = weather
+      .filter((h) => h.t >= now.getTime() - 3600_000 && h.t <= now.getTime() + 24 * 3600_000)
+      .map(({ t, airTemp, rain, cloud }) => ({ t, airTemp, rain, cloud }));
+    return { generatedAt: now.getTime(), weather: { available: weather.length > 0, error: weatherError, place: farm?.locationName ?? null, hours }, ponds };
   }
 
   api.get('/farm', (c) => {
     const farm = repo.getFarm();
-    return c.json({ farm, ponds: farm ? repo.listPonds().map(pondSummary) : [], today: localDate(clock(), timezone()) });
+    return c.json({ farm, ponds: farm ? repo.listPonds().map(pondSummary) : [], today: localDate(clock(), timezone()), streak: farm ? streakDays() : 0 });
   });
 
   api.put('/farm', async (c) => {

@@ -44,6 +44,8 @@ export interface Nowcast {
     anchor: { value: number; at: number } | null;
     calibrationPairs: number;
     offset: number;
+    /** How far the calibrated model missed each recent reading (°C), oldest first. */
+    fit: { t: number; error: number }[];
   };
   now: NowcastPoint;
   hours: NowcastPoint[]; // from 12 h ago to 24 h ahead, on the hour
@@ -112,6 +114,7 @@ export function simulate(weather: Map<number, WeatherHour>, p: ThermalParams, of
  */
 function calibrate(weather: Map<number, WeatherHour>, p: ThermalParams, readings: { t: number; value: number }[]) {
   const estimates: number[] = [];
+  const used: [{ t: number; value: number }, { t: number; value: number }][] = [];
   for (let i = 1; i < readings.length; i++) {
     const a = readings[i - 1];
     const b = readings[i];
@@ -123,8 +126,11 @@ function calibrate(weather: Map<number, WeatherHour>, p: ThermalParams, readings
     const reach = 1 - Math.pow(1 - p.k, gapH);
     if (reach < 0.2) continue;
     estimates.push((b.value - predicted) / reach);
+    used.push([a, b]);
   }
-  return { offset: estimates.length ? Math.max(-4, Math.min(4, median(estimates))) : 0, pairs: estimates.length };
+  const offset = estimates.length ? Math.max(-4, Math.min(4, median(estimates))) : 0;
+  const fit = used.slice(-7).map(([a, b]) => ({ t: b.t, error: Math.round((b.value - (simulate(weather, p, offset, a.t, a.value, b.t) ?? b.value)) * 10) / 10 }));
+  return { offset, pairs: estimates.length, fit };
 }
 
 // ---------- local time ----------
@@ -168,7 +174,7 @@ export function computeNowcast(input: NowcastInput): Nowcast {
     .map((l) => ({ t: Date.parse(l.loggedAt), value: l.data.readings!.temperature! }))
     .filter((r) => r.t <= now)
     .sort((a, b) => a.t - b.t);
-  const { offset, pairs } = calibrate(weather, params, readings);
+  const { offset, pairs, fit } = calibrate(weather, params, readings);
   const calibrated = pairs >= 2;
 
   function estimate(t: number): { temp: number | null; sigma: number | null } {
@@ -223,7 +229,7 @@ export function computeNowcast(input: NowcastInput): Nowcast {
     const recent = within(DAY_MS, known);
     const signs = new Set(recent.flatMap((l) => l.data.behavior ?? []));
     if (signs.has('surfacing') || signs.has('gathering_inlet')) {
-      factors.push({ id: 'signs', label: 'Sidat terlihat naik ke permukaan atau berkumpul di inlet', points: 3 });
+      factors.push({ id: 'signs', label: 'Sidat terlihat naik ke permukaan atau berkumpul di air masuk', points: 3 });
     }
 
     const lastAeration = recent.find((l) => l.data.aeration)?.data.aeration;
@@ -275,6 +281,7 @@ export function computeNowcast(input: NowcastInput): Nowcast {
       anchor: anchor && now - anchor.t <= 2 * DAY_MS ? { value: anchor.value, at: anchor.t } : null,
       calibrationPairs: pairs,
       offset: round1(offset),
+      fit,
     },
     now: nowPoint,
     hours,

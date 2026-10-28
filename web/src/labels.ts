@@ -1,4 +1,4 @@
-import type { Aeration, Behavior, Level, LogData, Phase, ReadingKey, RiskLevel, Setting } from './api.ts';
+import type { Aeration, Behavior, Level, Limits, LogData, LogSource, Phase, ReadingKey, RiskLevel, Setting } from './api.ts';
 
 export const levelLabel: Record<Level, string> = {
   ok: 'Aman',
@@ -21,12 +21,33 @@ export const readingLabel: Record<ReadingKey, { name: string; unit: string }> = 
 export const behaviorLabel: Record<Behavior, string> = {
   normal: 'Normal',
   surfacing: 'Naik ke permukaan',
-  gathering_inlet: 'Kumpul di inlet',
+  gathering_inlet: 'Kumpul di air masuk',
   not_eating: 'Tidak mau makan',
   lethargic: 'Lemas / diam',
 };
 
-export const riskLabel: Record<RiskLevel, string> = { ok: 'Risiko rendah', warning: 'Risiko sedang', critical: 'Risiko tinggi' };
+export const riskLabel: Record<RiskLevel, string> = { ok: 'Aman', warning: 'Perhatian', critical: 'Bahaya' };
+export const sourceLabel: Record<LogSource, string> = { manual: 'Ketik manual', voice: 'Suara · AI, dicek', photo: 'Foto alat · AI, dicek', video: 'Video · AI, dicek' };
+
+const WORDS = {
+  temperature: { low: ['Agak dingin', 'Terlalu dingin'], high: ['Agak hangat', 'Terlalu panas'] },
+  ph: { low: ['Agak rendah', 'Terlalu rendah'], high: ['Agak tinggi', 'Terlalu tinggi'] },
+  tds: { low: ['Agak rendah', 'Terlalu rendah'], high: ['Agak tinggi', 'Terlalu tinggi'] },
+} as const;
+
+/** A plain word for a reading ("Terlalu dingin") and its tone, from the server's status and limits. */
+export function readingWord(key: 'temperature' | 'ph' | 'tds', value: number, status: Level | undefined, limits: Limits | undefined) {
+  if (!status || status === 'ok' || !limits) return { text: 'Baik', tone: 'ok' as const };
+  const below = limits.target?.min ?? limits.warning?.below ?? -Infinity;
+  const side = value < below ? 'low' : 'high';
+  const strong = status === 'warning' || status === 'critical';
+  return { text: WORDS[key][side][strong ? 1 : 0], tone: status === 'critical' ? ('bad' as const) : ('warn' as const) };
+}
+
+export function greeting(now = new Date()): string {
+  const h = Number(now.toLocaleString('en-GB', { hour: '2-digit', hour12: false, timeZone: 'Asia/Jakarta' }));
+  return h < 11 ? 'Selamat pagi' : h < 15 ? 'Selamat siang' : h < 18 ? 'Selamat sore' : 'Selamat malam';
+}
 export const settingLabel: Record<Setting, string> = { outdoor: 'Luar ruangan', indoor: 'Dalam ruangan' };
 export const aerationLabel: Record<Aeration, string> = { full: '24 jam', partial: 'Sebagian waktu', none: 'Tidak ada' };
 export const aerationCheckLabel = { on: 'Nyala normal', weak: 'Lemah', off: 'Mati' } as const;

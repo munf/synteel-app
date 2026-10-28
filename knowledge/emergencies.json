@@ -27,9 +27,9 @@
       "id": "low_do",
       "trigger": "DO kolam < 4 mg/L, atau tanda-tanda DO rendah (benih naik ke permukaan / berkumpul di inlet)",
       "operator_actions": [
-        "Cek aerator, diffuser dan selang udara",
-        "Tambah aerasi atau oksigen darurat",
-        "Tunda pemberian pakan"
+        "Cek aerator, batu aerasi dan selang udara",
+        "Nyalakan aerator cadangan atau oksigen darurat kalau ada",
+        "Jangan beri pakan dulu sampai sidat berenang normal"
       ],
       "nursery_auto_response": "Alarm kritis, solenoid O₂ dibuka, feeder ditunda"
     },

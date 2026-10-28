@@ -3,7 +3,9 @@ import { api, type Behavior, type Draft, type DraftField, type LogData, type Log
 import { canRecordAudio, prepareImage, prepareVideo, startRecording, voiceToWav, type PreparedImage } from '../capture/media.ts';
 import { process, queue, Retryable, type CaptureKind, type Job } from '../capture/queue.ts';
 import { aerationCheckLabel, behaviorLabel, colorLabel, fmtClock, leftoverLabel, smellLabel } from '../labels.ts';
-import { Chips, Field, FindingCard, IconCamera, IconMic, IconVideo, LevelBadge } from '../ui.tsx';
+
+type EditKey = ReadingField | 'mortality' | 'behavior' | 'aeration' | 'leftover' | 'color' | 'smell';
+import { Chips, Field, FindingCard, Icon, PondPicker, Shape, StatusPill, Stepper } from '../ui.tsx';
 
 type Leftover = keyof typeof leftoverLabel;
 type Color = keyof typeof colorLabel;
@@ -51,6 +53,8 @@ export function Record({ ponds, initialPondId, onSaved }: { ponds: PondSummary[]
   const [recording, setRecording] = useState<{ stop: () => Promise<Blob>; started: number } | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [editing, setEditing] = useState<EditKey | null>(null);
+  const [manual, setManual] = useState(false);
 
   const photoInput = useRef<HTMLInputElement>(null);
   const photoField = useRef<ReadingField | undefined>(undefined);
@@ -107,6 +111,8 @@ export function Record({ ponds, initialPondId, onSaved }: { ponds: PondSummary[]
     setProblems([]);
     setSource('manual');
     setNotice('');
+    setEditing(null);
+    setManual(false);
   };
 
   function applyDraft(draft: Draft, kind: CaptureKind) {
@@ -250,71 +256,173 @@ export function Record({ ponds, initialPondId, onSaved }: { ponds: PondSummary[]
     }
   };
 
-  /** "dari foto" / "cek lagi" next to a field the AI filled. */
-  const Tag = ({ field }: { field: DraftField }) =>
-    filled[field] ? (
-      <span class={`ai-tag${doubtful.includes(field) ? ' doubt' : ''}`}>{doubtful.includes(field) ? 'ragu, cek lagi' : `dari ${kindLabel[filled[field]!]}`}</span>
-    ) : null;
+  const showValue = (key: EditKey): string | null => {
+    switch (key) {
+      case 'temperature':
+        return readings.temperature ? `${readings.temperature} °C` : null;
+      case 'ph':
+        return readings.ph || null;
+      case 'tds':
+        return readings.tds ? `${readings.tds} ppm` : null;
+      case 'mortality':
+        return mortality ? `${mortality} ekor` : null;
+      case 'behavior':
+        return behavior.length ? behavior.map((b) => behaviorLabel[b]).join(', ') : null;
+      case 'aeration':
+        return aeration[0] ? aerationCheckLabel[aeration[0]] : null;
+      case 'leftover':
+        return leftover[0] ? leftoverLabel[leftover[0]] : null;
+      case 'color':
+        return color[0] ? colorLabel[color[0]] : null;
+      case 'smell':
+        return smell[0] ? smellLabel[smell[0]] : null;
+    }
+  };
+
+  const LABELS: Record<EditKey, string> = {
+    temperature: 'Suhu air',
+    ph: 'pH',
+    tds: 'TDS',
+    mortality: 'Sidat mati',
+    behavior: 'Perilaku sidat',
+    aeration: 'Aerator',
+    leftover: 'Sisa pakan',
+    color: 'Warna air',
+    smell: 'Bau air',
+  };
+
+  /** The control for one value: the same in the AI review and in the full form. */
+  const editor = (key: EditKey) => {
+    switch (key) {
+      case 'temperature':
+      case 'ph':
+      case 'tds': {
+        const r = READINGS.find((x) => x.key === key)!;
+        return (
+          <div class="row">
+            <input
+              class="input grow"
+              aria-label={r.label}
+              inputMode={r.mode}
+              value={readings[key]}
+              onInput={(e) => setReadings({ ...readings, [key]: e.currentTarget.value })}
+              placeholder={r.placeholder}
+            />
+            <button type="button" class="icon-btn" style={{ border: '2px solid var(--line-2)', borderRadius: 16, width: 56, height: 56 }} aria-label={`Foto alat ukur ${r.label}`} onClick={() => takePhoto(key)} disabled={!!working || !!recording}>
+              <Icon name="camera" />
+            </button>
+          </div>
+        );
+      }
+      case 'mortality':
+        return <Stepper value={mortality} onChange={setMortality} />;
+      case 'behavior':
+        return <Chips options={behaviorLabel} value={behavior} onChange={setBehavior} multiple />;
+      case 'aeration':
+        return <Chips options={aerationCheckLabel} value={aeration} onChange={setAeration} />;
+      case 'leftover':
+        return <Chips options={leftoverLabel} value={leftover} onChange={setLeftover} />;
+      case 'color':
+        return <Chips options={colorLabel} value={color} onChange={setColor} />;
+      case 'smell':
+        return <Chips options={smellLabel} value={smell} onChange={setSmell} />;
+    }
+  };
 
   if (result) {
     return (
-      <div class="screen stack">
-        <div>
-          <p class="eyebrow">Tersimpan</p>
-          <div class="pond-head">
-            <h1>{result.name}</h1>
-            <LevelBadge level={result.level} />
-          </div>
+      <div class="screen">
+        <div class="note ok">
+          <Icon name="check" />
+          <span style={{ fontSize: '1rem' }}>Catatan {result.name} tersimpan.</span>
+        </div>
+        <div class="row between">
+          <h1>{result.name}</h1>
+          <StatusPill level={result.level} />
         </div>
         {result.findings.length === 0 ? (
-          <p class="muted">Tidak ada peringatan. Kolam aman berdasarkan catatan ini.</p>
+          <p class="ink2">Tidak ada peringatan. Kolam aman berdasarkan catatan ini.</p>
         ) : (
           result.findings.map((f) => <FindingCard key={f.id} finding={f} />)
         )}
-        <button class="primary" onClick={() => setResult(null)}>
+        <button class="btn primary" onClick={() => setResult(null)}>
           Catat lagi
         </button>
       </div>
     );
   }
 
-  if (ponds.length === 0) return <div class="screen"><p class="muted">Tambahkan kolam dulu di Hari Ini.</p></div>;
+  if (ponds.length === 0)
+    return (
+      <div class="screen">
+        <p class="muted">Tambahkan kolam dulu di Beranda.</p>
+      </div>
+    );
 
   const ready = jobs.filter((j) => j.status === 'ready');
   const waiting = jobs.filter((j) => j.status === 'pending');
+  const reviewing = source !== 'manual';
+  const draftKeys = (Object.keys(LABELS) as EditKey[]).filter((k) => k === 'temperature' || k === 'ph' || k === 'tds' || filled[k]);
 
   return (
-    <form class="screen stack" onSubmit={submit}>
-      <div>
-        <p class="eyebrow">Catat</p>
-        <h1>Kondisi kolam</h1>
-        <p class="muted small">Tangan basah? Bicara, foto alat ukur, atau rekam video. AI mengisi form, kamu yang memeriksa dan menyimpan.</p>
+    <form class="screen" onSubmit={submit}>
+      <section class="stack-sm">
+        <h1>Catat kondisi kolam</h1>
+        <p class="ink2">Tangan basah? Cukup bicara. Isian terisi otomatis, lalu cek sebelum disimpan.</p>
+      </section>
+
+      <div class="field">
+        <span class="label semi ink2">Kolam</span>
+        <PondPicker ponds={ponds} value={pond?.id ?? null} onChange={(id) => setPondId([String(id)])} />
       </div>
 
-      <Field label="Kolam">
-        <Chips options={Object.fromEntries(ponds.map((p) => [String(p.id), p.name]))} value={pondId} onChange={(v) => v.length && setPondId(v)} />
-      </Field>
+      {aiMode === 'mock' && <p class="note warn">Mode contoh: hasil foto dan suara adalah contoh, bukan bacaan sungguhan.</p>}
+      {aiMode === 'off' && <p class="note warn">AI belum aktif. Rekaman disimpan di HP dan dibaca setelah AI aktif. Ketik sendiri tetap bisa.</p>}
 
-      {aiMode === 'mock' && <p class="ai-banner">Mode contoh: AI Meta belum aktif. Hasil foto dan suara adalah contoh, bukan bacaan sungguhan.</p>}
-      {aiMode === 'off' && <p class="ai-banner">AI belum aktif. Rekaman disimpan di HP dan dibaca setelah AI aktif. Isi manual tetap bisa.</p>}
+      <button type="button" class={`talk${recording ? ' rec' : ''}`} onClick={toggleVoice} disabled={!!working && !recording}>
+        <span class="mic">
+          <Icon name="mic" size={32} />
+        </span>
+        <span class="stack-xs">
+          <span class="title">{recording ? `Selesai · ${elapsed} dtk` : 'Bicara'}</span>
+          <span class="label" style={{ color: '#E4EAF5' }}>
+            {recording ? `Merekam ${pond?.name ?? ''}. Ketuk untuk selesai, paling lama 60 detik.` : 'Sebutkan suhu, pH, TDS, sidat mati, sisa pakan dan aerator.'}
+          </span>
+        </span>
+      </button>
 
-      <div class="capture-bar">
-        <button type="button" class={`capture${recording ? ' rec' : ''}`} onClick={toggleVoice} disabled={!!working && !recording}>
-          <IconMic />
-          <span>{recording ? `Selesai (${elapsed} dtk)` : 'Bicara'}</span>
+      <div class="grid2">
+        <button type="button" class="capture-tile" onClick={() => takePhoto()} disabled={!!working || !!recording}>
+          <span class="icon-box">
+            <Icon name="camera" />
+          </span>
+          <span class="stack-xs">
+            <span class="strong">Foto alat ukur</span>
+            <span class="meta">pH, TDS, termometer</span>
+          </span>
         </button>
-        <button type="button" class="capture" onClick={() => takePhoto()} disabled={!!working || !!recording}>
-          <IconCamera />
-          <span>Foto alat ukur</span>
-        </button>
-        <button type="button" class="capture" onClick={() => videoInput.current?.click()} disabled={!!working || !!recording}>
-          <IconVideo />
-          <span>Video harian</span>
+        <button type="button" class="capture-tile" onClick={() => videoInput.current?.click()} disabled={!!working || !!recording}>
+          <span class="icon-box">
+            <Icon name="video" />
+          </span>
+          <span class="stack-xs">
+            <span class="strong">Video harian</span>
+            <span class="meta">Keliling kolam sambil cerita</span>
+          </span>
         </button>
       </div>
-      {recording && <p class="small muted">Sebutkan suhu, pH, TDS, jumlah mati, sisa pakan dan aerator. Maksimal 60 detik.</p>}
-      {working && <p class="working" role="status">{working}</p>}
-      {notice && <p class="small warning-text">{notice}</p>}
+
+      <div class="note info">
+        <Icon name="wifi" />
+        <span>Tidak ada sinyal? Rekaman disimpan di HP dan dibaca otomatis saat ada sinyal.</span>
+      </div>
+
+      {working && (
+        <p class="working" role="status">
+          {working}
+        </p>
+      )}
+      {notice && <p class="note warn">{notice}</p>}
 
       <input ref={photoInput} type="file" accept="image/*" capture="environment" hidden onChange={(e) => (onPhoto(e.currentTarget.files?.[0]), (e.currentTarget.value = ''))} />
       <input ref={videoInput} type="file" accept="video/*" capture="environment" hidden onChange={(e) => (onVideo(e.currentTarget.files?.[0]), (e.currentTarget.value = ''))} />
@@ -332,18 +440,17 @@ export function Record({ ponds, initialPondId, onSaved }: { ponds: PondSummary[]
       />
 
       {photoCheck && (
-        <div class="panel photo-check">
+        <section class="card" style={{ background: 'var(--warn-bg)' }}>
           <p>
-            <strong>{photoCheck.image.issues.join(' dan ')}.</strong> Angka bisa salah terbaca. Bayangi layar alat dengan tangan atau badan, lalu foto
-            dari samping.
+            <strong>{photoCheck.image.issues.join(' dan ')}.</strong> Angka bisa salah terbaca. Bayangi layar alat dengan tangan atau badan, lalu foto dari samping.
           </p>
-          <div class="row">
-            <button type="button" class="secondary" onClick={() => (setPhotoCheck(null), takePhoto(photoCheck.field))}>
+          <div class="grid2">
+            <button type="button" class="btn secondary" onClick={() => (setPhotoCheck(null), takePhoto(photoCheck.field))}>
               Foto ulang
             </button>
             <button
               type="button"
-              class="primary"
+              class="btn primary"
               onClick={() => {
                 const { image, field } = photoCheck;
                 setPhotoCheck(null);
@@ -353,109 +460,120 @@ export function Record({ ponds, initialPondId, onSaved }: { ponds: PondSummary[]
               Kirim saja
             </button>
           </div>
-        </div>
+        </section>
       )}
 
       {(ready.length > 0 || waiting.length > 0) && (
-        <div class="panel">
-          <h3>Rekaman di HP</h3>
+        <section class="card" style={{ gap: 8 }}>
+          <h2>Rekaman di HP</h2>
           {ready.map((j) => (
-            <div class="job" key={j.id}>
+            <div class="row between" key={j.id}>
               <span>
                 {j.pondName} · {kindLabel[j.kind]} · {fmtClock(j.createdAt, true)}
               </span>
-              <button type="button" class="link" onClick={() => useJob(j)}>
+              <button type="button" class="btn secondary" style={{ minHeight: 44 }} onClick={() => useJob(j)}>
                 Pakai
               </button>
             </div>
           ))}
-          {waiting.length > 0 && <p class="small muted">{waiting.length} rekaman menunggu sinyal atau AI aktif.</p>}
-        </div>
+          {waiting.length > 0 && <p class="meta">{waiting.length} rekaman menunggu sinyal atau AI aktif.</p>}
+        </section>
       )}
 
-      {(transcript || problems.length > 0) && (
-        <div class="panel ai-result">
-          {transcript && (
-            <p>
-              <span class="eyebrow">Terdengar</span>
-              <br />“{transcript}”
-            </p>
-          )}
+      {reviewing && !manual && (
+        <section class="card">
+          <div class="row top between">
+            <div class="stack-xs">
+              <h2>Cek dulu sebelum disimpan</h2>
+              <span class="meta">{pond?.name}</span>
+            </div>
+            <span class="pill blue">dari {kindLabel[source as CaptureKind]}</span>
+          </div>
+          {transcript && <p class="quote">“{transcript}”</p>}
           {problems.map((p) => (
-            <p key={p} class="small warning-text">
+            <p key={p} class="note warn">
               {p}
             </p>
           ))}
-          <p class="small muted">Periksa isian bertanda di bawah sebelum menyimpan.</p>
-        </div>
-      )}
-
-      <div class="stack-sm">
-        {READINGS.map((r) => (
-          <div class="reading-row" key={r.key}>
-            <Field
-              label={
-                <>
-                  {r.label} <Tag field={r.key} />
-                </>
-              }
-            >
-              <input
-                class={filled[r.key] ? (doubtful.includes(r.key) ? 'ai doubt' : 'ai') : ''}
-                inputMode={r.mode}
-                value={readings[r.key]}
-                onInput={(e) => setReadings({ ...readings, [r.key]: e.currentTarget.value })}
-                placeholder={r.placeholder}
-              />
-            </Field>
-            <button type="button" class="icon-btn" aria-label={`Foto alat ukur ${r.label}`} onClick={() => takePhoto(r.key)} disabled={!!working || !!recording}>
-              <IconCamera />
+          <span class="meta">Ada yang salah? Ketuk barisnya untuk mengubah.</span>
+          <div>
+            {draftKeys.map((k) =>
+              editing === k ? (
+                <div class="draft-edit" key={k}>
+                  <span class="strong">{LABELS[k]}</span>
+                  {editor(k)}
+                  <button type="button" class="btn blue" onClick={() => setEditing(null)}>
+                    Selesai
+                  </button>
+                </div>
+              ) : (
+                <button type="button" class="draft-row" key={k} onClick={() => setEditing(k)}>
+                  <span class="ink2">{LABELS[k]}</span>
+                  <span class="row" style={{ gap: 8 }}>
+                    {doubtful.includes(k) && (
+                      <span class="pill warn">
+                        <Shape tone="warn" size={10} />
+                        cek lagi
+                      </span>
+                    )}
+                    <span class="strong">{showValue(k) ?? '–'}</span>
+                    <span class="muted">
+                      <Icon name="pencil" size={18} />
+                    </span>
+                  </span>
+                </button>
+              ),
+            )}
+          </div>
+          {error && <p class="error">{error}</p>}
+          <button class="btn primary" disabled={busy || !pondId.length || !!working}>
+            <Icon name="check" size={20} stroke={2.4} /> Simpan catatan
+          </button>
+          <div class="grid2">
+            <button type="button" class="btn secondary" onClick={toggleVoice} disabled={!!working}>
+              <Icon name="mic" size={20} /> Ulangi bicara
+            </button>
+            <button type="button" class="btn secondary" onClick={() => setManual(true)}>
+              <Icon name="pencil" size={20} /> Ketik semua
             </button>
           </div>
-        ))}
-      </div>
+        </section>
+      )}
 
-      <Field
-        label={
-          <>
-            Sidat mati (ekor) <Tag field="mortality" />
-          </>
-        }
-      >
-        <div class="stepper">
-          <button type="button" onClick={() => setMortality(Math.max(0, mortality - 1))} aria-label="Kurangi">
-            −
-          </button>
-          <output>{mortality}</output>
-          <button type="button" onClick={() => setMortality(mortality + 1)} aria-label="Tambah">
-            +
-          </button>
-        </div>
-      </Field>
-
-      <Field label={<>Perilaku sidat <Tag field="behavior" /></>}>
-        <Chips options={behaviorLabel} value={behavior} onChange={setBehavior} multiple />
-      </Field>
-      <Field label={<>Aerator <Tag field="aeration" /></>}>
-        <Chips options={aerationCheckLabel} value={aeration} onChange={setAeration} />
-      </Field>
-      <Field label={<>Sisa pakan <Tag field="leftover" /></>}>
-        <Chips options={leftoverLabel} value={leftover} onChange={setLeftover} />
-      </Field>
-      <Field label={<>Warna air <Tag field="color" /></>}>
-        <Chips options={colorLabel} value={color} onChange={setColor} />
-      </Field>
-      <Field label={<>Bau air <Tag field="smell" /></>}>
-        <Chips options={smellLabel} value={smell} onChange={setSmell} />
-      </Field>
-      <Field label="Catatan">
-        <textarea rows={2} value={note} onInput={(e) => setNote(e.currentTarget.value)} placeholder="mis. habis hujan deras" />
-      </Field>
-
-      {error && <p class="error">{error}</p>}
-      <button class="primary" disabled={busy || !pondId.length || !!working}>
-        {source === 'manual' ? 'Simpan catatan' : 'Sudah benar, simpan'}
-      </button>
+      {(!reviewing || manual) && (
+        <details class="card more" open={manual} onToggle={(e) => setManual(e.currentTarget.open)}>
+          <summary>
+            <span class="row">
+              <span class="icon-box">
+                <Icon name="pencil" />
+              </span>
+              <span class="stack-xs">
+                <span class="strong">Ketik sendiri</span>
+                <span class="meta">Isi angka dan keadaan kolam satu per satu</span>
+              </span>
+            </span>
+            <Icon name="down" />
+          </summary>
+          <div class="stack" style={{ marginTop: 16 }}>
+            {(Object.keys(LABELS) as EditKey[]).map((k) => (
+              <div class="field" key={k}>
+                <span class="field-label">
+                  {LABELS[k]}
+                  {k === 'tds' ? ' (ppm)' : k === 'temperature' ? ' (°C)' : k === 'mortality' ? ' (ekor)' : ''}
+                </span>
+                {editor(k)}
+              </div>
+            ))}
+            <Field label="Catatan">
+              <textarea rows={2} value={note} onInput={(e) => setNote(e.currentTarget.value)} placeholder="mis. habis hujan deras" />
+            </Field>
+            {error && <p class="error">{error}</p>}
+            <button class="btn primary" disabled={busy || !pondId.length || !!working}>
+              <Icon name="check" size={20} stroke={2.4} /> Simpan catatan
+            </button>
+          </div>
+        </details>
+      )}
     </form>
   );
 }

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DAY_MS, type Log, type LogData } from '../src/domain.ts';
 import { knowledge } from '../src/knowledge.ts';
-import { assessPond, overallLevel, type Threshold } from '../src/rules.ts';
+import { assessPond, classifyReading, overallLevel, type Threshold } from '../src/rules.ts';
 
 const thresholds = knowledge.thresholds.parameters as Threshold[];
 const now = new Date('2026-10-28T10:00:00Z');
@@ -102,3 +102,11 @@ test('elver density above 100 per m² is a warning', () => {
 });
 
 test('DAY_MS sanity', () => assert.equal(DAY_MS, 86_400_000));
+
+test('a reading gets a status word level from its limits', () => {
+  const limits = { target: { min: 27, max: 28 }, warning: { below: 26, above: 29 }, critical: { below: 25, above: 30 } };
+  assert.equal(classifyReading(27.5, limits), 'ok');
+  assert.equal(classifyReading(26.5, limits), 'info');
+  assert.equal(classifyReading(25.8, limits), 'warning');
+  assert.equal(classifyReading(24.9, limits), 'critical');
+});
