@@ -693,7 +693,7 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
           <input ref={photo} type="file" accept="image/*" capture="environment" hidden onChange={(e) => (onBasinPhoto(e.currentTarget.files?.[0]), (e.currentTarget.value = ''))} />
           {!failed && (
             <>
-              <span class="field-hint">{t('Foto sidat mati dari atas, langsung di serok, baskom atau nampan. AI memperkirakan jumlahnya dari badan dan mata sidat.', 'Photograph the dead eels from above, right in the scoop, basin or tray. The AI estimates the number from the eel bodies and eyes.')}</span>
+              <span class="field-hint">{t('Usahakan foto ikan sidat yang mati dengan jelas.', 'Try to take a clear photo of the dead eels.')}</span>
               <button type="button" class="btn secondary" disabled={pondId === null || counting} onClick={() => photo.current?.click()}>
                 <Icon name="camera" size={20} /> {counting ? t('AI sedang menghitung…', 'The AI is counting…') : counted ? t('Foto ulang', 'Photograph again') : t('Foto untuk dihitung AI', 'Photo for an AI count')}
               </button>
