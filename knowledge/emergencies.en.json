@@ -1,0 +1,49 @@
+{
+  "note": "English wording of emergencies.json for the English interface. Same ids, same order; emergencies.json is the source.",
+  "emergencies": [
+    {
+      "id": "power_outage",
+      "trigger": "Power cut",
+      "operator_actions": [
+        "Keep track of how long the power has been off",
+        "Turn on spare aeration or emergency oxygen if you have it",
+        "Have a spare oxygen tank ready; swap it if the power is off for more than 6 hours",
+        "When the power is back: switch equipment on one by one, close the emergency oxygen, check the young eels"
+      ]
+    },
+    {
+      "id": "pump_failure",
+      "trigger": "Main pump failed or flow below 50%",
+      "operator_actions": ["Make sure the aeration keeps running", "Swap the pump (keep a spare)", "Check for blockages"]
+    },
+    {
+      "id": "low_do",
+      "trigger": "Pond DO below 4 mg/L, or signs of low DO (young eels rising to the surface or crowding at the inlet)",
+      "operator_actions": [
+        "Check the aerator, air stones and air hoses",
+        "Turn on a spare aerator or emergency oxygen if you have one",
+        "Do not feed until the eels swim normally"
+      ]
+    },
+    {
+      "id": "temperature_extreme",
+      "trigger": "Temperature below 25 °C or above 30 °C",
+      "operator_actions": ["Check the heater or cooler capacity and the room conditions", "Give shade when it is hot"]
+    },
+    {
+      "id": "high_ammonia",
+      "trigger": "Ammonia (TAN) above 1.0 mg/L",
+      "operator_actions": ["Feed less", "Add zeolite", "Check the biofilter"]
+    },
+    {
+      "id": "heavy_rain",
+      "trigger": "Heavy rain, or a muddy water source after rain",
+      "operator_actions": [
+        "Cover or divert rainwater so large amounts do not run into the ponds",
+        "Stop taking water from the source while it is muddy",
+        "Use water from the settling or quarantine pond you prepared",
+        "Measure pH, TDS and temperature after the rain; sudden changes stress the eels"
+      ]
+    }
+  ]
+}

@@ -5,35 +5,45 @@ import type { Go } from '../app.tsx';
 import { aerationLabel, fmtAgo, fmtNum, fmtTemp, fmtTime, phaseLabel, readingWord, settingLabel, sourceLabel, summarizeLog } from '../labels.ts';
 import { usePrefs } from '../prefs.ts';
 import { ActionBar, Icon, kindLabel, Shape, Soon, StatusPill, tankPath, toneOf } from '../ui.tsx';
+import { isEn, LOCALE, t } from '../i18n.ts';
 import './pond.css';
 
 type Key = 'temperature' | 'ph' | 'tds';
-const METRICS: { key: Key; label: string; unit: string; scale: [number, number] }[] = [
-  { key: 'temperature', label: 'Suhu', unit: ' °C', scale: [22, 34] },
-  { key: 'ph', label: 'pH', unit: '', scale: [6, 9] },
-  { key: 'tds', label: 'TDS', unit: '', scale: [0, 300] },
+// `tab`: the word on the narrow three-way switch ("Temp" in English, the one allowed short form).
+const METRICS: { key: Key; label: string; tab: string; unit: string; scale: [number, number] }[] = [
+  { key: 'temperature', label: t('Suhu', 'Temperature'), tab: t('Suhu', 'Temp'), unit: ' °C', scale: [22, 34] },
+  { key: 'ph', label: 'pH', tab: 'pH', unit: '', scale: [6, 9] },
+  { key: 'tds', label: 'TDS', tab: 'TDS', unit: '', scale: [0, 300] },
 ];
 
 const pct = (v: number, [lo, hi]: [number, number]) => Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100));
 const targetText = (l: Limits | undefined, unit: string) => {
-  const t = l?.target;
-  if (!t) return '';
-  if (t.min !== undefined && t.max !== undefined) return `target ${fmtNum(t.min)}–${fmtNum(t.max)}${unit}`;
-  if (t.max !== undefined) return `batas ${fmtNum(t.max)}${unit}`;
-  return `minimal ${fmtNum(t.min!)}${unit}`;
+  const tg = l?.target;
+  if (!tg) return '';
+  if (tg.min !== undefined && tg.max !== undefined) return `target ${fmtNum(tg.min)}–${fmtNum(tg.max)}${unit}`;
+  if (tg.max !== undefined) return t(`batas ${fmtNum(tg.max)}${unit}`, `limit ${fmtNum(tg.max)}${unit}`);
+  return t(`minimal ${fmtNum(tg.min!)}${unit}`, `at least ${fmtNum(tg.min!)}${unit}`);
 };
 
-const READING_WORD: Record<string, string> = { temperature: 'suhu', ph: 'pH', tds: 'TDS', do: 'oksigen', tan: 'amonia', no2: 'nitrit', no3: 'nitrat' };
+const READING_WORD: Record<string, string> = isEn
+  ? { temperature: 'temperature', ph: 'pH', tds: 'TDS', do: 'oxygen', tan: 'ammonia', no2: 'nitrite', no3: 'nitrate' }
+  : { temperature: 'suhu', ph: 'pH', tds: 'TDS', do: 'oksigen', tan: 'amonia', no2: 'nitrit', no3: 'nitrat' };
 
 /** Source names in plain words: "(temperature)" → "(suhu)", "DO rendah" → "oksigen rendah". */
 export const plainSource = (s: string) =>
-  s.replace(/\(([a-z0-9_]+)\)/g, (m, id) => (READING_WORD[id] ? `(${READING_WORD[id]})` : m)).replace(/\bDO\b/g, 'oksigen');
+  s.replace(/\(([a-z0-9_]+)\)/g, (m, id) => (READING_WORD[id] ? `(${READING_WORD[id]})` : m)).replace(/\bDO\b/g, t('oksigen', 'oxygen'));
 
 /** Program text in plain words: NO₂ is "nitrit" on the farm. */
-const plainWater = (s: string) => s.replace(/NO₂/g, 'nitrit').replace(/NO₃/g, 'nitrat').replace(/\bTAN\b/g, 'amonia');
+const plainWater = (s: string) =>
+  s.replace(/NO₂/g, t('nitrit', 'nitrite')).replace(/NO₃/g, t('nitrat', 'nitrate')).replace(/\bTAN\b/g, t('amonia', 'ammonia'));
 
 /** The kind of feed without portions: feed percentages belong in Teknis only. */
-const feedKind = (feed: string) => feed.split(',')[0].replace(/\s*\d[\d–\-,.]*\s*%.*$/, '').replace(/\s*\+\s*/g, ' dan ').trim();
+const feedKind = (feed: string) =>
+  feed
+    .split(',')[0]
+    .replace(/\s*\d[\d–\-,.]*\s*%.*$/, '')
+    .replace(/\s*\+\s*/g, t(' dan ', ' and '))
+    .trim();
 
 /** Last value per day for the past 7 days, oldest first. */
 function daily(logs: Log[], key: Key) {
@@ -65,10 +75,13 @@ function MetricCard({ pond, logs }: { pond: PondSummary; logs: Log[] }) {
   const diff = first !== undefined && last !== undefined ? last - first : 0;
   const sentence =
     days.length < 2
-      ? 'Belum cukup catatan untuk melihat arah. Ukur pagi dan sore.'
+      ? t('Belum cukup catatan untuk melihat arah. Ukur pagi dan sore.', 'Not enough records to see a trend yet. Measure morning and afternoon.')
       : Math.abs(diff) < (key === 'tds' ? 5 : key === 'ph' ? 0.1 : 0.3)
-        ? `${m.label} stabil dalam ${days.length} hari terakhir.`
-        : `${m.label} ${diff > 0 ? 'naik' : 'turun'} ${fmtNum(Math.abs(Math.round(diff * 10) / 10))}${m.unit} dalam ${days.length} hari.`;
+        ? t(`${m.label} stabil dalam ${days.length} hari terakhir.`, `${m.label} steady over the last ${days.length} days.`)
+        : t(
+            `${m.label} ${diff > 0 ? 'naik' : 'turun'} ${fmtNum(Math.abs(Math.round(diff * 10) / 10))}${m.unit} dalam ${days.length} hari.`,
+            `${m.label} ${diff > 0 ? 'up' : 'down'} ${fmtNum(Math.abs(Math.round(diff * 10) / 10))}${m.unit} over ${days.length} days.`,
+          );
 
   return (
     <section class="card">
@@ -76,7 +89,7 @@ function MetricCard({ pond, logs }: { pond: PondSummary; logs: Log[] }) {
         {METRICS.map((x) => (
           <button key={x.key} role="tab" aria-selected={x.key === key} class={x.key === key ? 'on' : ''} onClick={() => setKey(x.key)}>
             {x.key === key && <Icon name="check" size={16} stroke={3} />}
-            {x.label}
+            {x.tab}
           </button>
         ))}
       </div>
@@ -91,7 +104,7 @@ function MetricCard({ pond, logs }: { pond: PondSummary; logs: Log[] }) {
           )}
         </div>
         <span class="meta">
-          {latest ? `diukur ${fmtAgo(Date.parse(latest.at))}` : 'belum diukur'}
+          {latest ? t(`diukur ${fmtAgo(Date.parse(latest.at))}`, `measured ${fmtAgo(Date.parse(latest.at))}`) : t('belum diukur', 'not measured yet')}
           {limits && ` · ${targetText(limits, m.unit)}`}
         </span>
       </div>
@@ -105,7 +118,7 @@ function MetricCard({ pond, logs }: { pond: PondSummary; logs: Log[] }) {
               ))}
             </div>
           </div>
-          <span class="meta">Pita hijau = rentang target. Satu batang = ukuran terakhir tiap hari.</span>
+          <span class="meta">{t('Pita hijau = rentang target. Satu batang = ukuran terakhir tiap hari.', 'Green band = target range. One bar = last reading of each day.')}</span>
         </div>
       )}
       <p>{sentence}</p>
@@ -115,13 +128,16 @@ function MetricCard({ pond, logs }: { pond: PondSummary; logs: Log[] }) {
 
 /** "12 catatan sejak Jumat · terakhir Rabu 17.15" for the row that opens the full history. */
 function historyLine(logs: Log[]) {
-  if (logs.length === 0) return 'Belum ada catatan 14 hari terakhir';
+  if (logs.length === 0) return t('Belum ada catatan 14 hari terakhir', 'No records in the last 14 days');
   const oldest = Date.parse(logs.at(-1)!.loggedAt);
   const since =
     Date.now() - oldest < 6 * 86400_000
-      ? new Date(oldest).toLocaleDateString('id-ID', { weekday: 'long', timeZone: 'Asia/Jakarta' })
-      : new Date(oldest).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', timeZone: 'Asia/Jakarta' });
-  return `${logs.length} catatan sejak ${since} · terakhir ${fmtTime(logs[0].loggedAt)}`;
+      ? new Date(oldest).toLocaleDateString(LOCALE, { weekday: 'long', timeZone: 'Asia/Jakarta' })
+      : new Date(oldest).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long', timeZone: 'Asia/Jakarta' });
+  return t(
+    `${logs.length} catatan sejak ${since} · terakhir ${fmtTime(logs[0].loggedAt)}`,
+    `${logs.length} ${logs.length === 1 ? 'record' : 'records'} since ${since} · last ${fmtTime(logs[0].loggedAt)}`,
+  );
 }
 
 /**
@@ -175,12 +191,12 @@ function Nicknames({ pond, role, onSaved }: { pond: PondSummary; role?: Role | n
     return (
       <div class="row" style={{ background: 'var(--bg)', borderRadius: 16, padding: '8px 8px 8px 16px' }}>
         <span class="grow stack-xs" style={{ gap: 0 }}>
-          <span class="meta">Nama panggilan</span>
-          <span class="strong">{names.length ? names.join(', ') : 'Belum ada'}</span>
+          <span class="meta">{t('Nama panggilan', 'Nicknames')}</span>
+          <span class="strong">{names.length ? names.join(', ') : t('Belum ada', 'None yet')}</span>
         </span>
         <button type="button" class="nick-btn" onClick={start}>
           <Icon name={owner || names.length === 0 ? 'pencil' : 'plus'} size={16} stroke={2.5} />
-          {owner || names.length === 0 ? 'Ubah' : 'Tambah'}
+          {owner || names.length === 0 ? t('Ubah', 'Edit') : t('Tambah', 'Add')}
         </button>
       </div>
     );
@@ -188,17 +204,18 @@ function Nicknames({ pond, role, onSaved }: { pond: PondSummary; role?: Role | n
   return (
     <div class="stack">
       <label class="field">
-        <span class="meta">{owner ? 'Nama panggilan (boleh kosong)' : 'Nama panggilan baru'}</span>
-        <input value={draft} onInput={(e) => setDraft(e.currentTarget.value)} placeholder="contoh: kolam pojok" />
-        <span class="field-hint">{owner && names.length > 1 ? 'Pisahkan dengan koma. ' : ''}AI memakai ini saat mendengar suara.</span>
+        <span class="meta">{owner ? t('Nama panggilan (boleh kosong)', 'Nicknames (optional)') : t('Nama panggilan baru', 'New nickname')}</span>
+        <input value={draft} onInput={(e) => setDraft(e.currentTarget.value)} placeholder={t('contoh: kolam pojok', 'example: corner pond')} />
+        <span class="field-hint">{owner && names.length > 1 ? t('Pisahkan dengan koma. ', 'Separate them with commas. ') : ''}
+          {t('AI memakai ini saat mendengar suara.', 'The AI uses this when it listens to voice recordings.')}</span>
       </label>
       {error && <p class="error">{error}</p>}
       <div class="grid2" style={{ gap: 8 }}>
         <button type="button" class="btn primary" disabled={busy} onClick={save}>
-          {busy ? 'Menyimpan…' : 'Simpan'}
+          {busy ? t('Menyimpan…', 'Saving…') : t('Simpan', 'Save')}
         </button>
         <button type="button" class="btn secondary" onClick={() => setEditing(false)}>
-          Batal
+          {t('Batal', 'Cancel')}
         </button>
       </div>
     </div>
@@ -225,7 +242,7 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
   if (!data)
     return (
       <div class="screen">
-        <p class="muted">Memuat…</p>
+        <p class="muted">{t('Memuat…', 'Loading…')}</p>
       </div>
     );
 
@@ -246,12 +263,12 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
             <path d={tankPath(pond.kind)} />
           </svg>
         </span>
-        <button class="icon-btn" aria-label="Kembali ke Beranda" onClick={() => go({ name: 'today' })}>
+        <button class="icon-btn" aria-label={t('Kembali ke Beranda', 'Back to Home')} onClick={() => go({ name: 'today' })}>
           <Icon name="back" />
         </button>
         <span class="cover-action stack-xs" style={{ alignItems: 'flex-end' }}>
           <span class="pill grey" style={{ background: 'var(--surface)', minHeight: 44 }}>
-            <Icon name="camera" size={18} /> Foto kolam
+            <Icon name="camera" size={18} /> {t('Foto kolam', 'Pond photo')}
           </span>
           <Soon />
         </span>
@@ -261,11 +278,12 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
         <div class="stack-xs">
           <h1>{pond.name}</h1>
           <span class="meta">
-            {[pond.kind && (kindLabel[pond.kind] ?? pond.kind), pond.batch && phaseLabel[pond.batch.phase], pond.program && `minggu ${pond.program.week}`].filter(Boolean).join(' · ') || 'Belum ada batch'}
+            {[pond.kind && (kindLabel[pond.kind] ?? pond.kind), pond.batch && phaseLabel[pond.batch.phase], pond.program && `${t('minggu', 'week')} ${pond.program.week}`].filter(Boolean).join(' · ') ||
+              t('Belum ada batch', 'No batch yet')}
             {pond.program?.estimatedAlive != null && (
               <>
                 <br />
-                sekitar {pond.program.estimatedAlive.toLocaleString('id-ID')} ekor
+                {t(`sekitar ${pond.program.estimatedAlive.toLocaleString(LOCALE)} ekor`, `about ${pond.program.estimatedAlive.toLocaleString(LOCALE)} eels`)}
               </>
             )}
           </span>
@@ -275,10 +293,12 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
 
       <div class="segmented" role="tablist" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
         <button role="tab" aria-selected={!tech} class={!tech ? 'on' : ''} onClick={() => setTech(false)}>
-          {!tech && <Icon name="check" size={16} stroke={3} />}Ringkas
+          {!tech && <Icon name="check" size={16} stroke={3} />}
+          {t('Ringkas', 'Simple')}
         </button>
         <button role="tab" aria-selected={tech} class={tech ? 'on' : ''} onClick={() => setTech(true)}>
-          {tech && <Icon name="check" size={16} stroke={3} />}Teknis
+          {tech && <Icon name="check" size={16} stroke={3} />}
+          {t('Teknis', 'Technical')}
         </button>
       </div>
 
@@ -286,7 +306,7 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
         (top ? (
           <section class="hero">
             <span class="label semi" style={{ color: 'var(--on-navy-2)' }}>
-              Yang terjadi
+              {t('Yang terjadi', 'What is happening')}
             </span>
             <p class="h2" style={{ color: '#fff' }}>
               {top.title}. {top.detail}
@@ -294,16 +314,16 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
             {top.actions.length > 0 && (
               <>
                 <span class="label" style={{ color: '#C9D4EA' }}>
-                  Lakukan sekarang:
+                  {t('Lakukan sekarang:', 'Do now:')}
                 </span>
-                <StepList steps={top.actions} done={done} toggle={toggle} onAllDone={{ label: 'Catat kondisi sekarang', run: () => go({ name: 'record-pond', pondId: id }) }} />
+                <StepList steps={top.actions} done={done} toggle={toggle} onAllDone={{ label: t('Catat kondisi sekarang', 'Record conditions now'), run: () => go({ name: 'record-pond', pondId: id }) }} />
               </>
             )}
           </section>
         ) : (
           <section class="card tint">
-            <h2>Kolam aman</h2>
-            <p class="ink2">Tidak ada peringatan dari catatan terakhir.</p>
+            <h2>{t('Kolam aman', 'Pond safe')}</h2>
+            <p class="ink2">{t('Tidak ada peringatan dari catatan terakhir.', 'No warnings from the latest record.')}</p>
           </section>
         ))}
 
@@ -314,10 +334,14 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
           </span>
           <div class="stack-xs grow">
             <span class="strong">
-              Minggu ke-{pond.program!.week}: {stage.name}
+              {t('Minggu ke-', 'Week ')}
+              {pond.program!.week}: {stage.name}
             </span>
             <span class="ink2">
-              Pakan {feedKind(stage.feed).toLowerCase()}. Air: {plainWater(stage.water).toLowerCase()}. Porsi pakan ada di Teknis.
+              {t(
+                `Pakan ${feedKind(stage.feed).toLowerCase()}. Air: ${plainWater(stage.water).toLowerCase()}. Porsi pakan ada di Teknis.`,
+                `Feed: ${feedKind(stage.feed).toLowerCase()}. Water: ${plainWater(stage.water).toLowerCase()}. Feed portions are in Technical.`,
+              )}
             </span>
           </div>
         </section>
@@ -325,13 +349,13 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
 
       {tech && (
         <section class="card">
-          <h2>Ukuran terakhir dibanding target</h2>
+          <h2>{t('Ukuran terakhir dibanding target', 'Latest readings compared with target')}</h2>
           {METRICS.map((m) => {
             const r = pond.latest[m.key];
             const l = pond.limits[m.key];
-            const t = l?.target;
-            const from = t?.min ?? m.scale[0];
-            const to = t?.max ?? m.scale[1];
+            const tg = l?.target;
+            const from = tg?.min ?? m.scale[0];
+            const to = tg?.max ?? m.scale[1];
             return (
               <div class="stack-sm" key={m.key}>
                 <div class="row between">
@@ -345,9 +369,9 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
                 <span class="meta">
                   {[
                     targetText(l, m.unit),
-                    l?.warning?.below !== undefined && `perhatian di bawah ${fmtNum(l.warning.below)}`,
-                    l?.critical?.below !== undefined && `bahaya di bawah ${fmtNum(l.critical.below)}`,
-                    l?.warning?.above !== undefined && `perhatian di atas ${fmtNum(l.warning.above)}`,
+                    l?.warning?.below !== undefined && t(`perhatian di bawah ${fmtNum(l.warning.below)}`, `caution below ${fmtNum(l.warning.below)}`),
+                    l?.critical?.below !== undefined && t(`bahaya di bawah ${fmtNum(l.critical.below)}`, `danger below ${fmtNum(l.critical.below)}`),
+                    l?.warning?.above !== undefined && t(`perhatian di atas ${fmtNum(l.warning.above)}`, `caution above ${fmtNum(l.warning.above)}`),
                   ]
                     .filter(Boolean)
                     .join(' · ')}
@@ -366,7 +390,7 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
             <Icon name="clock" />
           </span>
           <span class="grow stack-xs" style={{ gap: 2 }}>
-            <span class="strong">Riwayat catatan</span>
+            <span class="strong">{t('Riwayat catatan', 'Record history')}</span>
             <span class="meta">{historyLine(logs)}</span>
           </span>
           <span style={{ color: 'var(--muted)', display: 'inline-flex' }}>
@@ -377,7 +401,7 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
 
       {!tech && (
         <button class="btn secondary" onClick={() => go({ name: 'problem', pondId: pond.id })}>
-          <Icon name="siren" size={20} /> Lapor masalah di kolam ini
+          <Icon name="siren" size={20} /> {t('Lapor masalah di kolam ini', 'Report a problem in this pond')}
         </button>
       )}
 
@@ -389,16 +413,22 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
                 <Icon name="thermo" />
               </span>
               <div class="stack-xs grow">
-                <span class="strong">Perkiraan dibanding ukuran</span>
+                <span class="strong">{t('Perkiraan dibanding ukuran', 'Estimate compared with readings')}</span>
                 <span class="label ink2">
                   {fit.length >= 3
-                    ? `${good} dari ${fit.length} ukuran suhu terakhir cocok (selisih 0,5 °C atau kurang).`
-                    : 'Perkiraan sedang belajar: butuh beberapa ukuran suhu lagi.'}
+                    ? t(
+                        `${good} dari ${fit.length} ukuran suhu terakhir cocok (selisih 0,5 °C atau kurang).`,
+                        `${good} of the last ${fit.length} temperature readings matched (0.5 °C off or less).`,
+                      )
+                    : t('Perkiraan sedang belajar: butuh beberapa ukuran suhu lagi.', 'The estimate is still learning: it needs a few more temperature readings.')}
                 </span>
               </div>
             </div>
             {fit.length > 0 && (
-              <svg viewBox="0 0 310 112" width="100%" role="img" aria-label={`Selisih perkiraan dan ukuran suhu, ${good} dari ${fit.length} di dalam zona cocok`}>
+              <svg viewBox="0 0 310 112" width="100%" role="img" aria-label={t(
+                  `Selisih perkiraan dan ukuran suhu, ${good} dari ${fit.length} di dalam zona cocok`,
+                  `Gap between estimate and measured temperature, ${good} of ${fit.length} inside the match zone`,
+                )}>
                 <rect x="0" y="36" width="310" height="40" style={{ fill: 'var(--ok-bg)' }} />
                 <line x1="0" y1="56" x2="310" y2="56" stroke="#6CC3A0" stroke-dasharray="4 4" />
                 {fit.map((f, i) => {
@@ -417,10 +447,10 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
 
           <section class="card" style={{ gap: 4 }}>
             <div class="row between" style={{ marginBottom: 8 }}>
-              <h2>Riwayat catatan</h2>
-              <span class="meta">mati 7 hari: {weekDead} ekor</span>
+              <h2>{t('Riwayat catatan', 'Record history')}</h2>
+              <span class="meta">{t(`mati 7 hari: ${weekDead} ekor`, `dead in 7 days: ${weekDead} ${weekDead === 1 ? 'eel' : 'eels'}`)}</span>
             </div>
-            {logs.length === 0 && <p class="ink2">Belum ada catatan.</p>}
+            {logs.length === 0 && <p class="ink2">{t('Belum ada catatan.', 'No records yet.')}</p>}
             {logs.slice(0, 12).map((l) => (
               <div key={l.id} class="stack-xs" style={{ padding: '12px 0', borderBottom: '1px solid var(--line)' }}>
                 <div class="row between">
@@ -429,54 +459,59 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
                     {sourceLabel[l.source]}
                   </span>
                 </div>
-                <span class="label ink2">{summarizeLog(l.data) || 'Cek: tidak ada catatan angka'}</span>
+                <span class="label ink2">{summarizeLog(l.data) || t('Cek: tidak ada catatan angka', 'Check: no numbers recorded')}</span>
               </div>
             ))}
             <button class="link-row label" style={{ marginTop: 8, minHeight: 44, justifyContent: 'flex-start', gap: 4, fontWeight: 800 }} onClick={() => go({ name: 'history', pondId: pond.id })}>
-              <span>Lihat semua {logs.length} catatan di Riwayat</span>
+              <span>{t(`Lihat semua ${logs.length} catatan di Riwayat`, `See all ${logs.length} records in History`)}</span>
               <Icon name="next" size={16} stroke={2.5} />
             </button>
           </section>
 
           <section class="card" style={{ gap: 4 }}>
-            <h2 style={{ marginBottom: 8 }}>Peringatan aktif</h2>
-            {pond.findings.length === 0 && <p class="ink2">Tidak ada peringatan.</p>}
+            <h2 style={{ marginBottom: 8 }}>{t('Peringatan aktif', 'Active warnings')}</h2>
+            {pond.findings.length === 0 && <p class="ink2">{t('Tidak ada peringatan.', 'No warnings.')}</p>}
             {pond.findings.map((f) => (
               <div key={f.id} class="stack-xs" style={{ padding: '12px 0', borderBottom: '1px solid var(--line)' }}>
                 <div class="row between top">
                   <span class="grow">{f.title}</span>
                   <span class={`word ${toneOf(f.level)}`}>
                     <Shape tone={toneOf(f.level)} />
-                    {f.level === 'critical' ? 'Bahaya' : f.level === 'warning' ? 'Perhatian' : 'Catatan'}
+                    {f.level === 'critical' ? t('Bahaya', 'Danger') : f.level === 'warning' ? t('Perhatian', 'Caution') : t('Catatan', 'Note')}
                   </span>
                 </div>
-                <span class="meta">Sumber: {plainSource(f.source)}</span>
+                <span class="meta">
+                  {t('Sumber', 'Source')}: {plainSource(f.source)}
+                </span>
               </div>
             ))}
           </section>
 
           <section class="card">
-            <h2>Profil kolam</h2>
+            <h2>{t('Profil kolam', 'Pond profile')}</h2>
             <Nicknames pond={pond} role={role} onSaved={(p) => setData({ ...data, pond: p })} />
             {stage && (
               <div class="stack-xs">
                 <span class="strong">
-                  Pakan minggu ke-{pond.program!.week}: {stage.name}
+                  {t(`Pakan minggu ke-${pond.program!.week}`, `Week ${pond.program!.week} feed`)}: {stage.name}
                 </span>
-                <span class="ink2">{stage.feed}. Panduan umum fase ini, bukan resep: sesuaikan dengan nafsu makan sidat.</span>
+                <span class="ink2">
+                  {stage.feed}. {t('Panduan umum fase ini, bukan resep: sesuaikan dengan nafsu makan sidat.', "General guidance for this stage, not a recipe: adjust to the eels' appetite.")}
+                </span>
               </div>
             )}
             <p class="ink2">
               {[
-                pond.setting && settingLabel[pond.setting] + (pond.setting === 'outdoor' && pond.shaded ? ', berpeneduh' : ''),
-                pond.aeration && `aerasi ${aerationLabel[pond.aeration].toLowerCase()}`,
-                pond.depthCm && `kedalaman ${fmtNum(pond.depthCm)} cm`,
+                pond.setting && settingLabel[pond.setting] + (pond.setting === 'outdoor' && pond.shaded ? t(', berpeneduh', ', shaded') : ''),
+                pond.aeration && t(`aerasi ${aerationLabel[pond.aeration].toLowerCase()}`, `aeration: ${aerationLabel[pond.aeration].toLowerCase()}`),
+                pond.depthCm && t(`kedalaman ${fmtNum(pond.depthCm)} cm`, `${fmtNum(pond.depthCm)} cm deep`),
                 pond.areaM2 && `${fmtNum(pond.areaM2)} m²`,
-                pond.program?.density != null && `kepadatan sekitar ${fmtNum(Math.round(pond.program.density))} ekor/m²`,
-                pond.program && `total mati tercatat ${fmtNum(pond.program.totalDead)} ekor`,
+                pond.program?.density != null &&
+                  t(`kepadatan sekitar ${fmtNum(Math.round(pond.program.density))} ekor/m²`, `about ${fmtNum(Math.round(pond.program.density))} eels/m²`),
+                pond.program && t(`total mati tercatat ${fmtNum(pond.program.totalDead)} ekor`, `${fmtNum(pond.program.totalDead)} dead recorded in total`),
               ]
                 .filter(Boolean)
-                .join(' · ') || 'Belum diisi.'}
+                .join(' · ') || t('Belum diisi.', 'Not filled in yet.')}
             </p>
           </section>
         </>
@@ -484,7 +519,7 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
 
       <ActionBar>
         <button class="btn primary" onClick={() => go({ name: 'record-pond', pondId: pond.id })}>
-          <Icon name="pencil" /> Catat kondisi sekarang
+          <Icon name="pencil" /> {t('Catat kondisi sekarang', 'Record conditions now')}
         </button>
       </ActionBar>
     </div>

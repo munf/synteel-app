@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { api, type Member, type Role } from '../api.ts';
+import { t } from '../i18n.ts';
 import { Field, fmtPhone, Icon, initialOf, PinInput, roleLabel, Tick } from '../ui.tsx';
 
 type Pending = { kind: 'pin' | 'remove'; member: Member } | null;
@@ -46,11 +47,11 @@ export function Members({ farmName, owner, inviteOpen, onInviteOpen }: { farmNam
   return (
     <section class="card" id="anggota">
       <div class="row between">
-        <h2>Anggota tambak</h2>
-        {members && <span class="meta">{members.length} orang</span>}
+        <h2>{t('Anggota tambak', 'Farm members')}</h2>
+        {members && <span class="meta">{t(`${members.length} orang`, `${members.length} ${members.length === 1 ? 'person' : 'people'}`)}</span>}
       </div>
 
-      {!members && !error && <p class="muted">Memuat…</p>}
+      {!members && !error && <p class="muted">{t('Memuat…', 'Loading…')}</p>}
 
       {members && (
         <div class="stack-xs">
@@ -65,7 +66,7 @@ export function Members({ farmName, owner, inviteOpen, onInviteOpen }: { farmNam
                 <span class="grow stack-xs" style={{ gap: 0 }}>
                   <span class="strong">
                     {m.name}
-                    {m.me && <span class="semi muted"> (akun ini)</span>}
+                    {m.me && <span class="semi muted"> {t('(akun ini)', '(this account)')}</span>}
                   </span>
                   <span class="label ink2">
                     {roleLabel[m.role]}
@@ -102,39 +103,50 @@ export function Members({ farmName, owner, inviteOpen, onInviteOpen }: { farmNam
                   <div class="stack-sm" style={{ paddingBottom: 16 }}>
                     {tempPin && tempPin.name === m.name ? (
                       <div class="box stack-sm" style={{ background: 'var(--tint)' }}>
-                        <span class="label semi">PIN sementara untuk {m.name}</span>
+                        <span class="label semi">{t(`PIN sementara untuk ${m.name}`, `Temporary PIN for ${m.name}`)}</span>
                         <span class="big" style={{ letterSpacing: '0.12em' }}>
                           {tempPin.pin}
                         </span>
-                        <span class="label ink2">Berikan PIN ini ke {m.name}. PIN hanya tampil sekali. Setelah masuk, ganti PIN di Profil.</span>
+                        <span class="label ink2">
+                          {t(
+                            `Berikan PIN ini ke ${m.name}. PIN hanya tampil sekali. Setelah masuk, ganti PIN di Profil.`,
+                            `Give this PIN to ${m.name}. It shows only once. After signing in, change the PIN in Profile.`,
+                          )}
+                        </span>
                         <button type="button" class="btn secondary" onClick={() => setTempPin(null)}>
-                          Sudah dicatat
+                          {t('Sudah dicatat', 'Written down')}
                         </button>
                       </div>
                     ) : pending ? (
                       <div class="box stack-sm" style={{ background: 'var(--bad-soft)' }}>
-                        <span class="strong">{pending.kind === 'pin' ? `Atur ulang PIN ${m.name}?` : `Keluarkan ${m.name} dari tambak?`}</span>
+                        <span class="strong">{pending.kind === 'pin' ? t(`Atur ulang PIN ${m.name}?`, `Reset the PIN for ${m.name}?`) : t(`Keluarkan ${m.name} dari tambak?`, `Remove ${m.name} from the farm?`)}</span>
                         <span class="label ink2">
                           {pending.kind === 'pin'
-                            ? 'PIN lama tidak berlaku lagi dan akun ini keluar dari semua HP. Sesudah itu muncul PIN sementara.'
-                            : `${m.name} tidak bisa membuka ${farmName} lagi. Catatan yang sudah dibuat tetap tersimpan.`}
+                            ? t(
+                                'PIN lama tidak berlaku lagi dan akun ini keluar dari semua HP. Sesudah itu muncul PIN sementara.',
+                                'The old PIN stops working and this account is signed out on every phone. Then a temporary PIN appears.',
+                              )
+                            : t(
+                                `${m.name} tidak bisa membuka ${farmName} lagi. Catatan yang sudah dibuat tetap tersimpan.`,
+                                `${m.name} can no longer open ${farmName}. Records already made are kept.`,
+                              )}
                         </span>
                         <div class="grid2" style={{ gap: 8 }}>
                           <button type="button" class="btn secondary" onClick={() => setPending(null)} disabled={busy}>
-                            Batal
+                            {t('Batal', 'Cancel')}
                           </button>
                           <button type="button" class="btn danger" onClick={confirm} disabled={busy}>
-                            {pending.kind === 'pin' ? 'Ya, atur ulang' : 'Ya, keluarkan'}
+                            {pending.kind === 'pin' ? t('Ya, atur ulang', 'Yes, reset') : t('Ya, keluarkan', 'Yes, remove')}
                           </button>
                         </div>
                       </div>
                     ) : (
                       <div class="grid2" style={{ gap: 8 }}>
                         <button type="button" class="btn secondary" onClick={() => setPending({ kind: 'pin', member: m })}>
-                          <Icon name="key" size={20} /> Atur ulang PIN
+                          <Icon name="key" size={20} /> {t('Atur ulang PIN', 'Reset PIN')}
                         </button>
                         <button type="button" class="btn secondary" style={{ color: 'var(--bad)' }} onClick={() => setPending({ kind: 'remove', member: m })}>
-                          Keluarkan
+                          {t('Keluarkan', 'Remove')}
                         </button>
                       </div>
                     )}
@@ -157,19 +169,22 @@ export function Members({ farmName, owner, inviteOpen, onInviteOpen }: { farmNam
           <Invite farmName={farmName} onClose={() => onInviteOpen(false)} />
         ) : (
           <button type="button" class="btn primary" onClick={() => onInviteOpen(true)}>
-            <Icon name="plus" size={20} /> Undang anggota
+            <Icon name="plus" size={20} /> {t('Undang anggota', 'Invite a member')}
           </button>
         )
       ) : (
-        <p class="meta">Hanya pemilik tambak yang bisa mengundang atau mengeluarkan anggota.</p>
+        <p class="meta">{t('Hanya pemilik tambak yang bisa mengundang atau mengeluarkan anggota.', 'Only the farm owner can invite or remove members.')}</p>
       )}
     </section>
   );
 }
 
+/** "as a worker" / "for an owner" in English sentences. */
+const ROLE_WORD: Record<Role, string> = { worker: 'a worker', owner: 'an owner' };
+
 const ROLE_HINT: Record<Role, string> = {
-  worker: 'bisa mencatat dan melihat kolam.',
-  owner: 'juga bisa mengubah tambak, kolam dan anggota.',
+  worker: t('bisa mencatat dan melihat kolam.', 'can record and view ponds.'),
+  owner: t('juga bisa mengubah tambak, kolam dan anggota.', 'can also change the farm, ponds and members.'),
 };
 
 function Invite({ farmName, onClose }: { farmName: string; onClose: () => void }) {
@@ -197,22 +212,28 @@ function Invite({ farmName, onClose }: { farmName: string; onClose: () => void }
 
   if (invite) {
     const url = window.location.origin + window.location.pathname;
-    const text = `Bergabung ke ${farmName} di Synteel sebagai ${roleLabel[invite.role].toLowerCase()}. Buka ${url}, pilih "Punya kode undangan?", lalu masukkan kode ${invite.code}. Kode berlaku ${invite.expiresInDays} hari.`;
+    const days = invite.expiresInDays;
+    const text = t(
+      `Bergabung ke ${farmName} di Synteel sebagai ${roleLabel[invite.role].toLowerCase()}. Buka ${url}, pilih "Punya kode undangan?", lalu masukkan kode ${invite.code}. Kode berlaku ${days} hari.`,
+      `Join ${farmName} on Synteel as ${ROLE_WORD[invite.role]}. Open ${url}, choose "Have an invite code?", then enter the code ${invite.code}. The code is valid for ${days} ${days === 1 ? 'day' : 'days'}.`,
+    );
     return (
       <div ref={ref} class="box stack" style={{ background: 'var(--tint)', padding: 16 }}>
         <div class="stack-xs center">
-          <span class="label semi">Kode undangan {roleLabel[invite.role].toLowerCase()}</span>
+          <span class="label semi">{t(`Kode undangan ${roleLabel[invite.role].toLowerCase()}`, `Invite code for ${ROLE_WORD[invite.role]}`)}</span>
           <span class="big" style={{ letterSpacing: '0.12em' }} aria-label={invite.code.split('').join(' ')}>
             {invite.code}
           </span>
-          <span class="label ink2">Berlaku {invite.expiresInDays} hari · sekali pakai</span>
+          <span class="label ink2">{t(`Berlaku ${days} hari · sekali pakai`, `Valid for ${days} ${days === 1 ? 'day' : 'days'} · one use`)}</span>
         </div>
-        <span class="label ink2">Di HP anggota: buka Synteel, pilih "Punya kode undangan?", lalu masukkan kode ini.</span>
+        <span class="label ink2">
+          {t('Di HP anggota: buka Synteel, pilih "Punya kode undangan?", lalu masukkan kode ini.', 'On the member\'s phone: open Synteel, choose "Have an invite code?", then enter this code.')}
+        </span>
         <a class="btn primary" href={`https://wa.me/?text=${encodeURIComponent(text)}`} target="_blank" rel="noopener noreferrer">
-          <Icon name="chat" size={20} /> Bagikan lewat WhatsApp
+          <Icon name="chat" size={20} /> {t('Bagikan lewat WhatsApp', 'Share on WhatsApp')}
         </a>
         <button type="button" class="btn secondary" onClick={onClose}>
-          Selesai
+          {t('Selesai', 'Done')}
         </button>
       </div>
     );
@@ -220,8 +241,8 @@ function Invite({ farmName, onClose }: { farmName: string; onClose: () => void }
 
   return (
     <div ref={ref} class="box stack" style={{ background: 'var(--soft)', padding: 16 }}>
-      <span class="strong">Undang sebagai</span>
-      <div class="segmented" role="radiogroup" aria-label="Peran" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', background: 'var(--bg)' }}>
+      <span class="strong">{t('Undang sebagai', 'Invite as')}</span>
+      <div class="segmented" role="radiogroup" aria-label={t('Peran', 'Role')} style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', background: 'var(--bg)' }}>
         {(['worker', 'owner'] as const).map((r) => (
           <button type="button" key={r} role="radio" aria-checked={role === r} class={role === r ? 'on' : ''} onClick={() => setRole(r)}>
             {role === r && <Tick />}
@@ -235,10 +256,10 @@ function Invite({ farmName, onClose }: { farmName: string; onClose: () => void }
       {error && <p class="error">{error}</p>}
       <div class="grid2" style={{ gap: 8 }}>
         <button type="button" class="btn secondary" onClick={onClose}>
-          Batal
+          {t('Batal', 'Cancel')}
         </button>
         <button type="button" class="btn primary" onClick={create} disabled={busy}>
-          Buat kode
+          {t('Buat kode', 'Create code')}
         </button>
       </div>
     </div>
@@ -257,8 +278,8 @@ export function ChangePin() {
   const submit = async (e: Event) => {
     e.preventDefault();
     setDone(false);
-    if (pin.length !== 6 || next.length !== 6) return setError('PIN harus 6 angka');
-    if (next !== again) return setError('PIN baru dan ulangan tidak sama. Ketik lagi.');
+    if (pin.length !== 6 || next.length !== 6) return setError(t('PIN harus 6 angka', 'The PIN must be 6 digits'));
+    if (next !== again) return setError(t('PIN baru dan ulangan tidak sama. Ketik lagi.', 'The new PIN and the repeat do not match. Type them again.'));
     setBusy(true);
     setError('');
     try {
@@ -282,20 +303,20 @@ export function ChangePin() {
             <Icon name="key" />
           </span>
           <span class="stack-xs">
-            <span class="strong">Ganti PIN</span>
-            <span class="meta">PIN 6 angka untuk masuk</span>
+            <span class="strong">{t('Ganti PIN', 'Change PIN')}</span>
+            <span class="meta">{t('PIN 6 angka untuk masuk', '6-digit PIN to sign in')}</span>
           </span>
         </span>
         <Icon name="down" />
       </summary>
       <form class="stack" style={{ marginTop: 16 }} onSubmit={submit}>
-        <Field label="PIN lama">
+        <Field label={t('PIN lama', 'Old PIN')}>
           <PinInput value={pin} onChange={setPin} />
         </Field>
-        <Field label="PIN baru">
+        <Field label={t('PIN baru', 'New PIN')}>
           <PinInput value={next} onChange={setNext} autoComplete="new-password" />
         </Field>
-        <Field label="Ulangi PIN baru">
+        <Field label={t('Ulangi PIN baru', 'Repeat new PIN')}>
           <PinInput value={again} onChange={setAgain} autoComplete="new-password" />
         </Field>
         {error && (
@@ -305,11 +326,11 @@ export function ChangePin() {
         )}
         {done && (
           <p class="note ok" role="status">
-            <Icon name="check" size={20} stroke={3} /> PIN sudah diganti. HP lain perlu masuk lagi dengan PIN baru.
+            <Icon name="check" size={20} stroke={3} /> {t('PIN sudah diganti. HP lain perlu masuk lagi dengan PIN baru.', 'PIN changed. Other phones need to sign in again with the new PIN.')}
           </p>
         )}
         <button class="btn primary" disabled={busy}>
-          Simpan PIN baru
+          {t('Simpan PIN baru', 'Save new PIN')}
         </button>
       </form>
     </details>

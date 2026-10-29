@@ -6,8 +6,9 @@ import type { HistoryLog, QuotaState, SupportTopic } from './contract.ts';
 import type { SendMail } from './mail.ts';
 import { attemptLimiter, AuthError, checkPin, hashPin, hashToken, inviteCode, newToken, normalizePhone, tempPin, verifyPin } from './auth.ts';
 import { knowledge } from './knowledge.ts';
+import { currentLang, parseLang, tx, withLang } from './i18n.ts';
 import { AiFailed, AiUnavailable, type Ai, type CaptureKind, type ChatProvider } from './ai.ts';
-import { runBriefing, type Briefing, type BriefingInput } from './agent.ts';
+import { rulesBriefing, runBriefing, type Briefing, type BriefingInput } from './agent.ts';
 import { countDeadEels, type SamProvider } from './sam.ts';
 import type { SaveCapture } from './captures.ts';
 import { computeNowcast } from './nowcast.ts';
@@ -17,10 +18,34 @@ import { geocode as defaultGeocode, getWeather as defaultGetWeather } from './we
 const thresholds = knowledge.thresholds.parameters as Threshold[];
 const stages = knowledge.nurseryProgram.stages as { weeks: [number, number]; name: string; feed: string; mesh_mm: string; water: string }[];
 
+// English for knowledge/nursery-program.json stages, in the same order.
+const STAGE_EN: { name: string; feed: string; mesh_mm: string; water: string }[] = [
+  {
+    name: 'Arrival and acclimation',
+    feed: 'No feed for 24–48 hours, then a little chopped bloodworm',
+    mesh_mm: '0.5',
+    water: 'Start at the salinity the seed came from, lower it to fresh water over 5–7 days; raise the temperature about 1 °C every 12 hours to 27–28 °C',
+  },
+  { name: 'Feed adaptation', feed: 'Chopped frozen bloodworm or tubifex, 8–10% of wet body weight a day, 6–8 feeds', mesh_mm: '0.5', water: 'DO ≥ 6 mg/L, TAN < 0.5 mg/L' },
+  { name: 'Paste transition', feed: 'Worms mixed with formulated feed, the formulated share rising step by step, 6–8%', mesh_mm: '1', water: 'Watch NO₂ and turbidity as the feed load rises' },
+  { name: 'Growth', feed: 'Full paste 5–6%, 4–6 feeds', mesh_mm: '1–1.5', water: 'Biofilter close to full load; keep pH 7.0–7.8' },
+  { name: 'Harvest preparation', feed: 'Paste or crumble 3–5%', mesh_mm: '2', water: 'Biofilter (TAN) limit at the target stocking density; harvest per batch or pond' },
+];
+
 const BEHAVIORS: Behavior[] = ['normal', 'surfacing', 'gathering_inlet', 'not_eating', 'lethargic'];
 const READINGS = ['temperature', 'ph', 'tds', 'do', 'tan', 'no2'] as const;
 
 class BadRequest extends Error {}
+
+// English for the field names in validation errors (the Indonesian name is the key).
+const FIELD_EN: Record<string, string> = {
+  'sisa pakan': 'Leftover feed', 'jumlah mati': 'Number dead', 'warna air': 'Water color', 'bau air': 'Water smell',
+  'ganti air': 'Water change', 'luas kolam': 'Pond area', 'tempat kolam': 'Pond setting', 'kedalaman air': 'Water depth',
+  'nama kolam': 'Pond name', 'jenis kolam': 'Pond type', 'jenis rekaman': 'Recording type', 'Nomor WhatsApp': 'WhatsApp number',
+  'Nomor HP akun': 'Account phone number', aerasi: 'Aeration', aerator: 'Aerator', fase: 'Phase',
+};
+const fieldName = (f: string) => tx(f, FIELD_EN[f] ?? f);
+const invalid = (field: string) => new BadRequest(tx(`${field} tidak valid`, `${fieldName(field)} is not valid`));
 class NotFound extends Error {}
 /** The farm's AI reads for today are used up (429, code 'ai_quota'). */
 class AiQuota extends Error {}
@@ -28,13 +53,13 @@ class AiQuota extends Error {}
 function num(v: unknown, field: string, { min = -Infinity, max = Infinity } = {}): number | undefined {
   if (v === undefined || v === null || v === '') return undefined;
   const n = Number(v);
-  if (!Number.isFinite(n) || n < min || n > max) throw new BadRequest(`${field} tidak valid`);
+  if (!Number.isFinite(n) || n < min || n > max) throw invalid(field);
   return n;
 }
 
 function text(v: unknown, field: string, required = false): string | null {
   if (v === undefined || v === null || String(v).trim() === '') {
-    if (required) throw new BadRequest(`${field} wajib diisi`);
+    if (required) throw new BadRequest(tx(`${field} wajib diisi`, `${fieldName(field)} is required`));
     return null;
   }
   return String(v).trim().slice(0, 200);
@@ -42,7 +67,7 @@ function text(v: unknown, field: string, required = false): string | null {
 
 function oneOf<T extends string>(v: unknown, allowed: readonly T[], field: string): T | undefined {
   if (v === undefined || v === null || v === '') return undefined;
-  if (!allowed.includes(v as T)) throw new BadRequest(`${field} tidak valid`);
+  if (!allowed.includes(v as T)) throw invalid(field);
   return v as T;
 }
 
@@ -79,7 +104,7 @@ function parseLogData(body: Record<string, any>): LogData {
   const note = text(body.note, 'catatan');
   if (note) data.note = note;
 
-  if (Object.keys(data).length === 0) throw new BadRequest('Catatan kosong');
+  if (Object.keys(data).length === 0) throw new BadRequest(tx('Catatan kosong', 'The record is empty'));
   return data;
 }
 
@@ -132,27 +157,44 @@ const SUPPORT_TOPICS: Record<SupportTopic, string> = { pin: 'Masuk dan PIN', cat
 /** Ponds can have other names ("kolam dekat pintu"): trimmed, single spaces, at most 30 characters. */
 function nickname(v: unknown): string {
   const s = String(v ?? '').trim().replace(/\s+/g, ' ');
-  if (!s) throw new BadRequest('Nama lain kolam wajib diisi');
-  if (s.length > MAX_NICKNAME_LENGTH) throw new BadRequest(`Nama lain kolam terlalu panjang (maksimal ${MAX_NICKNAME_LENGTH} huruf)`);
+  if (!s) throw new BadRequest(tx('Nama lain kolam wajib diisi', 'The pond nickname is required'));
+  if (s.length > MAX_NICKNAME_LENGTH) throw new BadRequest(tx(`Nama lain kolam terlalu panjang (maksimal ${MAX_NICKNAME_LENGTH} huruf)`, `The pond nickname is too long (${MAX_NICKNAME_LENGTH} letters at most)`));
   return s;
 }
 
 function nicknameList(v: unknown): string[] {
-  if (!Array.isArray(v)) throw new BadRequest('nama lain kolam tidak valid');
+  if (!Array.isArray(v)) throw new BadRequest(tx('nama lain kolam tidak valid', 'Pond nicknames are not valid'));
   return v.map(nickname);
 }
 
 // ---------- plain words for the history of a log ----------
 
-const READING_WORDS: Record<(typeof READINGS)[number], string> = { temperature: 'suhu', ph: 'pH', tds: 'TDS', do: 'oksigen terlarut', tan: 'amonia', no2: 'nitrit' };
-const LEFTOVER_WORDS = { none: 'habis', little: 'sedikit', much: 'banyak' };
-const BEHAVIOR_WORDS: Record<Behavior, string> = { normal: 'normal', surfacing: 'naik ke permukaan', gathering_inlet: 'berkumpul di air masuk', not_eating: 'tidak mau makan', lethargic: 'lemas' };
-const COLOR_WORDS = { clear: 'jernih', green: 'hijau', brown: 'cokelat', cloudy: 'keruh' };
-const SMELL_WORDS = { normal: 'normal', foul: 'busuk' };
-const AERATION_WORDS = { on: 'nyala normal', weak: 'lemah', off: 'mati' };
+// Word sets for the change log, in each language. The log line is written in the language of whoever edits.
+const WORDS = {
+  id: {
+    reading: { temperature: 'suhu', ph: 'pH', tds: 'TDS', do: 'oksigen terlarut', tan: 'amonia', no2: 'nitrit' } as Record<(typeof READINGS)[number], string>,
+    leftover: { none: 'habis', little: 'sedikit', much: 'banyak' },
+    behavior: { normal: 'normal', surfacing: 'naik ke permukaan', gathering_inlet: 'berkumpul di air masuk', not_eating: 'tidak mau makan', lethargic: 'lemas' } as Record<Behavior, string>,
+    color: { clear: 'jernih', green: 'hijau', brown: 'cokelat', cloudy: 'keruh' },
+    smell: { normal: 'normal', foul: 'busuk' },
+    aeration: { on: 'nyala normal', weak: 'lemah', off: 'mati' },
+    labels: { dead: 'sidat mati', leftover: 'sisa pakan', behavior: 'perilaku', color: 'warna air', smell: 'bau air', change: 'ganti air', aerator: 'aerator' },
+    note: { removed: 'catatan dihapus', changed: 'catatan diubah', added: 'catatan ditambah' },
+  },
+  en: {
+    reading: { temperature: 'temperature', ph: 'pH', tds: 'TDS', do: 'dissolved oxygen', tan: 'ammonia', no2: 'nitrite' } as Record<(typeof READINGS)[number], string>,
+    leftover: { none: 'all eaten', little: 'a little', much: 'a lot' },
+    behavior: { normal: 'normal', surfacing: 'rising to the surface', gathering_inlet: 'crowding at the water inlet', not_eating: 'not eating', lethargic: 'sluggish' } as Record<Behavior, string>,
+    color: { clear: 'clear', green: 'green', brown: 'brown', cloudy: 'cloudy' },
+    smell: { normal: 'normal', foul: 'foul' },
+    aeration: { on: 'on, normal', weak: 'weak', off: 'off' },
+    labels: { dead: 'dead eels', leftover: 'leftover feed', behavior: 'behavior', color: 'water color', smell: 'water smell', change: 'water change', aerator: 'aerator' },
+    note: { removed: 'note removed', changed: 'note changed', added: 'note added' },
+  },
+};
 
-/** Indonesian decimal comma: 28.9 → "28,9". */
-const decimal = (v: number | undefined) => (v === undefined ? undefined : String(v).replace('.', ','));
+/** 28.9 → "28,9" (Indonesian) or "28.9" (English). */
+const decimal = (v: number | undefined) => (v === undefined ? undefined : currentLang() === 'en' ? String(v) : String(v).replace('.', ','));
 
 /** What changed between two versions of a log: ["suhu 28,9 → 29,8", "sisa pakan habis → banyak"]. */
 export function describeChanges(before: LogData, after: LogData): string[] {
@@ -160,16 +202,17 @@ export function describeChanges(before: LogData, after: LogData): string[] {
   const show = (label: string, a: string | undefined, b: string | undefined) => {
     if ((a ?? '') !== (b ?? '')) parts.push(`${label} ${a || '–'} → ${b || '–'}`);
   };
-  for (const key of READINGS) show(READING_WORDS[key], decimal(before.readings?.[key]), decimal(after.readings?.[key]));
-  show('sidat mati', decimal(before.mortality), decimal(after.mortality));
-  show('sisa pakan', before.feeding?.leftover && LEFTOVER_WORDS[before.feeding.leftover], after.feeding?.leftover && LEFTOVER_WORDS[after.feeding.leftover]);
-  show('perilaku', before.behavior?.map((b) => BEHAVIOR_WORDS[b]).join(', '), after.behavior?.map((b) => BEHAVIOR_WORDS[b]).join(', '));
-  show('warna air', before.water?.color && COLOR_WORDS[before.water.color], after.water?.color && COLOR_WORDS[after.water.color]);
-  show('bau air', before.water?.smell && SMELL_WORDS[before.water.smell], after.water?.smell && SMELL_WORDS[after.water.smell]);
-  show('ganti air', before.waterChangePct === undefined ? undefined : `${decimal(before.waterChangePct)}%`, after.waterChangePct === undefined ? undefined : `${decimal(after.waterChangePct)}%`);
-  show('aerator', before.aeration && AERATION_WORDS[before.aeration], after.aeration && AERATION_WORDS[after.aeration]);
+  const w = WORDS[currentLang()];
+  for (const key of READINGS) show(w.reading[key], decimal(before.readings?.[key]), decimal(after.readings?.[key]));
+  show(w.labels.dead, decimal(before.mortality), decimal(after.mortality));
+  show(w.labels.leftover, before.feeding?.leftover && w.leftover[before.feeding.leftover], after.feeding?.leftover && w.leftover[after.feeding.leftover]);
+  show(w.labels.behavior, before.behavior?.map((b) => w.behavior[b]).join(', '), after.behavior?.map((b) => w.behavior[b]).join(', '));
+  show(w.labels.color, before.water?.color && w.color[before.water.color], after.water?.color && w.color[after.water.color]);
+  show(w.labels.smell, before.water?.smell && w.smell[before.water.smell], after.water?.smell && w.smell[after.water.smell]);
+  show(w.labels.change, before.waterChangePct === undefined ? undefined : `${decimal(before.waterChangePct)}%`, after.waterChangePct === undefined ? undefined : `${decimal(after.waterChangePct)}%`);
+  show(w.labels.aerator, before.aeration && w.aeration[before.aeration], after.aeration && w.aeration[after.aeration]);
   // Notes can be long: say what happened, not the whole text twice.
-  if ((before.note ?? '') !== (after.note ?? '')) parts.push(!after.note ? 'catatan dihapus' : before.note ? 'catatan diubah' : 'catatan ditambah');
+  if ((before.note ?? '') !== (after.note ?? '')) parts.push(!after.note ? w.note.removed : before.note ? w.note.changed : w.note.added);
   return parts;
 }
 
@@ -193,9 +236,11 @@ export function createApi(
   { clock = () => new Date(), getWeather = defaultGetWeather, geocode = defaultGeocode, ai, saveCapture, cookieName = 'synteel_session', demoPhone = null, farmAiCap = 0, agentProviders = [], sam = null, mail = null }: ApiDeps = {},
 ) {
   const api = new Hono<Env>();
+  // Every handler below answers in the language the app asked for (i18n.ts).
+  api.use((c, next) => withLang(parseLang(c.req.header('x-lang')), next));
   const limiter = attemptLimiter();
-  const supportLimiter = attemptLimiter(5, 60 * 60_000, undefined, 'Terlalu banyak pesan. Coba lagi 1 jam lagi.');
-  const speechLimiter = attemptLimiter(20, 60 * 60_000, undefined, 'Terlalu sering. Ketik saja dulu, atau coba lagi 1 jam lagi.');
+  const supportLimiter = attemptLimiter(5, 60 * 60_000, undefined, () => tx('Terlalu banyak pesan. Coba lagi 1 jam lagi.', 'Too many messages. Try again in 1 hour.'));
+  const speechLimiter = attemptLimiter(20, 60 * 60_000, undefined, () => tx('Terlalu sering. Ketik saja dulu, atau coba lagi 1 jam lagi.', 'Too often. Type it in for now, or try again in 1 hour.'));
 
   api.onError((err, c) => {
     if (err instanceof BadRequest) return c.json({ error: err.message }, 400);
@@ -203,13 +248,13 @@ export function createApi(
     if (err instanceof AuthError) return c.json({ error: err.message, code: err.code ?? (err.status === 401 ? 'auth' : undefined), retryAt: err.retryAt }, err.status);
     if (err instanceof AiQuota) return c.json({ error: err.message, code: 'ai_quota' }, 429);
     // The server-wide demo cap (withDailyCap) is a quota too, though ai.ts throws it as AiUnavailable.
-    if (err instanceof AiUnavailable) return c.json({ error: err.message, code: /^Kuota AI/.test(err.message) ? 'ai_quota' : 'ai_unavailable' }, /^Kuota AI/.test(err.message) ? 429 : 503);
+    if (err instanceof AiUnavailable) return c.json({ error: err.message, code: /^(Kuota AI|AI demo quota)/.test(err.message) ? 'ai_quota' : 'ai_unavailable' }, /^(Kuota AI|AI demo quota)/.test(err.message) ? 429 : 503);
     if (err instanceof AiFailed) {
       console.error(err.message);
-      return c.json({ error: 'AI gagal membaca. Coba lagi, atau isi manual.', code: 'ai_unavailable' }, 503);
+      return c.json({ error: tx('AI gagal membaca. Coba lagi, atau isi manual.', 'The AI could not read it. Try again, or type it in.'), code: 'ai_unavailable' }, 503);
     }
     console.error(err);
-    return c.json({ error: 'Terjadi kesalahan di server' }, 500);
+    return c.json({ error: tx('Terjadi kesalahan di server', 'Something went wrong on the server') }, 500);
   });
 
   const timezone = (r: FarmRepo) => r.getFarm()?.timezone ?? 'Asia/Jakarta';
@@ -222,7 +267,8 @@ export function createApi(
     let program = null;
     if (batch) {
       const week = batchWeek(batch, now, tz);
-      const stage = batch.phase === 'glass_eel' ? (stages.find((s) => week >= s.weeks[0] && week <= s.weeks[1]) ?? null) : null;
+      const found = batch.phase === 'glass_eel' ? (stages.find((s) => week >= s.weeks[0] && week <= s.weeks[1]) ?? null) : null;
+      const stage = found && currentLang() === 'en' ? { ...found, ...STAGE_EN[stages.indexOf(found)] } : found;
       const dead = r.totalMortality(batch.id);
       const estimatedAlive = batch.initialCount !== null ? Math.max(0, batch.initialCount - dead) : null;
       program = {
@@ -324,9 +370,9 @@ export function createApi(
    * farm's reads for today are used up. Mock reads are counted, so the quota page shows use, but never refused.
    */
   function useAi(r: FarmRepo, userId: number) {
-    if (!ai || ai.mode === 'off') throw new AiUnavailable('AI belum aktif. Isi manual dulu, atau coba lagi nanti.');
+    if (!ai || ai.mode === 'off') throw new AiUnavailable(tx('AI belum aktif. Isi manual dulu, atau coba lagi nanti.', 'The AI is not on yet. Type it in for now, or try again later.'));
     if (farmAiCap && ai.mode === 'meta' && quotaState(r).left <= 0) {
-      throw new AiQuota('Jatah baca AI tambak ini untuk hari ini sudah habis. Rekaman disimpan di HP; ketik sendiri tetap bisa.');
+      throw new AiQuota(tx('Jatah baca AI tambak ini untuk hari ini sudah habis. Rekaman disimpan di HP; ketik sendiri tetap bisa.', "This farm's AI reads for today are used up. The recording is kept on the phone; typing it in still works."));
     }
     r.countAiUse(userId, localDate(clock(), timezone(r)));
   }
@@ -344,7 +390,7 @@ export function createApi(
         weatherError = (err as Error).message;
       }
     } else {
-      weatherError = 'Lokasi tambak belum diatur';
+      weatherError = tx('Lokasi tambak belum diatur', 'Farm location not set');
     }
     const ponds = r.listPonds().map((pond) => {
       const { batch, logs, program } = pondState(r, pond, now);
@@ -399,11 +445,11 @@ export function createApi(
     }));
   }
 
-  async function makeBriefing(r: FarmRepo): Promise<Briefing> {
+  async function briefingInput(r: FarmRepo): Promise<BriefingInput> {
     const now = clock();
     const nc = await nowcastAll(r);
     const farm = r.getFarm()!;
-    const input: BriefingInput = {
+    return {
       farmName: farm.name,
       now: now.getTime(),
       timezone: farm.timezone,
@@ -424,8 +470,12 @@ export function createApi(
       weather: nc.weather.hours,
       history: (pondId, days) => pondHistory(r, pondId, days),
     };
+  }
+
+  async function makeBriefing(r: FarmRepo): Promise<Briefing> {
+    const input = await briefingInput(r);
     const briefing = await runBriefing(input, ai?.mode === 'meta' ? agentProviders : []);
-    r.saveBriefing(localDate(now, timezone(r)), briefing);
+    r.saveBriefing(localDate(new Date(input.now), timezone(r)), briefing);
     return briefing;
   }
 
@@ -460,7 +510,9 @@ export function createApi(
     if (invite) return invite;
     const spent = store.inviteProblem(code) === 'spent';
     throw new AuthError(
-      spent ? 'Kode undangan sudah dipakai atau kedaluwarsa. Minta kode baru ke pemilik tambak.' : 'Kode undangan tidak berlaku',
+      spent
+        ? tx('Kode undangan sudah dipakai atau kedaluwarsa. Minta kode baru ke pemilik tambak.', 'This invite code was already used or has expired. Ask the farm owner for a new code.')
+        : tx('Kode undangan tidak berlaku', 'Invite code not valid'),
       spent ? 410 : 404,
       'invite_invalid',
     );
@@ -480,7 +532,7 @@ export function createApi(
     const phone = normalizePhone(body.phone);
     const pin = checkPin(body.pin);
     const name = text(body.name, 'nama', true)!;
-    if (store.userByPhone(phone)) throw new AuthError('Nomor ini sudah terdaftar. Silakan masuk.', 409, 'phone_taken');
+    if (store.userByPhone(phone)) throw new AuthError(tx('Nomor ini sudah terdaftar. Silakan masuk.', 'This number is already registered. Please sign in.'), 409, 'phone_taken');
     const user = store.createUser({ phone, name, pinHash: hashPin(pin) });
     startSession(c, user.id, null);
     return c.json(me(user.id, null), 201);
@@ -494,7 +546,7 @@ export function createApi(
     const user = store.userByPhone(phone);
     if (!user || !verifyPin(String(body.pin ?? ''), user.pinHash)) {
       limiter.fail(...keys);
-      throw new AuthError('Nomor HP atau PIN salah');
+      throw new AuthError(tx('Nomor HP atau PIN salah', 'Wrong phone number or PIN'));
     }
     limiter.clear(`phone:${phone}`);
     const farmId = store.farmsOf(user.id)[0]?.id ?? null;
@@ -505,7 +557,7 @@ export function createApi(
   // The shared demo farm for judges and visitors: no sign-up, reset every night.
   api.post('/auth/demo', (c) => {
     const user = demoPhone ? store.userByPhone(demoPhone) : null;
-    if (!user) throw new AuthError('Demo tidak tersedia', 403);
+    if (!user) throw new AuthError(tx('Demo tidak tersedia', 'The demo is not available'), 403);
     const farmId = store.farmsOf(user.id)[0]?.id ?? null;
     startSession(c, user.id, farmId);
     return c.json(me(user.id, farmId));
@@ -528,7 +580,7 @@ export function createApi(
       limiter.check(...keys);
       if (!verifyPin(String(body.pin ?? ''), user.pinHash)) {
         limiter.fail(...keys);
-        throw new AuthError('Nomor ini sudah terdaftar. Masukkan PIN yang benar.');
+        throw new AuthError(tx('Nomor ini sudah terdaftar. Masukkan PIN yang benar.', 'This number is already registered. Enter the right PIN.'));
       }
     } else {
       user = { ...store.createUser({ phone, name: text(body.name, 'nama', true)!, pinHash: hashPin(checkPin(body.pin)) }), pinHash: '' };
@@ -549,13 +601,13 @@ export function createApi(
     const session = readSession(c);
     const topic = oneOf(body.topic, Object.keys(SUPPORT_TOPICS) as SupportTopic[], 'topik') ?? 'lain';
     const message = String(body.message ?? '').trim();
-    if (message.length < 5) throw new BadRequest('Ceritakan masalahnya dulu');
-    if (message.length > 2000) throw new BadRequest('Pesan terlalu panjang (maksimal 2000 huruf)');
+    if (message.length < 5) throw new BadRequest(tx('Ceritakan masalahnya dulu', 'Describe the problem first'));
+    if (message.length > 2000) throw new BadRequest(tx('Pesan terlalu panjang (maksimal 2000 huruf)', 'The message is too long (2000 letters at most)'));
     const phone = (v: unknown, field: string) => {
       try {
         return normalizePhone(v);
       } catch {
-        throw new BadRequest(`${field} tidak valid`);
+        throw invalid(field);
       }
     };
     const replyPhone = phone(body.replyPhone, 'Nomor WhatsApp');
@@ -605,7 +657,7 @@ export function createApi(
 
   api.use('*', async (c, next) => {
     const session = readSession(c);
-    if (!session) throw new AuthError('Silakan masuk dulu');
+    if (!session) throw new AuthError(tx('Silakan masuk dulu', 'Please sign in first'));
     c.set('userId', session.userId);
     c.set('tokenHash', session.tokenHash);
     c.set('farmId', session.farmId);
@@ -615,12 +667,12 @@ export function createApi(
   });
 
   const needFarm = (c: Context<Env>) => {
-    if (c.get('farmId') === null) throw new AuthError('Tambak belum dibuat', 409);
+    if (c.get('farmId') === null) throw new AuthError(tx('Tambak belum dibuat', 'No farm set up yet'), 409);
     return c.get('r');
   };
   const needOwner = (c: Context<Env>) => {
     const r = needFarm(c);
-    if (c.get('role') !== 'owner') throw new AuthError('Hanya pemilik tambak yang bisa mengubah ini', 403);
+    if (c.get('role') !== 'owner') throw new AuthError(tx('Hanya pemilik tambak yang bisa mengubah ini', 'Only the farm owner can change this'), 403);
     return r;
   };
 
@@ -634,7 +686,7 @@ export function createApi(
 
   api.post('/auth/switch', async (c) => {
     const farmId = Number((await c.req.json()).farmId);
-    if (!store.role(c.get('userId'), farmId)) throw new AuthError('Bukan anggota tambak ini', 403);
+    if (!store.role(c.get('userId'), farmId)) throw new AuthError(tx('Bukan anggota tambak ini', 'Not a member of this farm'), 403);
     store.setSessionFarm(c.get('tokenHash'), farmId);
     return c.json(me(c.get('userId'), farmId));
   });
@@ -654,12 +706,12 @@ export function createApi(
   api.put('/auth/pin', async (c) => {
     const body = await c.req.json();
     const user = store.userByPhone(store.user(c.get('userId'))!.phone)!;
-    if (user.phone === demoPhone) throw new AuthError('PIN akun demo tidak bisa diubah', 403);
+    if (user.phone === demoPhone) throw new AuthError(tx('PIN akun demo tidak bisa diubah', 'The demo account PIN cannot be changed'), 403);
     const keys = [`phone:${user.phone}`];
     limiter.check(...keys);
     if (!verifyPin(String(body.pin ?? ''), user.pinHash)) {
       limiter.fail(...keys);
-      throw new AuthError('PIN lama salah', 403);
+      throw new AuthError(tx('PIN lama salah', 'The old PIN is wrong'), 403);
     }
     store.setPin(user.id, hashPin(checkPin(body.newPin)));
     // setPin ended every session, including this one: start a fresh one here.
@@ -702,16 +754,19 @@ export function createApi(
     return c.json({ farm: r.getFarm() });
   });
 
-  api.get('/briefing', (c) => {
+  api.get('/briefing', async (c) => {
     const r = needFarm(c);
-    return c.json({ briefing: r.briefing<Briefing>(localDate(clock(), timezone(r))) });
+    const saved = r.briefing<Briefing>(localDate(clock(), timezone(r)));
+    // Written in the other language: show the rules-only briefing in this one ("Susun ulang" asks the agent again).
+    if (saved && (saved.lang ?? 'id') !== currentLang()) return c.json({ briefing: { ...rulesBriefing(await briefingInput(r)), generatedAt: saved.generatedAt } });
+    return c.json({ briefing: saved });
   });
 
   // Ask for a fresh briefing now (the server also makes one by itself every evening).
   api.post('/briefing', async (c) => {
     const r = needFarm(c);
-    if (r.listPonds().length === 0) throw new BadRequest('Belum ada kolam');
-    if (r.briefingsOn(localDate(clock(), timezone(r))) >= MAX_BRIEFINGS_PER_DAY) throw new BadRequest('Briefing hari ini sudah disusun beberapa kali. Coba lagi besok.');
+    if (r.listPonds().length === 0) throw new BadRequest(tx('Belum ada kolam', 'No ponds yet'));
+    if (r.briefingsOn(localDate(clock(), timezone(r))) >= MAX_BRIEFINGS_PER_DAY) throw new BadRequest(tx('Ringkasan malam hari ini sudah disusun beberapa kali. Coba lagi besok.', "Tonight's summary has been made several times today. Try again tomorrow."));
     return c.json({ briefing: await makeBriefing(r) }, 201);
   });
 
@@ -735,7 +790,7 @@ export function createApi(
   api.delete('/farm/members/:userId', (c) => {
     needOwner(c);
     const userId = Number(c.req.param('userId'));
-    if (userId === c.get('userId')) throw new BadRequest('Tidak bisa mengeluarkan diri sendiri');
+    if (userId === c.get('userId')) throw new BadRequest(tx('Tidak bisa mengeluarkan diri sendiri', 'You cannot remove yourself'));
     store.removeMember(userId, c.get('farmId')!);
     return c.body(null, 204);
   });
@@ -744,7 +799,7 @@ export function createApi(
   api.post('/farm/members/:userId/pin', (c) => {
     needOwner(c);
     const userId = Number(c.req.param('userId'));
-    if (!store.role(userId, c.get('farmId')!)) throw new AuthError('Bukan anggota tambak ini', 403);
+    if (!store.role(userId, c.get('farmId')!)) throw new AuthError(tx('Bukan anggota tambak ini', 'Not a member of this farm'), 403);
     const pin = tempPin();
     store.setPin(userId, hashPin(pin));
     return c.json({ pin });
@@ -763,8 +818,8 @@ export function createApi(
       const key = name.toLowerCase();
       if (key === pond.name.toLowerCase() || list.some((n) => n.toLowerCase() === key)) continue;
       const other = others.find((p) => [p.name, ...p.nicknames].some((n) => n.toLowerCase() === key));
-      if (other) throw new BadRequest(`"${name}" sudah dipakai untuk ${other.name}`);
-      if (list.length >= MAX_NICKNAMES) throw new BadRequest(`Sudah ada ${MAX_NICKNAMES} nama lain untuk kolam ini`);
+      if (other) throw new BadRequest(tx(`"${name}" sudah dipakai untuk ${other.name}`, `"${name}" is already used for ${other.name}`));
+      if (list.length >= MAX_NICKNAMES) throw new BadRequest(tx(`Sudah ada ${MAX_NICKNAMES} nama lain untuk kolam ini`, `This pond already has ${MAX_NICKNAMES} nicknames`));
       list.push(name);
     }
     return list;
@@ -788,7 +843,7 @@ export function createApi(
   api.post('/ponds/:id/nicknames', async (c) => {
     const r = needFarm(c);
     const pond = r.getPond(Number(c.req.param('id')));
-    if (!pond) return c.json({ error: 'Kolam tidak ditemukan' }, 404);
+    if (!pond) return c.json({ error: tx('Kolam tidak ditemukan', 'Pond not found') }, 404);
     const name = nickname((await c.req.json()).nickname);
     r.updatePond({ ...pond, nicknames: addNicknames(r, pond, [name]) });
     return c.json({ pond: pondSummary(r, r.getPond(pond.id)!) });
@@ -797,7 +852,7 @@ export function createApi(
   api.put('/ponds/:id', async (c) => {
     const r = needOwner(c);
     const pond = r.getPond(Number(c.req.param('id')));
-    if (!pond) return c.json({ error: 'Kolam tidak ditemukan' }, 404);
+    if (!pond) return c.json({ error: tx('Kolam tidak ditemukan', 'Pond not found') }, 404);
     const body = await c.req.json();
     // Only fields present in the body change.
     const profile = pondProfile(body);
@@ -825,7 +880,7 @@ export function createApi(
   api.get('/ponds/:id', (c) => {
     const r = needFarm(c);
     const pond = r.getPond(Number(c.req.param('id')));
-    if (!pond) return c.json({ error: 'Kolam tidak ditemukan' }, 404);
+    if (!pond) return c.json({ error: tx('Kolam tidak ditemukan', 'Pond not found') }, 404);
     const since = new Date(clock().getTime() - 14 * DAY_MS).toISOString();
     return c.json({ pond: pondSummary(r, pond), logs: r.logsSince(pond.id, since) });
   });
@@ -833,10 +888,10 @@ export function createApi(
   api.post('/ponds/:id/batches', async (c) => {
     const r = needOwner(c);
     const pond = r.getPond(Number(c.req.param('id')));
-    if (!pond) return c.json({ error: 'Kolam tidak ditemukan' }, 404);
+    if (!pond) return c.json({ error: tx('Kolam tidak ditemukan', 'Pond not found') }, 404);
     const body = await c.req.json();
     const stockedAt = text(body.stockedAt, 'tanggal tebar', true)!;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(stockedAt)) throw new BadRequest('tanggal tebar tidak valid');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(stockedAt)) throw new BadRequest(tx('tanggal tebar tidak valid', 'Stocking date is not valid'));
     r.startBatch(
       {
         pondId: pond.id,
@@ -854,19 +909,19 @@ export function createApi(
   api.post('/ponds/:id/capture', async (c) => {
     const r = needFarm(c);
     const pond = r.getPond(Number(c.req.param('id')));
-    if (!pond) return c.json({ error: 'Kolam tidak ditemukan' }, 404);
-    if (!ai || ai.mode === 'off') throw new AiUnavailable('AI belum aktif. Isi manual dulu, atau coba lagi nanti.');
+    if (!pond) return c.json({ error: tx('Kolam tidak ditemukan', 'Pond not found') }, 404);
+    if (!ai || ai.mode === 'off') throw new AiUnavailable(tx('AI belum aktif. Isi manual dulu, atau coba lagi nanti.', 'The AI is not on yet. Type it in for now, or try again later.'));
     const form = await c.req.parseBody({ all: true });
     const kind = oneOf<CaptureKind>(form.kind, ['photo', 'voice', 'video'], 'jenis rekaman');
-    if (!kind) throw new BadRequest('jenis rekaman wajib diisi');
+    if (!kind) throw new BadRequest(tx('jenis rekaman wajib diisi', 'Recording type is required'));
     const field = oneOf(form.field, ['temperature', 'ph', 'tds'] as const, 'kolom');
     const images = ([] as unknown[]).concat(form.image ?? []).filter((f): f is File => f instanceof File);
     const audio = form.audio instanceof File ? form.audio : undefined;
-    if (images.length > MAX_IMAGES || images.some((f) => f.size > MAX_IMAGE_BYTES)) throw new BadRequest('Gambar terlalu banyak atau terlalu besar');
-    if (audio && audio.size > MAX_AUDIO_BYTES) throw new BadRequest('Rekaman suara terlalu panjang');
-    if (kind === 'photo' && !images.length) throw new BadRequest('Foto belum ada');
-    if (kind === 'voice' && !audio) throw new BadRequest('Rekaman suara belum ada');
-    if (kind === 'video' && !images.length && !audio) throw new BadRequest('Video belum ada');
+    if (images.length > MAX_IMAGES || images.some((f) => f.size > MAX_IMAGE_BYTES)) throw new BadRequest(tx('Gambar terlalu banyak atau terlalu besar', 'Too many pictures, or too large'));
+    if (audio && audio.size > MAX_AUDIO_BYTES) throw new BadRequest(tx('Rekaman suara terlalu panjang', 'The voice recording is too long'));
+    if (kind === 'photo' && !images.length) throw new BadRequest(tx('Foto belum ada', 'No photo yet'));
+    if (kind === 'voice' && !audio) throw new BadRequest(tx('Rekaman suara belum ada', 'No voice recording yet'));
+    if (kind === 'video' && !images.length && !audio) throw new BadRequest(tx('Video belum ada', 'No video yet'));
 
     useAi(r, c.get('userId'));
     const batch = r.activeBatch(pond.id);
@@ -884,13 +939,13 @@ export function createApi(
   api.post('/ponds/:id/count', async (c) => {
     const r = needFarm(c);
     const pond = r.getPond(Number(c.req.param('id')));
-    if (!pond) return c.json({ error: 'Kolam tidak ditemukan' }, 404);
+    if (!pond) return c.json({ error: tx('Kolam tidak ditemukan', 'Pond not found') }, 404);
     const form = await c.req.parseBody();
     const image = form.image instanceof File ? form.image : null;
-    if (!image) throw new BadRequest('Foto belum ada');
-    if (image.size > MAX_IMAGE_BYTES) throw new BadRequest('Foto terlalu besar');
+    if (!image) throw new BadRequest(tx('Foto belum ada', 'No photo yet'));
+    if (image.size > MAX_IMAGE_BYTES) throw new BadRequest(tx('Foto terlalu besar', 'The photo is too large'));
     if (ai?.mode === 'mock') return c.json({ result: { count: 0, eels: [], review: true, model: 'mock', ms: 0 }, mock: true });
-    if (ai?.mode !== 'meta' || !sam?.apiKey) throw new AiUnavailable('Hitung otomatis belum aktif. Hitung manual dulu.');
+    if (ai?.mode !== 'meta' || !sam?.apiKey) throw new AiUnavailable(tx('Hitung otomatis belum aktif. Hitung manual dulu.', 'Automatic counting is not on yet. Count by hand for now.'));
     // Part of an emergency report: it does not use the farm's daily AI quota (the app promises that).
     const result = await countDeadEels(image, sam);
     await saveCapture?.({ farmId: r.farmId, pondId: pond.id, kind: 'count', at: clock().toISOString(), ms: result.ms, count: result.count, review: result.review }, [{ name: 'image-0.jpg', blob: image }]).catch((err) =>
@@ -902,10 +957,10 @@ export function createApi(
   api.post('/ponds/:id/logs', async (c) => {
     const r = needFarm(c);
     const pond = r.getPond(Number(c.req.param('id')));
-    if (!pond) return c.json({ error: 'Kolam tidak ditemukan' }, 404);
+    if (!pond) return c.json({ error: tx('Kolam tidak ditemukan', 'Pond not found') }, 404);
     const body = await c.req.json();
     const loggedAt = body.loggedAt ? new Date(body.loggedAt) : clock();
-    if (Number.isNaN(loggedAt.getTime())) throw new BadRequest('waktu catat tidak valid');
+    if (Number.isNaN(loggedAt.getTime())) throw new BadRequest(tx('waktu catat tidak valid', 'Record time is not valid'));
     const log = r.addLog(
       {
         pondId: pond.id,
@@ -931,21 +986,25 @@ export function createApi(
     if (log.createdBy === userId) {
       return clock().getTime() < until
         ? { canEdit: true, lockReason: null, editableUntil: new Date(until).toISOString() }
-        : { canEdit: false, lockReason: 'Terkunci: sudah lewat 24 jam. Kalau ada yang salah, minta pemilik tambak mengubahnya.', editableUntil: null };
+        : {
+            canEdit: false,
+            lockReason: tx('Terkunci: sudah lewat 24 jam. Kalau ada yang salah, minta pemilik tambak mengubahnya.', 'Locked: more than 24 hours ago. If something is wrong, ask the farm owner to change it.'),
+            editableUntil: null,
+          };
     }
     const maker = log.createdBy === null ? null : store.user(log.createdBy)?.name;
     return {
       canEdit: false,
       lockReason: maker
-        ? `Terkunci: dicatat ${maker}. Hanya yang mencatat (dalam 24 jam) atau pemilik tambak yang bisa mengubah.`
-        : 'Terkunci: catatan lama. Hanya pemilik tambak yang bisa mengubah.',
+        ? tx(`Terkunci: dicatat ${maker}. Hanya yang mencatat (dalam 24 jam) atau pemilik tambak yang bisa mengubah.`, `Locked: recorded by ${maker}. Only the person who recorded it (within 24 hours) or the farm owner can change it.`)
+        : tx('Terkunci: catatan lama. Hanya pemilik tambak yang bisa mengubah.', 'Locked: old record. Only the farm owner can change it.'),
       editableUntil: null,
     };
   }
 
   function historyLog(c: Context<Env>, log: LogRecord): HistoryLog {
     const r = c.get('r');
-    const name = (id: number) => store.user(id)?.name ?? 'Anggota lama';
+    const name = (id: number) => store.user(id)?.name ?? tx('Anggota lama', 'Former member');
     const maker = log.createdBy === null ? null : store.user(log.createdBy);
     return {
       id: log.id,
@@ -964,7 +1023,7 @@ export function createApi(
   function editableLog(c: Context<Env>, { deleted = false } = {}) {
     const r = needFarm(c);
     const log = r.getLog(Number(c.req.param('id')));
-    if (!log || (log.deletedAt !== null && !deleted)) throw new NotFound('Catatan tidak ditemukan');
+    if (!log || (log.deletedAt !== null && !deleted)) throw new NotFound(tx('Catatan tidak ditemukan', 'Record not found'));
     const a = access(log, c.get('userId'), c.get('role'));
     if (!a.canEdit) throw new AuthError(a.lockReason!, 403);
     return { r, log };
@@ -975,7 +1034,7 @@ export function createApi(
   api.get('/ponds/:id/history', (c) => {
     const r = needFarm(c);
     const pond = r.getPond(Number(c.req.param('id')));
-    if (!pond) return c.json({ error: 'Kolam tidak ditemukan' }, 404);
+    if (!pond) return c.json({ error: tx('Kolam tidak ditemukan', 'Pond not found') }, 404);
     const since = new Date(clock().getTime() - HISTORY_DAYS * DAY_MS).toISOString();
     return c.json({ logs: r.historySince(pond.id, since).map((l) => historyLog(c, l)) });
   });
@@ -994,23 +1053,23 @@ export function createApi(
   api.post('/logs/:id/move', async (c) => {
     const { r, log } = editableLog(c);
     const target = r.getPond(Number((await c.req.json()).pondId));
-    if (!target) throw new NotFound('Kolam tidak ditemukan');
-    if (target.id === log.pondId) throw new BadRequest('Catatan sudah ada di kolam ini');
-    const from = r.getPond(log.pondId)?.name ?? 'kolam lain';
-    r.saveLog(edited(c, { ...log, pondId: target.id, batchId: r.activeBatch(target.id)?.id ?? null }, `dipindahkan dari ${from}`));
+    if (!target) throw new NotFound(tx('Kolam tidak ditemukan', 'Pond not found'));
+    if (target.id === log.pondId) throw new BadRequest(tx('Catatan sudah ada di kolam ini', 'The record is already in this pond'));
+    const from = r.getPond(log.pondId)?.name ?? tx('kolam lain', 'another pond');
+    r.saveLog(edited(c, { ...log, pondId: target.id, batchId: r.activeBatch(target.id)?.id ?? null }, tx(`dipindahkan dari ${from}`, `moved from ${from}`)));
     return c.json({ log: historyLog(c, r.getLog(log.id)!) });
   });
 
   // Soft delete: the log leaves charts, alerts and history but can be restored.
   api.delete('/logs/:id', (c) => {
     const { r, log } = editableLog(c, { deleted: true });
-    if (log.deletedAt === null) r.saveLog(edited(c, { ...log, deletedAt: clock().toISOString() }, 'dihapus'));
+    if (log.deletedAt === null) r.saveLog(edited(c, { ...log, deletedAt: clock().toISOString() }, tx('dihapus', 'deleted')));
     return c.body(null, 204);
   });
 
   api.post('/logs/:id/restore', (c) => {
     const { r, log } = editableLog(c, { deleted: true });
-    if (log.deletedAt !== null) r.saveLog(edited(c, { ...log, deletedAt: null }, 'dikembalikan'));
+    if (log.deletedAt !== null) r.saveLog(edited(c, { ...log, deletedAt: null }, tx('dikembalikan', 'restored')));
     return c.json({ log: historyLog(c, r.getLog(log.id)!) });
   });
 
@@ -1024,8 +1083,8 @@ export function createApi(
   async function round(c: Context<Env>, input: { audio?: File; transcript?: string }) {
     const r = needFarm(c);
     const ponds = r.listPonds().map(({ id, name, nicknames }) => ({ id, name, nicknames }));
-    if (!ponds.length) throw new BadRequest('Belum ada kolam');
-    if (!ai || ai.mode === 'off' || typeof ai.round !== 'function') throw new AiUnavailable('AI belum aktif. Isi manual dulu, atau coba lagi nanti.');
+    if (!ponds.length) throw new BadRequest(tx('Belum ada kolam', 'No ponds yet'));
+    if (!ai || ai.mode === 'off' || typeof ai.round !== 'function') throw new AiUnavailable(tx('AI belum aktif. Isi manual dulu, atau coba lagi nanti.', 'The AI is not on yet. Type it in for now, or try again later.'));
     useAi(r, c.get('userId'));
     const started = Date.now();
     const result = await ai.round({ ...input, ponds });
@@ -1040,15 +1099,15 @@ export function createApi(
   api.post('/round', async (c) => {
     const form = await c.req.parseBody();
     const audio = form.audio instanceof File ? form.audio : undefined;
-    if (!audio) throw new BadRequest('Rekaman suara belum ada');
-    if (audio.size > MAX_AUDIO_BYTES) throw new BadRequest('Rekaman suara terlalu panjang');
+    if (!audio) throw new BadRequest(tx('Rekaman suara belum ada', 'No voice recording yet'));
+    if (audio.size > MAX_AUDIO_BYTES) throw new BadRequest(tx('Rekaman suara terlalu panjang', 'The voice recording is too long'));
     return round(c, { audio });
   });
 
   api.post('/round/text', async (c) => {
     const transcript = String((await c.req.json()).transcript ?? '').trim();
-    if (!transcript) throw new BadRequest('Teks keliling masih kosong');
-    if (transcript.length > MAX_TRANSCRIPT) throw new BadRequest('Teks keliling terlalu panjang');
+    if (!transcript) throw new BadRequest(tx('Teks keliling masih kosong', 'The round text is still empty'));
+    if (transcript.length > MAX_TRANSCRIPT) throw new BadRequest(tx('Teks keliling terlalu panjang', 'The round text is too long'));
     return round(c, { transcript });
   });
 
@@ -1057,9 +1116,9 @@ export function createApi(
   api.post('/transcribe', async (c) => {
     const form = await c.req.parseBody();
     const audio = form.audio instanceof File ? form.audio : undefined;
-    if (!audio) throw new BadRequest('Rekaman suara belum ada');
-    if (audio.size > 3 * 1024 * 1024) throw new BadRequest('Rekaman terlalu panjang. Cukup satu menit.');
-    if (!ai || ai.mode === 'off') throw new AiUnavailable('Suara belum bisa diubah jadi teks. Ketik saja dulu.');
+    if (!audio) throw new BadRequest(tx('Rekaman suara belum ada', 'No voice recording yet'));
+    if (audio.size > 3 * 1024 * 1024) throw new BadRequest(tx('Rekaman terlalu panjang. Cukup satu menit.', 'The recording is too long. One minute is enough.'));
+    if (!ai || ai.mode === 'off') throw new AiUnavailable(tx('Suara belum bisa diubah jadi teks. Ketik saja dulu.', 'Speech cannot be turned into text yet. Type it in for now.'));
     const key = `user:${c.get('userId')}`;
     speechLimiter.check(key);
     speechLimiter.fail(key);

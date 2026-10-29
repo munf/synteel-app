@@ -1,6 +1,8 @@
+
 // Uploads with progress. On weak signal a video or a long round recording can take minutes:
 // the farmer sees how far it got instead of a frozen screen. Same errors as api.ts (ApiError).
 import { API, ApiError, api, type Draft, type RoundResult } from './api.ts';
+import { lang, t } from './i18n.ts';
 import { Retryable, type Job } from './capture/queue.ts';
 
 /** No connection at all: keep the recording and try again when there is signal. */
@@ -25,9 +27,11 @@ function post<T>(path: string, form: FormData, onProgress?: (p: Progress) => voi
     const xhr = new XMLHttpRequest();
     const started = Date.now();
     xhr.open('POST', `${API}${path}`);
+    // The server answers (drafts, errors) in the chosen language, as for every api.ts request.
+    xhr.setRequestHeader('x-lang', lang);
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.({ sent: e.loaded, total: e.total, started });
-    xhr.onerror = () => reject(new Offline('Belum ada sinyal'));
-    xhr.ontimeout = () => reject(new Offline('Sinyal terputus'));
+    xhr.onerror = () => reject(new Offline(t('Belum ada sinyal', 'No signal yet')));
+    xhr.ontimeout = () => reject(new Offline(t('Sinyal terputus', 'Signal lost')));
     xhr.onload = () => {
       let json: { error?: string; code?: string } = {};
       try {
@@ -38,7 +42,7 @@ function post<T>(path: string, form: FormData, onProgress?: (p: Progress) => voi
       if (xhr.status >= 200 && xhr.status < 300) return resolve(json as T);
       // Let api.ts notice the lost session the usual way (back to sign-in).
       if (xhr.status === 401) api.me().catch(() => {});
-      reject(new ApiError(json.error ?? `Gagal (${xhr.status})`, xhr.status, json.code));
+      reject(new ApiError(json.error ?? t(`Gagal (${xhr.status})`, `Failed (${xhr.status})`), xhr.status, json.code));
     };
     xhr.send(form);
   });
@@ -46,7 +50,7 @@ function post<T>(path: string, form: FormData, onProgress?: (p: Progress) => voi
 
 /** Voice round: one recording that names many ponds → one draft per pond. Nothing is saved. */
 export function sendRound(audio: Blob, onProgress?: (p: Progress) => void) {
-  if (!navigator.onLine) return Promise.reject(new Offline('Belum ada sinyal'));
+  if (!navigator.onLine) return Promise.reject(new Offline(t('Belum ada sinyal', 'No signal yet')));
   const form = new FormData();
   form.append('audio', audio, audio.type.includes('wav') ? 'round.wav' : 'round.webm');
   return post<{ round: RoundResult }>('/round', form, onProgress);
@@ -54,7 +58,7 @@ export function sendRound(audio: Blob, onProgress?: (p: Progress) => void) {
 
 /** Like capture/queue.ts process(), with progress, and an empty AI quota keeps the job queued too. */
 export async function sendCapture(job: Job, onProgress?: (p: Progress) => void): Promise<Job> {
-  if (!navigator.onLine) throw new Retryable('Belum ada sinyal');
+  if (!navigator.onLine) throw new Retryable(t('Belum ada sinyal', 'No signal yet'));
   const form = new FormData();
   form.append('kind', job.kind);
   if (job.field) form.append('field', job.field);
@@ -65,7 +69,7 @@ export async function sendCapture(job: Job, onProgress?: (p: Progress) => void):
     return { ...job, status: 'ready', draft: body.draft };
   } catch (err) {
     if (err instanceof Offline) throw new Retryable(err.message);
-    if (err instanceof ApiError && err.code === 'ai_quota') throw new Retryable('Jatah baca AI hari ini habis');
+    if (err instanceof ApiError && err.code === 'ai_quota') throw new Retryable(t('Jatah baca AI hari ini habis', "Today's AI reads are used up"));
     if (err instanceof ApiError && (err.status >= 500 || err.status === 408)) throw new Retryable(err.message);
     return { ...job, status: 'failed', error: (err as Error).message };
   }

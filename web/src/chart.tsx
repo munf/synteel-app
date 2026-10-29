@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import type { Nowcast, NowcastPoint } from './api.ts';
 import { fmtNum, riskLabel } from './labels.ts';
 import { Shape, StatusPill, type Tone } from './ui.tsx';
+import { LOCALE, t as tr } from './i18n.ts';
 
 /** A status shape in the legend; sized inline because `.chart svg` stretches every svg in the figure. */
 const KeyShape = ({ tone }: { tone: Tone }) => (
@@ -17,8 +18,8 @@ const STRIP_H = 12;
 // Tick text in viewBox units: about 14 px on a phone-wide chart, the smallest size in the design.
 const TICK = { fontSize: '15.4px' };
 
-const clock = (t: number) => new Date(t).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' });
-const dayClock = (t: number) => new Date(t).toLocaleString('id-ID', { weekday: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' });
+const clock = (t: number) => new Date(t).toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' });
+const dayClock = (t: number) => new Date(t).toLocaleString(LOCALE, { weekday: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' });
 
 /**
  * Estimated water temperature from 12 hours ago to 24 hours ahead: the line is the
@@ -28,7 +29,7 @@ const dayClock = (t: number) => new Date(t).toLocaleString('id-ID', { weekday: '
 export function NowcastChart({ nc }: { nc: Nowcast }) {
   const points = nc.hours.filter((h) => h.temp !== null);
   const [active, setActive] = useState<NowcastPoint | null>(null);
-  if (points.length < 2) return <p class="meta">Belum cukup data untuk grafik perkiraan.</p>;
+  if (points.length < 2) return <p class="meta">{tr('Belum cukup data untuk grafik perkiraan.', 'Not enough data for the forecast chart yet.')}</p>;
 
   const t0 = nc.hours[0].t;
   const t1 = nc.hours.at(-1)!.t;
@@ -67,7 +68,7 @@ export function NowcastChart({ nc }: { nc: Nowcast }) {
       <svg
         viewBox={`0 0 ${W} ${H}`}
         role="img"
-        aria-label={`Perkiraan suhu air 36 jam, sekarang ${nc.now.temp ?? '-'} °C`}
+        aria-label={tr(`Perkiraan suhu air 36 jam, sekarang ${nc.now.temp ?? '-'} °C`, `Estimated water temperature over 36 hours, now ${nc.now.temp ?? '-'} °C`)}
         onPointerMove={pick}
         onPointerDown={pick}
         onPointerLeave={() => setActive(null)}
@@ -92,7 +93,7 @@ export function NowcastChart({ nc }: { nc: Nowcast }) {
 
         <line class="now" x1={x(nc.now.t)} x2={x(nc.now.t)} y1={PAD.top} y2={plotBottom} />
         <text class="tick now-label" style={TICK} x={x(nc.now.t) + 5} y={PAD.top + 12}>
-          sekarang
+          {tr('sekarang', 'now')}
         </text>
 
         {nc.measurements.map((m) => (
@@ -126,37 +127,38 @@ export function NowcastChart({ nc }: { nc: Nowcast }) {
 
       <figcaption class="stack-xs label" aria-live="polite">
         <span class="row between">
-          <strong class="num">{active ? dayClock(shown.t) : `Puncak risiko ${dayClock(shown.t)}`}</strong>
+          <strong class="num">{active ? dayClock(shown.t) : tr(`Puncak risiko ${dayClock(shown.t)}`, `Peak risk ${dayClock(shown.t)}`)}</strong>
           <StatusPill level={shown.level}>{riskLabel[shown.level]}</StatusPill>
         </span>
         <span class="ink2">
-          {[shown.temp !== null && `Air ±${fmtNum(shown.temp)}\u00a0°C (±${fmtNum(shown.sigma!)})`, shown.factors[0]?.label].filter(Boolean).join(' · ')}
+          {[shown.temp !== null && tr(`Air ±${fmtNum(shown.temp)}\u00a0°C (±${fmtNum(shown.sigma!)})`, `Water ±${fmtNum(shown.temp)}\u00a0°C (±${fmtNum(shown.sigma!)})`), shown.factors[0]?.label].filter(Boolean).join(' · ')}
         </span>
       </figcaption>
       <p class="chart-key">
-        <span class="key-line" /> perkiraan suhu air <span class="key-dot" /> hasil ukur
+        <span class="key-line" /> {tr('perkiraan suhu air', 'estimated water temperature')} <span class="key-dot" /> {tr('hasil ukur', 'measured')}
       </p>
       <p class="chart-key" style={{ gap: '4px 12px' }}>
-        <span>Pita bawah: risiko oksigen rendah per jam</span>
+        <span>{tr('Pita bawah: risiko oksigen rendah per jam', 'Bottom strip: low-oxygen risk per hour')}</span>
         <span class="row" style={{ gap: 6 }}>
-          <KeyShape tone="ok" /> Aman
+          <KeyShape tone="ok" /> {tr('Aman', 'Safe')}
         </span>
         <span class="row" style={{ gap: 6 }}>
-          <KeyShape tone="warn" /> Perhatian
+          <KeyShape tone="warn" /> {tr('Perhatian', 'Caution')}
         </span>
         <span class="row" style={{ gap: 6 }}>
-          <KeyShape tone="bad" /> Bahaya{nc.peak.level !== 'ok' ? ` (segitiga = puncak ${clock(nc.peak.t)})` : ''}
+          <KeyShape tone="bad" /> {tr('Bahaya', 'Danger')}
+          {nc.peak.level !== 'ok' ? tr(` (segitiga = puncak ${clock(nc.peak.t)})`, ` (triangle = peak at ${clock(nc.peak.t)})`) : ''}
         </span>
       </p>
 
       <details class="plain">
-        <summary>Lihat sebagai tabel</summary>
+        <summary>{tr('Lihat sebagai tabel', 'View as a table')}</summary>
         <table class="table">
           <thead>
             <tr>
-              <th>Jam</th>
-              <th>Suhu air</th>
-              <th>Risiko</th>
+              <th>{tr('Jam', 'Time')}</th>
+              <th>{tr('Suhu air', 'Water temperature')}</th>
+              <th>{tr('Risiko', 'Risk')}</th>
             </tr>
           </thead>
           <tbody>

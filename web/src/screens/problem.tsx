@@ -4,6 +4,7 @@ import { prepareImage } from '../capture/media.ts';
 import type { Go } from '../app.tsx';
 import { fmtClock, fmtNum, levelLabel, phaseLabel, readingLabel } from '../labels.ts';
 import { setForcedNight } from '../prefs.ts';
+import { isEn, LOCALE, t } from '../i18n.ts';
 import { StepList, useSteps } from '../steps.tsx';
 import { Icon, PondThumb, Shape, Stepper, Tick, TickBox, toneOf, type IconName } from '../ui.tsx';
 import './problem.css';
@@ -12,19 +13,22 @@ type Sign = 'dead' | 'surface' | 'inlet' | 'feed' | 'skin' | 'water' | 'power' |
 
 // The four most common signs first; the rest sit behind "Gejala lain".
 const SIGNS: { id: Sign; label: string; icon: IconName }[] = [
-  { id: 'dead', label: 'Sidat mati', icon: 'dead' },
-  { id: 'surface', label: 'Naik ke permukaan', icon: 'up' },
-  { id: 'feed', label: 'Tidak mau makan', icon: 'bowl' },
-  { id: 'power', label: 'Aerator atau listrik mati', icon: 'bolt' },
-  { id: 'inlet', label: 'Kumpul di air masuk', icon: 'inlet' },
-  { id: 'skin', label: 'Luka, bercak, jamur', icon: 'spots' },
-  { id: 'water', label: 'Air berubah warna atau bau', icon: 'drop' },
-  { id: 'other', label: 'Lainnya', icon: 'dots' },
+  { id: 'dead', label: t('Sidat mati', 'Dead eels'), icon: 'dead' },
+  { id: 'surface', label: t('Naik ke permukaan', 'Coming up to the surface'), icon: 'up' },
+  { id: 'feed', label: t('Tidak mau makan', 'Not eating'), icon: 'bowl' },
+  { id: 'power', label: t('Aerator atau listrik mati', 'Aerator or power is off'), icon: 'bolt' },
+  { id: 'inlet', label: t('Kumpul di air masuk', 'Crowding at the water inlet'), icon: 'inlet' },
+  { id: 'skin', label: t('Luka, bercak, jamur', 'Wounds, spots, fungus'), icon: 'spots' },
+  { id: 'water', label: t('Air berubah warna atau bau', 'Water color or smell changed'), icon: 'drop' },
+  { id: 'other', label: t('Lainnya', 'Other'), icon: 'dots' },
 ];
 const COMMON = 4;
 
+/** "8 sidat mati terhitung" / "8 dead eels counted". */
+const deadCounted = (n: number) => t(`${n} sidat mati terhitung`, `${n} dead ${n === 1 ? 'eel' : 'eels'} counted`);
+
 /** "Rabu 18.40": full day name, never "Rab". */
-const dayClock = (t: number) => `${new Date(t).toLocaleDateString('id-ID', { weekday: 'long', timeZone: 'Asia/Jakarta' })} ${fmtClock(t)}`;
+const dayClock = (at: number) => `${new Date(at).toLocaleDateString(LOCALE, { weekday: 'long', timeZone: 'Asia/Jakarta' })} ${fmtClock(at)}`;
 
 // Which emergency SOP (knowledge/emergencies.json) answers which sign. Deterministic: works without the AI.
 const SOP: Partial<Record<Sign, string>> = { dead: 'low_do', surface: 'low_do', inlet: 'low_do', power: 'power_outage', water: 'heavy_rain' };
@@ -38,17 +42,22 @@ const PLAIN: Record<string, string> = {
   'Tunda pemberian pakan': 'Jangan beri pakan dulu sampai sidat berenang normal',
   'Cek kapasitas pemanas/pendingin dan kondisi ruangan': 'Cek kapasitas pemanas atau pendingin dan kondisi ruangan',
   'Cek pemanas/pendingin dan kondisi ruangan': 'Cek kapasitas pemanas atau pendingin dan kondisi ruangan',
+  // English (the server answers in the chosen language).
+  'Check the aerator, air stones and air hoses; do not feed yet': 'Check the aerator, air stones and air hoses',
+  'Turn on a spare aerator or emergency oxygen': 'Turn on a spare aerator or emergency oxygen if you have one',
+  'Hold off feeding': 'Do not feed until the eels swim normally',
 };
 const plain = (a: string) => {
-  const t = a.trim().replace(/\.$/, '');
-  return PLAIN[t] ?? t;
+  const step = a.trim().replace(/\.$/, '');
+  return PLAIN[step] ?? step;
 };
 
 // ---------- working without signal ----------
 // The emergency steps must show at the pond even with no signal, so the last copy is kept on the phone.
 // A report made without signal waits on the phone and is sent (with its own time) once there is signal.
 
-const EMERGENCIES_KEY = 'synteel.emergencies';
+// One copy per language, so English never shows cached Indonesian steps (or the other way round).
+const EMERGENCIES_KEY = isEn ? 'synteel.emergencies.en' : 'synteel.emergencies';
 const QUEUE_KEY = 'synteel.pendingReports';
 
 interface PendingReport {
@@ -122,13 +131,14 @@ function useSendPending(onSent: () => void) {
 // ---------- pond picker: name, then phase and week, then the count, each on its own line ----------
 
 function metaLines(p: PondSummary): [string, string | null] {
-  if (!p.batch || !p.program) return ['Belum ada batch', null];
-  const count = p.program.estimatedAlive !== null ? `sekitar ${p.program.estimatedAlive.toLocaleString('id-ID')} ekor` : null;
-  return [`${phaseLabel[p.batch.phase]} · minggu ${p.program.week}`, count];
+  if (!p.batch || !p.program) return [t('Belum ada batch', 'No batch yet'), null];
+  const alive = p.program.estimatedAlive;
+  const count = alive !== null ? t(`sekitar ${alive.toLocaleString(LOCALE)} ekor`, `about ${alive.toLocaleString(LOCALE)} ${alive === 1 ? 'eel' : 'eels'}`) : null;
+  return [`${phaseLabel[p.batch.phase]} · ${t('minggu', 'week')} ${p.program.week}`, count];
 }
 
 function Meta({ p }: { p: PondSummary | undefined }) {
-  const [a, b] = p ? metaLines(p) : ['Belum dipilih', null];
+  const [a, b] = p ? metaLines(p) : [t('Belum dipilih', 'Not chosen yet'), null];
   return (
     <span class="meta num stack-xs" style={{ gap: 0 }}>
       <span>{a}</span>
@@ -164,7 +174,7 @@ function PondChooser({ ponds, value, onChange }: { ponds: PondSummary[]; value: 
           </span>
         )}
         <span class="grow stack-xs">
-          <span class="h2">{cur ? cur.name : 'Pilih kolam'}</span>
+          <span class="h2">{cur ? cur.name : t('Pilih kolam', 'Choose a pond')}</span>
           <Meta p={cur} />
         </span>
         <Icon name="down" />
@@ -174,10 +184,10 @@ function PondChooser({ ponds, value, onChange }: { ponds: PondSummary[]; value: 
           {ponds.length > 5 && (
             <label class="picker-search">
               <Icon name="search" size={20} />
-              <input aria-label="Cari kolam" placeholder="Cari nama kolam" value={query} onInput={(e) => setQuery(e.currentTarget.value)} />
+              <input aria-label={t('Cari kolam', 'Search ponds')} placeholder={t('Cari nama kolam', 'Search pond name')} value={query} onInput={(e) => setQuery(e.currentTarget.value)} />
             </label>
           )}
-          <div role="listbox" aria-label="Daftar kolam" class="stack-xs">
+          <div role="listbox" aria-label={t('Daftar kolam', 'Pond list')} class="stack-xs">
             {shown.map((p) => (
               <button
                 type="button"
@@ -206,7 +216,7 @@ function PondChooser({ ponds, value, onChange }: { ponds: PondSummary[]; value: 
             ))}
             {shown.length === 0 && (
               <p class="meta" style={{ padding: '16px 8px' }}>
-                Tidak ada kolam dengan nama itu.
+                {t('Tidak ada kolam dengan nama itu.', 'No pond with that name.')}
               </p>
             )}
           </div>
@@ -266,8 +276,8 @@ function CountedPhoto({ c }: { c: Counted }) {
   const r = Math.max(12, c.w / 45);
   return (
     <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', background: 'var(--bg)' }}>
-      <img src={c.url} alt="Foto sidat mati di baskom" style={{ display: 'block', width: '100%' }} />
-      <svg viewBox={`0 0 ${c.w} ${c.h}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} role="img" aria-label={`${c.result.count} sidat ditandai`}>
+      <img src={c.url} alt={t('Foto sidat mati di baskom', 'Photo of dead eels in a basin')} style={{ display: 'block', width: '100%' }} />
+      <svg viewBox={`0 0 ${c.w} ${c.h}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} role="img" aria-label={t(`${c.result.count} sidat ditandai`, `${c.result.count} ${c.result.count === 1 ? 'eel' : 'eels'} marked`)}>
         {c.result.eels.map((e, i) => (
           <path key={`p${i}`} d={e.path} transform={`translate(${e.left} ${e.top})`} fill={COLORS[i % COLORS.length]} fill-opacity="0.25" stroke={COLORS[i % COLORS.length]} stroke-width={stroke} />
         ))}
@@ -308,7 +318,7 @@ function Result({ report, emergencies, go, onBack, onSaved }: { report: Report; 
     .map(plain)
     .filter((a, i, all) => all.indexOf(a) === i)
     .slice(0, 5);
-  if (signs.includes('skin')) steps.push('Pisahkan sidat yang luka atau berjamur ke kolam karantina');
+  if (signs.includes('skin')) steps.push(t('Pisahkan sidat yang luka atau berjamur ke kolam karantina', 'Move eels with wounds or fungus to a quarantine pond'));
   const count = steps.filter((s) => done[s]).length;
   const causes = pond.findings.filter((f) => f.level === 'critical' || f.level === 'warning').slice(0, 3);
   const signText = SIGNS.filter((s) => signs.includes(s.id))
@@ -316,12 +326,15 @@ function Result({ report, emergencies, go, onBack, onSaved }: { report: Report; 
     .join(', ');
 
   const summary = [
-    `Laporan ${pond.name}, ${dayClock(report.at)}`,
-    `Terlihat: ${signText}${report.dead ? ` (${report.dead} ekor mati)` : ''}`,
+    t(`Laporan ${pond.name}, ${dayClock(report.at)}`, `${pond.name} report, ${dayClock(report.at)}`),
+    t(`Terlihat: ${signText}${report.dead ? ` (${report.dead} ekor mati)` : ''}`, `Seen: ${signText}${report.dead ? ` (${report.dead} dead)` : ''}`),
     ...(['temperature', 'ph', 'tds'] as const)
       .filter((k) => pond.latest[k])
-      .map((k) => `${readingLabel[k].name} terakhir: ${fmtNum(pond.latest[k]!.value)}${readingLabel[k].unit ? ' ' + readingLabel[k].unit : ''}`),
-    count ? `Sudah dilakukan: ${steps.filter((s) => done[s]).map((s) => `${s} (${fmtClock(done[s].at)})`).join('; ')}` : '',
+      .map((k) => {
+        const value = `${fmtNum(pond.latest[k]!.value)}${readingLabel[k].unit ? ' ' + readingLabel[k].unit : ''}`;
+        return t(`${readingLabel[k].name} terakhir: ${value}`, `Last ${k === 'temperature' ? 'temperature' : readingLabel[k].name}: ${value}`);
+      }),
+    count ? `${t('Sudah dilakukan', 'Done')}: ${steps.filter((s) => done[s]).map((s) => `${s} (${fmtClock(done[s].at)})`).join('; ')}` : '',
   ]
     .filter(Boolean)
     .join('\n');
@@ -329,7 +342,7 @@ function Result({ report, emergencies, go, onBack, onSaved }: { report: Report; 
   return (
     <div class="screen problem-flow">
       <header class="row">
-        <button class="icon-btn" aria-label="Kembali" onClick={onBack}>
+        <button class="icon-btn" aria-label={t('Kembali', 'Back')} onClick={onBack}>
           <Icon name="back" />
         </button>
         <PondThumb kind={pond.kind} size={48} />
@@ -345,31 +358,33 @@ function Result({ report, emergencies, go, onBack, onSaved }: { report: Report; 
         <div class="note info" role="status" style={{ fontSize: '1rem' }}>
           <Icon name="nowifi" />
           <span class="grow stack-xs" style={{ gap: 0 }}>
-            <span class="strong">Belum ada sinyal</span>
-            <span>Laporan disimpan di HP, terkirim otomatis saat ada sinyal.</span>
+            <span class="strong">{t('Belum ada sinyal', 'No signal yet')}</span>
+            <span>{t('Laporan disimpan di HP, terkirim otomatis saat ada sinyal.', 'The report is kept on the phone and sent by itself when there is signal.')}</span>
           </span>
         </div>
       ) : (
         <div class="note ok" role="status">
           <Icon name="check" />
-          <span class="grow">Laporan tersimpan di catatan kolam.</span>
+          <span class="grow">{t('Laporan tersimpan di catatan kolam.', 'Report saved in the pond records.')}</span>
         </div>
       )}
 
       {steps.length > 0 && (
         <section class="hero">
           <div class="row between">
-            <h2>Lakukan sekarang</h2>
+            <h2>{t('Lakukan sekarang', 'Do this now')}</h2>
             <span class="label semi" style={{ color: 'var(--on-navy-2)' }}>
-              {count} dari {steps.length} selesai
+              {t(`${count} dari ${steps.length} selesai`, `${count} of ${steps.length} done`)}
             </span>
           </div>
           <span class="progress">
             <span style={{ width: `${(count / steps.length) * 100}%` }} />
           </span>
-          <StepList steps={steps} done={done} toggle={toggle} onAllDone={{ label: 'Catat kondisi sekarang', run: () => go({ name: 'record-pond', pondId: pond.id }) }} />
+          <StepList steps={steps} done={done} toggle={toggle} onAllDone={{ label: t('Catat kondisi sekarang', 'Record conditions now'), run: () => go({ name: 'record-pond', pondId: pond.id }) }} />
           <span class="label" style={{ color: '#9FB0CF' }}>
-            {report.offline ? 'Langkah ini tersimpan di HP, tetap muncul tanpa sinyal.' : 'Langkah ini tetap muncul walau tanpa internet.'}
+            {report.offline
+              ? t('Langkah ini tersimpan di HP, tetap muncul tanpa sinyal.', 'These steps are kept on the phone and still show without signal.')
+              : t('Langkah ini tetap muncul walau tanpa internet.', 'These steps still show without internet.')}
           </span>
         </section>
       )}
@@ -381,20 +396,25 @@ function Result({ report, emergencies, go, onBack, onSaved }: { report: Report; 
             <Icon name="info" />
           </span>
           <div class="stack-xs">
-            <span class="strong help-head">Minta bantuan pemilik tambak atau penyuluh kalau</span>
-            <span class="label help-body">sidat mati bertambah dalam 6 jam, atau muncul bercak, luka atau jamur. Aplikasi ini tidak memberi dosis obat.</span>
+            <span class="strong help-head">{t('Minta bantuan pemilik tambak atau penyuluh kalau', 'Ask the farm owner or an extension officer for help if')}</span>
+            <span class="label help-body">
+              {t(
+                'sidat mati bertambah dalam 6 jam, atau muncul bercak, luka atau jamur. Aplikasi ini tidak memberi dosis obat.',
+                'more eels die within 6 hours, or spots, wounds or fungus appear. This app does not give medicine doses.',
+              )}
+            </span>
           </div>
         </div>
         <p class="row top semi help-head">
           <Icon name="chat" size={20} />
-          <span class="grow">Pemilik belum dikabari. Kirim ringkasan lewat WhatsApp.</span>
+          <span class="grow">{t('Pemilik belum dikabari. Kirim ringkasan lewat WhatsApp.', 'The owner has not been told yet. Send the summary on WhatsApp.')}</span>
         </p>
         <a class="btn danger" href={`https://wa.me/?text=${encodeURIComponent(summary)}`} target="_blank" rel="noopener">
-          <Icon name="chat" size={20} /> Kirim ringkasan ke WhatsApp
+          <Icon name="chat" size={20} /> {t('Kirim ringkasan ke WhatsApp', 'Send the summary to WhatsApp')}
         </a>
-        {queued && <span class="label help-body">Tetap bisa tanpa sinyal: WhatsApp mengirim pesan begitu ada sinyal.</span>}
+        {queued && <span class="label help-body">{t('Tetap bisa tanpa sinyal: WhatsApp mengirim pesan begitu ada sinyal.', 'This works without signal too: WhatsApp sends the message as soon as there is signal.')}</span>}
         <div class="summary-box stack-xs">
-          <span class="label strong help-head">Isi ringkasan</span>
+          <span class="label strong help-head">{t('Isi ringkasan', 'Summary text')}</span>
           <span class="label ink2" style={{ whiteSpace: 'pre-line' }}>
             {summary}
           </span>
@@ -403,19 +423,26 @@ function Result({ report, emergencies, go, onBack, onSaved }: { report: Report; 
 
       {report.counted && (
         <section class="card">
-          <h2>Dari foto</h2>
+          <h2>{t('Dari foto', 'From the photo')}</h2>
           <CountedPhoto c={report.counted} />
           <p>
-            <strong>{report.counted.result.count} sidat mati terhitung</strong>
-            {report.dead !== report.counted.result.count && `, dicatat ${report.dead} setelah dicek`}.
+            <strong>{deadCounted(report.counted.result.count)}</strong>
+            {report.dead !== report.counted.result.count && t(`, dicatat ${report.dead} setelah dicek`, `, ${report.dead} recorded after checking`)}.
           </p>
-          <span class="label ink2">Dihitung AI. Sidat yang bertumpuk bisa terlewat.</span>
+          <span class="label ink2">{t('Dihitung AI. Sidat yang bertumpuk bisa terlewat.', 'Counted by AI. Eels that overlap can be missed.')}</span>
         </section>
       )}
 
       <section class="card">
-        <h2>Kemungkinan penyebab</h2>
-        {causes.length === 0 && <p class="ink2">Catatan terakhir belum menunjukkan penyebab yang jelas. Ukur suhu, pH dan TDS sekarang.</p>}
+        <h2>{t('Kemungkinan penyebab', 'Possible causes')}</h2>
+        {causes.length === 0 && (
+          <p class="ink2">
+            {t(
+              'Catatan terakhir belum menunjukkan penyebab yang jelas. Ukur suhu, pH dan TDS sekarang.',
+              'The latest records do not show a clear cause yet. Measure temperature, pH and TDS now.',
+            )}
+          </p>
+        )}
         {causes.map((f, i) => (
           <div class="row top" key={f.id}>
             <span class={`cause-num${i === 0 ? ' first' : ''}`}>{i + 1}</span>
@@ -425,7 +452,7 @@ function Result({ report, emergencies, go, onBack, onSaved }: { report: Report; 
             </div>
           </div>
         ))}
-        <span class="label ink2">Dari catatan kolam dan aturan ambang batas. Ini saran, bukan diagnosis.</span>
+        <span class="label ink2">{t('Dari catatan kolam dan aturan ambang batas. Ini saran, bukan diagnosis.', 'From the pond records and threshold rules. This is advice, not a diagnosis.')}</span>
       </section>
 
       <section class="card">
@@ -434,12 +461,12 @@ function Result({ report, emergencies, go, onBack, onSaved }: { report: Report; 
             <Icon name="clock" />
           </span>
           <div class="stack-xs grow">
-            <span class="strong">Cek ulang jam {fmtClock(report.at + 3600_000)}</span>
-            <span class="label ink2">Pengingat muncul di Beranda: sidat sudah turun dan berenang normal?</span>
+            <span class="strong">{t(`Cek ulang jam ${fmtClock(report.at + 3600_000)}`, `Check again at ${fmtClock(report.at + 3600_000)}`)}</span>
+            <span class="label ink2">{t('Pengingat muncul di Beranda: sidat sudah turun dan berenang normal?', 'A reminder will show on Home: are the eels back down and swimming normally?')}</span>
           </div>
         </div>
         <button class="btn primary" onClick={() => go({ name: 'today' })}>
-          Selesai, kembali ke Beranda
+          {t('Selesai, kembali ke Beranda', 'Done, back to Home')}
         </button>
       </section>
     </div>
@@ -452,41 +479,43 @@ function CountFailed({ failed, onRetake, onManual }: { failed: Failed; onRetake:
     <section class="card">
       <div class="row top">
         {failed.url ? (
-          <img src={failed.url} alt="Foto baskom" style={{ width: 88, height: 66, flex: 'none', borderRadius: 12, objectFit: 'cover', background: '#20252c' }} />
+          <img src={failed.url} alt={t('Foto baskom', 'Basin photo')} style={{ width: 88, height: 66, flex: 'none', borderRadius: 12, objectFit: 'cover', background: '#20252c' }} />
         ) : (
           <span style={{ width: 88, height: 66, flex: 'none', borderRadius: 12, background: '#20252c' }} />
         )}
         <span class="grow stack-xs">
-          <span class="h2">AI belum melihat sidat di foto ini</span>
+          <span class="h2">{t('AI belum melihat sidat di foto ini', 'The AI did not see eels in this photo')}</span>
           <span class="label ink2">
-            {failed.offline ? 'Foto belum terkirim karena belum ada sinyal. Isi jumlah sendiri, atau foto ulang saat ada sinyal.' : 'Foto terlalu gelap, atau sidat tertutup bayangan.'}
+            {failed.offline
+              ? t('Foto belum terkirim karena belum ada sinyal. Isi jumlah sendiri, atau foto ulang saat ada sinyal.', 'The photo was not sent because there is no signal yet. Enter the number yourself, or photograph again when there is signal.')
+              : t('Foto terlalu gelap, atau sidat tertutup bayangan.', 'The photo is too dark, or the eels are in shadow.')}
           </span>
         </span>
       </div>
       <ul class="count-tips">
-        {TIPS.map((t) => (
-          <li key={t.text}>
+        {TIPS.map((tip) => (
+          <li key={tip.text}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d={t.d} />
+              <path d={tip.d} />
             </svg>
-            {t.text}
+            {tip.text}
           </li>
         ))}
       </ul>
       <button type="button" class="btn primary" onClick={onRetake}>
-        <Icon name="camera" size={20} /> Foto ulang
+        <Icon name="camera" size={20} /> {t('Foto ulang', 'Photograph again')}
       </button>
       <button type="button" class="btn secondary" onClick={onManual}>
-        Isi jumlah sendiri
+        {t('Isi jumlah sendiri', 'Enter the number yourself')}
       </button>
     </section>
   );
 }
 
 const TIPS = [
-  { d: 'M3 9h18l-2 9H5zM6 9V7h12v2', text: 'Taruh sidat di baskom putih' },
-  { d: 'M12 4v10M8 10l4 4 4-4M5 20h14', text: 'Foto lurus dari atas' },
-  { d: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4', text: 'Cari tempat cukup terang, atau nyalakan senter HP' },
+  { d: 'M3 9h18l-2 9H5zM6 9V7h12v2', text: t('Taruh sidat di baskom putih', 'Put the eels in a white basin') },
+  { d: 'M12 4v10M8 10l4 4 4-4M5 20h14', text: t('Foto lurus dari atas', 'Photograph straight from above') },
+  { d: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4', text: t('Cari tempat cukup terang, atau nyalakan senter HP', 'Find a bright enough spot, or turn on the phone torch') },
 ];
 
 interface Failed {
@@ -574,7 +603,7 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
       mortality: signs.includes('dead') ? dead : undefined,
       aeration: signs.includes('power') ? 'off' : undefined,
       note:
-        'Laporan masalah: ' +
+        t('Laporan masalah: ', 'Problem report: ') +
         SIGNS.filter((s) => signs.includes(s.id))
           .map((s) => s.label.toLowerCase())
           .join(', '),
@@ -610,17 +639,17 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
   return (
     <div class="screen problem-flow has-bar">
       <section class="stack-sm">
-        <h1>Ada masalah?</h1>
-        <p class="ink2">Pilih kolamnya dulu, lalu pilih yang terlihat.</p>
+        <h1>{t('Ada masalah?', 'Something wrong?')}</h1>
+        <p class="ink2">{t('Pilih kolamnya dulu, lalu pilih yang terlihat.', 'Choose the pond first, then pick what you see.')}</p>
       </section>
 
       <div class="field">
-        <span class="field-label">Kolam mana?</span>
+        <span class="field-label">{t('Kolam mana?', 'Which pond?')}</span>
         <PondChooser ponds={ponds} value={pondId} onChange={setPondId} />
       </div>
 
       <section class="stack-sm">
-        <span class="field-label">Pilih yang terlihat</span>
+        <span class="field-label">{t('Pilih yang terlihat', 'Pick what you see')}</span>
         <div class="grid2">
           {shown.map((s) => {
             const on = signs.includes(s.id);
@@ -637,7 +666,7 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
         </div>
         {(more || hidden > 0) && (
           <button type="button" class="more-signs" aria-expanded={more} onClick={() => setMore(!more)}>
-            <span>{more ? 'Sembunyikan gejala lain' : `Gejala lain (${hidden})`}</span>
+            <span>{more ? t('Sembunyikan gejala lain', 'Hide other signs') : t(`Gejala lain (${hidden})`, `Other signs (${hidden})`)}</span>
             <Icon name="down" size={20} />
           </button>
         )}
@@ -645,21 +674,21 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
 
       {signs.includes('dead') && (
         <div class={`field${manual ? ' count-manual' : ''}`}>
-          <span class="field-label">Berapa ekor mati?</span>
+          <span class="field-label">{t('Berapa ekor mati?', 'How many died?')}</span>
           <Stepper value={dead} onChange={setDead} min={1} quick={[5, 10, 50]} />
           {manual && (
             <span role="status" class="label semi" style={{ color: 'var(--accent-ink)' }}>
-              Isi dengan − dan +. Jumlah ini yang dipakai di laporan.
+              {t('Isi dengan − dan +. Jumlah ini yang dipakai di laporan.', 'Set it with − and +. This number is used in the report.')}
             </span>
           )}
           <input ref={photo} type="file" accept="image/*" capture="environment" hidden onChange={(e) => (onBasinPhoto(e.currentTarget.files?.[0]), (e.currentTarget.value = ''))} />
           {!failed && (
             <>
-              <span class="field-hint">Taruh sidat mati di baskom putih, lalu foto dari atas supaya AI bisa menghitung.</span>
+              <span class="field-hint">{t('Taruh sidat mati di baskom putih, lalu foto dari atas supaya AI bisa menghitung.', 'Put the dead eels in a white basin, then photograph it from above so the AI can count them.')}</span>
               <button type="button" class="btn secondary" disabled={pondId === null || counting} onClick={() => photo.current?.click()}>
-                <Icon name="camera" size={20} /> {counting ? 'AI sedang menghitung…' : counted ? 'Foto ulang' : 'Foto baskom untuk dihitung AI'}
+                <Icon name="camera" size={20} /> {counting ? t('AI sedang menghitung…', 'The AI is counting…') : counted ? t('Foto ulang', 'Photograph again') : t('Foto baskom untuk dihitung AI', 'Basin photo for an AI count')}
               </button>
-              {pondId === null && <span class="field-hint">Pilih kolam dulu.</span>}
+              {pondId === null && <span class="field-hint">{t('Pilih kolam dulu.', 'Choose a pond first.')}</span>}
             </>
           )}
           {counted && (
@@ -668,17 +697,17 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
               {counted.mock ? (
                 <p class="note info">
                   <Icon name="info" size={20} />
-                  <span>Mode contoh: hitung otomatis tidak aktif di server ini. Hitung manual.</span>
+                  <span>{t('Mode contoh: hitung otomatis tidak aktif di server ini. Hitung manual.', 'Sample mode: the automatic count is off on this server. Count by hand.')}</span>
                 </p>
               ) : (
                 <>
                   <p>
-                    <strong>{counted.result.count} sidat mati terhitung.</strong> Jumlah di atas sudah diisi. Ubah kalau berbeda.
+                    <strong>{deadCounted(counted.result.count)}.</strong> {t('Jumlah di atas sudah diisi. Ubah kalau berbeda.', 'The number above is filled in. Change it if it is wrong.')}
                   </p>
                   {counted.result.review && (
                     <p class="note info">
                       <Icon name="info" size={20} />
-                      <span>Sidat bertumpuk atau kurang jelas bisa terlewat. Cek lagi hitungannya.</span>
+                      <span>{t('Sidat bertumpuk atau kurang jelas bisa terlewat. Cek lagi hitungannya.', 'Eels that overlap or are unclear can be missed. Check the count again.')}</span>
                     </p>
                   )}
                 </>
@@ -692,13 +721,13 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
         <CountFailed failed={failed} onRetake={() => photo.current?.click()} onManual={() => setManual(true)} />
       )}
 
-      <span class="label ink2 center">Laporan darurat tidak memakai jatah baca AI.</span>
+      <span class="label ink2 center">{t('Laporan darurat tidak memakai jatah baca AI.', 'Emergency reports do not use your daily AI reads.')}</span>
       {error && <p class="error">{error}</p>}
 
       {/* Main action: pinned above the tab bar while the page scrolls. */}
       <div class="problem-bar">
         <button class="btn primary" disabled={pondId === null || signs.length === 0 || busy} onClick={submit}>
-          {pondId === null ? 'Pilih kolam dulu' : signs.length === 0 ? 'Pilih yang terlihat' : 'Lihat yang harus dilakukan'}
+          {pondId === null ? t('Pilih kolam dulu', 'Choose a pond first') : signs.length === 0 ? t('Pilih yang terlihat', 'Pick what you see') : t('Lihat yang harus dilakukan', 'See what to do')}
           {pondId !== null && signs.length > 0 && <Icon name="arrow" size={20} />}
         </button>
       </div>

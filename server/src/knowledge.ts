@@ -10,3 +10,6 @@ export const knowledge = {
   alarmLevels: load('alarm-levels.json'),
   emergencies: load('emergencies.json'),
 };
+
+/** English wording of the emergency steps, for GET /knowledge with x-lang: en. */
+export const emergenciesEn = load('emergencies.en.json');

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { api, type Me } from '../api.ts';
 import { Eel, Glyph, GLYPH, Icon, type IconName } from '../ui.tsx';
+import { t } from '../i18n.ts';
 
 export type SignInMode = 'login' | 'register' | 'join';
 
@@ -39,9 +40,17 @@ function PondArt() {
 }
 
 const POINTS: { icon: IconName; title: string; text: string }[] = [
-  { icon: 'mic', title: 'Catat dengan suara', text: 'Sebut banyak kolam sekaligus, periksa hasilnya sebelum disimpan.' },
-  { icon: 'moon', title: 'Waspada malam', text: 'Jadwal cek dan alarm di malam yang rawan oksigen.' },
-  { icon: 'alert', title: 'Saat sidat sekarat', text: 'Langkah yang bisa langsung dikerjakan, plus ringkasan untuk pemilik.' },
+  {
+    icon: 'mic',
+    title: t('Catat dengan suara', 'Record by voice'),
+    text: t('Sebut banyak kolam sekaligus, periksa hasilnya sebelum disimpan.', 'Name many ponds in one go, check the result before saving.'),
+  },
+  { icon: 'moon', title: t('Waspada malam', 'Night watch'), text: t('Jadwal cek dan alarm di malam yang rawan oksigen.', 'Check schedule and alarms on nights at risk of low oxygen.') },
+  {
+    icon: 'alert',
+    title: t('Saat sidat sekarat', 'When eels are dying'),
+    text: t('Langkah yang bisa langsung dikerjakan, plus ringkasan untuk pemilik.', 'Steps you can do right away, plus a summary for the owner.'),
+  },
 ];
 
 export function Welcome({ onPick, onSignedIn }: { onPick: (mode: SignInMode) => void; onSignedIn: (me: Me) => void }) {
@@ -83,7 +92,7 @@ export function Welcome({ onPick, onSignedIn }: { onPick: (mode: SignInMode) => 
 
       <section class="hero" style={{ background: '#13264a', gap: 16 }}>
         <PondArt />
-        <h1 style={{ color: '#fff' }}>Jaga kolam sidat, siang dan malam</h1>
+        <h1 style={{ color: '#fff' }}>{t('Jaga kolam sidat, siang dan malam', 'Look after your eel ponds, day and night')}</h1>
       </section>
 
       <ul class="stack" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
@@ -102,18 +111,18 @@ export function Welcome({ onPick, onSignedIn }: { onPick: (mode: SignInMode) => 
 
       <div class="stack-sm" style={{ marginTop: 'auto', gap: 12 }}>
         <button type="button" class="btn primary" onClick={() => pick('login')}>
-          Masuk
+          {t('Masuk', 'Sign in')}
         </button>
         <button type="button" class="btn" style={{ background: 'var(--surface)', color: 'var(--ink)', border: '2px solid var(--ink)' }} onClick={() => pick('register')}>
-          Daftar akun baru
+          {t('Daftar akun baru', 'Create a new account')}
         </button>
         <div class="row" style={{ justifyContent: 'center', gap: 24, flexWrap: 'wrap' }}>
           <button type="button" class="link-btn label row" style={{ minHeight: 48, gap: 6, fontWeight: 800 }} onClick={() => pick('join')}>
-            <Icon name="users" size={18} /> Punya kode undangan
+            <Icon name="users" size={18} /> {t('Punya kode undangan', 'Have an invite code')}
           </button>
           {demo && (
             <button type="button" class="link-btn label row" style={{ minHeight: 48, gap: 6, fontWeight: 800 }} disabled={busy} onClick={tryDemo}>
-              <Glyph d={GLYPH.play} size={18} /> {busy ? 'Tunggu…' : 'Coba demo'}
+              <Glyph d={GLYPH.play} size={18} /> {busy ? t('Tunggu…', 'Wait…') : t('Coba demo', 'Try the demo')}
             </button>
           )}
         </div>
@@ -122,7 +131,7 @@ export function Welcome({ onPick, onSignedIn }: { onPick: (mode: SignInMode) => 
             {error}
           </p>
         )}
-        {demo && <p class="label ink2 center">Demo: tambak contoh, direset tiap malam.</p>}
+        {demo && <p class="label ink2 center">{t('Demo: tambak contoh, direset tiap malam.', 'Demo: sample farm, reset every night.')}</p>}
       </div>
     </div>
   );

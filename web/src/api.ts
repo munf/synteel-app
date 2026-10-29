@@ -6,6 +6,7 @@ import type { Limits } from '../../server/src/rules.ts';
 import type { Draft, DraftField } from '../../server/src/ai.ts';
 import type { AutoFix, HistoryLog, LogEdit, QuotaState, ReadingField, RoundDraft, RoundIssue, RoundResult, SupportRequest, SupportTopic } from '../../server/src/contract.ts';
 import type { LogSource } from '../../server/src/domain.ts';
+import { lang, t } from './i18n.ts';
 
 export type { Aeration, Batch, Behavior, Farm, Finding, Level, Log, LogData, Phase, Pond, Setting };
 export type { Limits, Nowcast, NowcastPoint, RiskFactor, RiskLevel, SuggestedCheck };
@@ -122,24 +123,24 @@ export const onSessionLost = (fn: (() => void) | null) => {
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${API}${path}`, {
     method,
-    headers: body === undefined ? undefined : { 'content-type': 'application/json' },
+    headers: body === undefined ? { 'x-lang': lang } : { 'content-type': 'application/json', 'x-lang': lang },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (res.status === 204) return undefined as T;
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     if (res.status === 401 && !PUBLIC.test(path)) sessionLost?.();
-    throw new ApiError(json.error ?? `Gagal (${res.status})`, res.status, json.code);
+    throw new ApiError(json.error ?? `${t('Gagal', 'Failed')} (${res.status})`, res.status, json.code);
   }
   return json as T;
 }
 
 async function upload<T>(path: string, form: FormData): Promise<T> {
-  const res = await fetch(`${API}${path}`, { method: 'POST', body: form });
+  const res = await fetch(`${API}${path}`, { method: 'POST', body: form, headers: { 'x-lang': lang } });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     if (res.status === 401) sessionLost?.();
-    throw new ApiError(json.error ?? `Gagal (${res.status})`, res.status, json.code);
+    throw new ApiError(json.error ?? `${t('Gagal', 'Failed')} (${res.status})`, res.status, json.code);
   }
   return json as T;
 }

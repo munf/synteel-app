@@ -7,24 +7,25 @@ import { clips, readClip, waitReason, type Clip, type RoundItem } from '../queue
 import { Icon, kindLabel, StatusPill, Stepper } from '../ui.tsx';
 import { sendRound, type Progress } from '../upload.ts';
 import { fmtDur, Glyph, isDenied, isSlow, parseNum, UploadCard, useTick, type GlyphName } from './record-pond.tsx';
+import { isEn, LOCALE, t } from '../i18n.ts';
 import './record.css';
 
 const FIELD: Record<ReadingField, { label: string; unit: string; example: string }> = {
-  temperature: { label: 'Suhu', unit: '°C', example: '28,5' },
-  ph: { label: 'pH', unit: '', example: '7,4' },
+  temperature: { label: t('Suhu', 'Temperature'), unit: '°C', example: t('28,5', '28.5') },
+  ph: { label: 'pH', unit: '', example: t('7,4', '7.4') },
   tds: { label: 'TDS', unit: 'ppm', example: '150' },
 };
 /** "29 °C", "pH 7,4" as spoken back to the farmer. */
 const said = (f: ReadingField, v: number) => (f === 'ph' ? `pH ${fmtNum(v)}` : `${FIELD[f].label} ${fmtNum(v)} ${FIELD[f].unit}`);
 const withUnit = (f: ReadingField, v: number) => `${fmtNum(v)}${FIELD[f].unit ? ` ${FIELD[f].unit}` : ''}`;
-const fmt1 = (n: number) => n.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+const fmt1 = (n: number) => n.toLocaleString(LOCALE, { minimumFractionDigits: 1, maximumFractionDigits: 2 });
 
 /** "27,0 °C · pH 7,4 (dari 74) · 2 mati" */
 function vals(data: LogData, autoFixed: AutoFix[] = []) {
   const r = data.readings ?? {};
   const from = (f: ReadingField) => {
     const a = autoFixed.find((x) => x.field === f);
-    return a ? ` (dari ${a.heard})` : '';
+    return a ? t(` (dari ${a.heard})`, ` (heard ${a.heard})`) : '';
   };
   const parts: string[] = [];
   if (r.temperature !== undefined) parts.push(`${fmt1(r.temperature)} °C${from('temperature')}`);
@@ -32,7 +33,7 @@ function vals(data: LogData, autoFixed: AutoFix[] = []) {
   if (r.tds !== undefined) parts.push(`TDS ${fmtNum(r.tds)} ppm${from('tds')}`);
   const rest = summarizeLog({ ...data, readings: undefined });
   if (rest) parts.push(rest);
-  return parts.join(' · ') || 'Tanpa angka';
+  return parts.join(' · ') || t('Tanpa angka', 'No numbers');
 }
 
 const setReading = (data: LogData, f: ReadingField, v: number): LogData => ({ ...data, readings: { ...data.readings, [f]: v } });
@@ -140,7 +141,11 @@ export function Round({ ponds, queued, onSaved, go }: { ponds: PondSummary[]; qu
         if (pond.level === 'warning' || pond.level === 'critical') flagged.push(pond);
       }
     } catch (err) {
-      setError(err instanceof TypeError ? 'Belum ada sinyal. Catatan yang belum tersimpan tetap di sini, coba simpan lagi nanti.' : (err as Error).message);
+      setError(
+        err instanceof TypeError
+          ? t('Belum ada sinyal. Catatan yang belum tersimpan tetap di sini, coba simpan lagi nanti.', 'No signal yet. Records not saved yet stay here; try saving again later.')
+          : (err as Error).message,
+      );
     } finally {
       setSaving(false);
       setAlerts((a) => [...a.filter((p) => !flagged.some((f) => f.id === p.id)), ...flagged]);
@@ -158,14 +163,14 @@ export function Round({ ponds, queued, onSaved, go }: { ponds: PondSummary[]; qu
   };
   const header = (
     <header class="row">
-      <button type="button" class="icon-btn" aria-label="Kembali ke Catat" onClick={back}>
+      <button type="button" class="icon-btn" aria-label={t('Kembali ke Catat', 'Back to Record')} onClick={back}>
         <Icon name="back" />
       </button>
       <div class="grow" style={{ display: 'flex', flexDirection: 'column' }}>
-        <h1>Cek hasil suara</h1>
+        <h1>{t('Cek hasil suara', 'Check voice results')}</h1>
         {clip && (
           <span class="meta num">
-            Rekaman {fmtDur(clip.seconds)} · direkam {fmtClock(clip.createdAt)}
+            {t(`Rekaman ${fmtDur(clip.seconds)} · direkam ${fmtClock(clip.createdAt)}`, `Recording, ${fmtDur(clip.seconds)} · recorded ${fmtClock(clip.createdAt)}`)}
           </span>
         )}
       </div>
@@ -177,10 +182,10 @@ export function Round({ ponds, queued, onSaved, go }: { ponds: PondSummary[]; qu
       <div class="screen">
         {header}
         {progress && isSlow(progress) ? (
-          <UploadCard what="rekaman" p={progress} onOther={back} />
+          <UploadCard what={t('rekaman', 'recording')} p={progress} onOther={back} />
         ) : (
           <p class="working" role="status">
-            AI memilah suara per kolam…
+            {t('AI memilah suara per kolam…', 'AI is sorting the recording by pond…')}
           </p>
         )}
       </div>
@@ -190,9 +195,9 @@ export function Round({ ponds, queued, onSaved, go }: { ponds: PondSummary[]; qu
     return (
       <div class="screen">
         {header}
-        <p class="ink2">Rekaman ini sudah tidak ada di HP. Mungkin sudah dicek dan disimpan.</p>
+        <p class="ink2">{t('Rekaman ini sudah tidak ada di HP. Mungkin sudah dicek dan disimpan.', 'This recording is no longer on the phone. It may already be checked and saved.')}</p>
         <button class="btn primary" onClick={back}>
-          Kembali ke Catat
+          {t('Kembali ke Catat', 'Back to Record')}
         </button>
       </div>
     );
@@ -210,13 +215,13 @@ export function Round({ ponds, queued, onSaved, go }: { ponds: PondSummary[]; qu
       <div class="screen">
         {header}
         <section class="card rp-warn-card">
-          <h2>Rekaman belum bisa dibaca</h2>
-          <p class="ink2">{clip.error ?? 'Ada masalah saat membaca rekaman.'}</p>
+          <h2>{t('Rekaman belum bisa dibaca', 'The recording could not be read yet')}</h2>
+          <p class="ink2">{clip.error ?? t('Ada masalah saat membaca rekaman.', 'Something went wrong reading the recording.')}</p>
           <button class="btn primary" onClick={() => read(clip)}>
-            <Glyph name="retry" /> Coba lagi
+            <Glyph name="retry" /> {t('Coba lagi', 'Try again')}
           </button>
           <button class="btn secondary" onClick={discard}>
-            Buang rekaman
+            {t('Buang rekaman', 'Discard the recording')}
           </button>
         </section>
       </div>
@@ -226,7 +231,7 @@ export function Round({ ponds, queued, onSaved, go }: { ponds: PondSummary[]; qu
   const mock = result.mode === 'mock' && (
     <p class="note info">
       <Icon name="info" />
-      <span>Mode contoh: hasil suara adalah contoh, bukan bacaan AI sungguhan.</span>
+      <span>{t('Mode contoh: hasil suara adalah contoh, bukan bacaan AI sungguhan.', 'Sample mode: voice results are samples, not real AI reads.')}</span>
     </p>
   );
 
@@ -240,20 +245,24 @@ export function Round({ ponds, queued, onSaved, go }: { ponds: PondSummary[]; qu
             <Glyph name="wave" />
           </span>
           <div class="stack-xs">
-            <h2>Suara belum terbaca</h2>
-            <p class="ink2">AI belum menangkap nama kolam atau angka dari rekaman ini. Rekaman tetap&nbsp;disimpan.</p>
+            <h2>{t('Suara belum terbaca', 'Could not read the recording')}</h2>
+            <p class="ink2">
+              {t('AI belum menangkap nama kolam atau angka dari rekaman ini. Rekaman tetap\u00a0disimpan.', 'The AI did not catch a pond name or number in this recording. The recording is still\u00a0kept.')}
+            </p>
           </div>
           <button type="button" class="rp-play" onClick={play} aria-pressed={playing}>
             <Glyph name={playing ? 'pause' : 'play'} size={20} />
-            <span class="grow">{playing ? `Memutar rekaman ${fmtDur(clip.seconds)}…` : `Putar rekaman ${fmtDur(clip.seconds)}`}</span>
+            <span class="grow">{playing
+                ? t(`Memutar rekaman ${fmtDur(clip.seconds)}…`, `Playing the recording (${fmtDur(clip.seconds)})…`)
+                : t(`Putar rekaman ${fmtDur(clip.seconds)}`, `Play the recording (${fmtDur(clip.seconds)})`)}</span>
           </button>
           <div class="stack rp-tips">
-            <span class="label semi muted">Supaya terbaca:</span>
+            <span class="label semi muted">{t('Supaya terbaca:', 'So it can be read:')}</span>
             {(
               [
-                ['device', 'Dekatkan HP ke mulut'],
-                ['chat', 'Sebut “Kolam” dulu, lalu angkanya'],
-                ['fan', 'Jauhi aerator saat bicara'],
+                ['device', t('Dekatkan HP ke mulut', 'Hold the phone close to your mouth')],
+                ['chat', t('Sebut “Kolam” dulu, lalu angkanya', 'Say the pond name first, then the numbers')],
+                ['fan', t('Jauhi aerator saat bicara', 'Stay away from the aerator while you talk')],
               ] as [GlyphName, string][]
             ).map(([icon, text]) => (
               <div class="row" key={text}>
@@ -267,10 +276,10 @@ export function Round({ ponds, queued, onSaved, go }: { ponds: PondSummary[]; qu
         </section>
         <div class="stack-sm" style={{ gap: 12 }}>
           <button class="btn primary" onClick={discard}>
-            <Icon name="mic" /> Rekam lagi
+            <Icon name="mic" /> {t('Rekam lagi', 'Record again')}
           </button>
           <button class="btn secondary" onClick={discard}>
-            <Icon name="pencil" /> Ketik sendiri
+            <Icon name="pencil" /> {t('Ketik sendiri', 'Type it in')}
           </button>
         </div>
       </div>
@@ -296,51 +305,66 @@ export function Round({ ponds, queued, onSaved, go }: { ponds: PondSummary[]; qu
       <section class="card" style={{ gap: 12 }}>
         <div class="row top between">
           <div class="stack-xs">
-            <h2>AI menemukan {total}&nbsp;kolam</h2>
-            <span class="label ink2 num">{pending ? `${clear.length + resolved.length} jelas · ${pending} perlu dicek` : `${total} jelas · semua sudah dicek`}</span>
+            <h2>{t(`AI menemukan ${total}\u00a0kolam`, `AI found ${total}\u00a0${total === 1 ? 'pond' : 'ponds'}`)}</h2>
+            <span class="label ink2 num">{pending
+                ? t(`${clear.length + resolved.length} jelas · ${pending} perlu dicek`, `${clear.length + resolved.length} clear · ${pending} to check`)
+                : t(`${total} jelas · semua sudah dicek`, `${total} clear · all checked`)}</span>
           </div>
-          <span class="pill blue">dari suara</span>
+          <span class="pill blue">{t('dari suara', 'from voice')}</span>
         </div>
         {savedN > 0 && (
           <div class="note ok" role="status" style={{ alignItems: 'center' }}>
             <Icon name="check" />
             <span class="num" style={{ fontSize: '1rem' }}>
-              {allDone ? `Semua ${total} catatan tersimpan.` : `${savedN} catatan tersimpan.`}
+              {allDone
+                ? t(`Semua ${total} catatan tersimpan.`, `All ${total} records saved.`)
+                : t(`${savedN} catatan tersimpan.`, `${savedN} record${savedN === 1 ? '' : 's'} saved.`)}
             </span>
           </div>
         )}
         {ready > 0 && (
           <button type="button" class="btn primary num" onClick={save} disabled={saving}>
-            {saving ? 'Menyimpan…' : savedN ? `Simpan ${ready} lagi` : `Simpan ${ready} yang jelas`}
+            {saving
+              ? t('Menyimpan…', 'Saving…')
+              : savedN
+                ? t(`Simpan ${ready} lagi`, `Save ${ready} more`)
+                : t(`Simpan ${ready} yang jelas`, ready === 1 ? 'Save the clear one' : `Save the ${ready} clear ones`)}
           </button>
         )}
         {allDone && (
           <button type="button" class="btn primary" onClick={back}>
-            Kembali ke Catat
+            {t('Kembali ke Catat', 'Back to Record')}
           </button>
         )}
         {error && <p class="error">{error}</p>}
-        {pending > 0 && <span class="label ink2">{pending} yang perlu dicek belum disimpan, tetap di sini sampai dicek.</span>}
+        {pending > 0 && (
+          <span class="label ink2">
+            {t(
+              `${pending} yang perlu dicek belum disimpan, tetap di sini sampai dicek.`,
+              `${pending} to check ${pending === 1 ? 'is' : 'are'} not saved yet and ${pending === 1 ? 'stays' : 'stay'} here until checked.`,
+            )}
+          </span>
+        )}
       </section>
 
       {alerts.map((p) => (
         <article class="card" key={p.id} style={{ gap: 12 }}>
           <div class="row between">
             <h2>
-              {p.name}: {p.findings[0]?.title ?? 'perlu perhatian'}
+              {p.name}: {p.findings[0]?.title ?? t('perlu perhatian', 'needs attention')}
             </h2>
             <StatusPill level={p.level} />
           </div>
           {p.findings[0] && <p class="ink2">{p.findings[0].detail}</p>}
           <button type="button" class="rp-link" onClick={() => go({ name: 'pond', id: p.id })}>
-            Lihat {p.name}
+            {t(`Lihat ${p.name}`, `View ${p.name}`)}
           </button>
         </article>
       ))}
 
       {checks.length > 0 && (
         <section class="stack-sm" style={{ gap: 12 }}>
-          <h2>Perlu dicek</h2>
+          <h2>{t('Perlu dicek', 'To check')}</h2>
           {checks.map((it) => (
             <CheckCard
               key={it.key}
@@ -362,8 +386,8 @@ export function Round({ ponds, queued, onSaved, go }: { ponds: PondSummary[]; qu
       {clear.length > 0 && (
         <section class="stack-sm">
           <div class="row between" style={{ alignItems: 'baseline' }}>
-            <h2 class="num">{clear.length} jelas</h2>
-            <span class={`label semi ${clearSaved ? 'rs-ok' : 'muted'}`}>{clearSaved ? 'Tersimpan' : 'Siap disimpan'}</span>
+            <h2 class="num">{t(`${clear.length} jelas`, `${clear.length} clear`)}</h2>
+            <span class={`label semi ${clearSaved ? 'rs-ok' : 'muted'}`}>{clearSaved ? t('Tersimpan', 'Saved') : t('Siap disimpan', 'Ready to save')}</span>
           </div>
           <div class="rs-clear" style={{ maxHeight: more ? 432 : undefined }}>
             {clearShown.map((it) => (
@@ -378,7 +402,7 @@ export function Round({ ponds, queued, onSaved, go }: { ponds: PondSummary[]; qu
           </div>
           {clear.length > SHOW && (
             <button type="button" class="rp-text-btn blue" aria-expanded={more} onClick={() => setMore(!more)}>
-              {more ? 'Tutup' : `Lihat ${clear.length - SHOW} lainnya`}
+              {more ? t('Tutup', 'Close') : t(`Lihat ${clear.length - SHOW} lainnya`, `See ${clear.length - SHOW} more`)}
               <span style={{ display: 'flex', transform: more ? 'rotate(180deg)' : undefined }}>
                 <Icon name="down" size={20} />
               </span>
@@ -394,10 +418,19 @@ export function Round({ ponds, queued, onSaved, go }: { ponds: PondSummary[]; qu
 function Kept({ reason, go, onRetry }: { reason?: Clip['reason']; go: Go; onRetry: () => void }) {
   const text =
     reason === 'quota'
-      ? { title: 'Jatah baca AI hari ini habis', body: 'Rekaman tetap disimpan dan dibaca otomatis besok pagi, atau begitu jatah ditambah.' }
+      ? {
+          title: t('Jatah baca AI hari ini habis', "Today's AI reads are used up"),
+          body: t('Rekaman tetap disimpan dan dibaca otomatis besok pagi, atau begitu jatah ditambah.', 'The recording is kept and read automatically tomorrow morning, or as soon as more reads are added.'),
+        }
       : reason === 'ai'
-        ? { title: 'AI sedang tidak tersedia', body: 'Rekaman disimpan di HP dan dibaca otomatis begitu AI tersedia lagi. Ketik sendiri tetap bisa.' }
-        : { title: 'Belum ada sinyal', body: 'Rekaman disimpan di HP dan dibaca otomatis saat ada sinyal. Aplikasi boleh ditutup.' };
+        ? {
+            title: t('AI sedang tidak tersedia', 'The AI is not available right now'),
+            body: t('Rekaman disimpan di HP dan dibaca otomatis begitu AI tersedia lagi. Ketik sendiri tetap bisa.', 'The recording is kept on the phone and read automatically once the AI is back. You can still type it in.'),
+          }
+        : {
+            title: t('Belum ada sinyal', 'No signal yet'),
+            body: t('Rekaman disimpan di HP dan dibaca otomatis saat ada sinyal. Aplikasi boleh ditutup.', 'The recording is kept on the phone and read automatically when there is signal. You can close the app.'),
+          };
   return (
     <section class="card rp-warn-card">
       <div class="row">
@@ -407,14 +440,14 @@ function Kept({ reason, go, onRetry }: { reason?: Clip['reason']; go: Go; onRetr
       <p class="ink2">{text.body}</p>
       {reason === 'quota' && (
         <button type="button" class="rp-link" onClick={() => go({ name: 'quota' })}>
-          Lihat dan tambah jatah AI <Icon name="next" size={16} />
+          {t('Lihat dan tambah jatah AI', 'View and add daily AI reads')} <Icon name="next" size={16} />
         </button>
       )}
       <button type="button" class="btn primary" onClick={() => go({ name: 'record' })}>
-        Kembali ke Catat
+        {t('Kembali ke Catat', 'Back to Record')}
       </button>
       <button type="button" class="btn secondary" onClick={onRetry}>
-        <Glyph name="retry" /> Coba baca sekarang
+        <Glyph name="retry" /> {t('Coba baca sekarang', 'Try reading now')}
       </button>
     </section>
   );
@@ -436,17 +469,17 @@ function CheckCard(props: {
   const unknown = it.pondId === null;
   const open = it.issues.map((iss, i) => ({ iss, i })).filter(({ i }) => !it.fixed[i]);
   const kind = unknown ? 'nopond' : (open[0]?.iss.kind ?? 'unclear');
-  const nick = it.heardName && !/^kolam\s+\w{1,3}$/i.test(it.heardName) ? it.heardName : '';
-  const name = pond ? pond.name : nick ? 'Kolam belum dikenal' : 'Kolam belum jelas';
+  const nick = it.heardName && !/^(kolam|pond)\s+\w{1,3}$/i.test(it.heardName) ? it.heardName : '';
+  const name = pond ? pond.name : nick ? t('Kolam belum dikenal', 'Unknown pond') : t('Kolam belum jelas', 'Unclear pond');
   const kindText = unknown
     ? it.heardName
-      ? `Terdengar “${it.heardName}”`
-      : 'Angka disebut sebelum nama kolam'
+      ? t(`Terdengar “${it.heardName}”`, `Heard “${it.heardName}”`)
+      : t('Angka disebut sebelum nama kolam', 'Numbers said before the pond name')
     : kind === 'unclear'
-      ? 'Bagian kurang jelas'
+      ? t('Bagian kurang jelas', 'Part not clear')
       : kind === 'implausible'
-        ? 'Angka janggal'
-        : 'Disebut dua kali';
+        ? t('Angka janggal', 'Odd number')
+        : t('Disebut dua kali', 'Said twice');
   const fix = (i: number, data: LogData) => onChange({ data, fixed: it.fixed.map((f, j) => (j === i ? true : f)) });
 
   if (isDone(it))
@@ -460,12 +493,12 @@ function CheckCard(props: {
             <span class="strong">{pond?.name}</span>
             <span class="label muted num">
               {vals(it.data)}
-              {it.picked && it.heardName ? ` · dari “${it.heardName}”` : ''} · {it.saved ? 'tersimpan' : 'siap disimpan'}
+              {it.picked && it.heardName ? t(` · dari “${it.heardName}”`, ` · from “${it.heardName}”`) : ''} · {it.saved ? t('tersimpan', 'saved') : t('siap disimpan', 'ready to save')}
             </span>
           </div>
           {!it.saved && (
             <button type="button" class="rs-small-btn" onClick={props.onUndo}>
-              Ubah
+              {t('Ubah', 'Edit')}
             </button>
           )}
         </div>
@@ -473,7 +506,7 @@ function CheckCard(props: {
         {it.picked && nick && it.remember === 'yes' && (
           <span class="row label semi" style={{ gap: 8, color: 'var(--accent-ink)' }} role="status">
             <Icon name="check" size={18} stroke={2.6} />
-            Diingat: “{nick}” = {pond?.name}
+            {t('Diingat', 'Remembered')}: “{nick}” = {pond?.name}
           </span>
         )}
       </article>
@@ -496,7 +529,7 @@ function CheckCard(props: {
       {it.autoFixed.map((a) => (
         <span class="row label rs-ok num" style={{ gap: 8 }} key={a.field}>
           <Icon name="check" size={18} stroke={2.6} />
-          {FIELD[a.field].label} terdengar {a.heard}, otomatis dibaca {fmtNum(a.value)}
+          {t(`${FIELD[a.field].label} terdengar ${a.heard}, otomatis dibaca ${fmtNum(a.value)}`, `${FIELD[a.field].label} heard as ${a.heard}, read as ${fmtNum(a.value)} automatically`)}
         </span>
       ))}
 
@@ -533,17 +566,17 @@ function Remember({ nick, pond, onAnswer }: { nick: string; pond: PondSummary; o
     <div class="rs-offer">
       <div class="stack-xs" style={{ gap: 2 }}>
         <span class="strong" style={{ color: 'var(--navy)' }}>
-          Ingat “{nick}” = {pond.name}?
+          {t('Ingat', 'Remember')} “{nick}” = {pond.name}?
         </span>
-        <span class="label ink2">Lain kali langsung masuk ke {pond.name}.</span>
+        <span class="label ink2">{t(`Lain kali langsung masuk ke ${pond.name}.`, `Next time it goes straight to ${pond.name}.`)}</span>
       </div>
       {error && <p class="error">{error}</p>}
       <div class="grid2" style={{ gap: 8 }}>
         <button type="button" class="btn primary rs-48" onClick={yes}>
-          Ya, ingat
+          {t('Ya, ingat', 'Yes, remember')}
         </button>
         <button type="button" class="btn secondary rs-48" onClick={() => onAnswer('no')}>
-          Tidak
+          {t('Tidak', 'No')}
         </button>
       </div>
     </div>
@@ -562,12 +595,14 @@ function PickPond({ item, ponds, onPick }: { item: RoundItem; ponds: PondSummary
     : suggested.length
       ? suggested.slice(0, 4)
       : late.slice(0, 3);
-  const hint = (p: PondSummary) => [p.kind ? (kindLabel[p.kind] ?? p.kind) : null, p.lastLogAt ? `terakhir ${fmtAgo(Date.parse(p.lastLogAt))}` : 'belum pernah dicatat'].filter(Boolean).join(' · ');
+  const hint = (p: PondSummary) => [p.kind ? (kindLabel[p.kind] ?? p.kind) : null, p.lastLogAt ? t(`terakhir ${fmtAgo(Date.parse(p.lastLogAt))}`, `last ${fmtAgo(Date.parse(p.lastLogAt))}`) : t('belum pernah dicatat', 'never recorded')].filter(Boolean).join(' · ');
   return (
     <>
-      <p class="label ink2">Terdengar: “{item.quote}”</p>
+      <p class="label ink2">
+        {t('Terdengar', 'Heard')}: “{item.quote}”
+      </p>
       <button type="button" class="rs-pick" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <span class="grow">Pilih kolamnya</span>
+        <span class="grow">{t('Pilih kolamnya', 'Pick the pond')}</span>
         <span style={{ display: 'flex', transform: open ? 'rotate(180deg)' : undefined }}>
           <Icon name="down" />
         </span>
@@ -576,9 +611,9 @@ function PickPond({ item, ponds, onPick }: { item: RoundItem; ponds: PondSummary
         <div class="stack-sm">
           <label class="rp-search">
             <Icon name="search" size={20} />
-            <input aria-label="Cari kolam" placeholder="Cari nama kolam" value={q} onInput={(e) => setQ(e.currentTarget.value)} />
+            <input aria-label={t('Cari kolam', 'Search ponds')} placeholder={t('Cari nama kolam', 'Search pond name')} value={q} onInput={(e) => setQ(e.currentTarget.value)} />
           </label>
-          <span class="label muted">{needle ? 'Hasil cari:' : suggested.length ? 'Paling mirip:' : 'Paling lama belum dicatat:'}</span>
+          <span class="label muted">{needle ? t('Hasil cari:', 'Search results:') : suggested.length ? t('Paling mirip:', 'Closest match:') : t('Paling lama belum dicatat:', 'Longest without a record:')}</span>
           {pool.map((p) => (
             <button type="button" class="rs-option" key={p.id} onClick={() => onPick(p.id)}>
               <span class="grow" style={{ display: 'flex', flexDirection: 'column' }}>
@@ -588,7 +623,9 @@ function PickPond({ item, ponds, onPick }: { item: RoundItem; ponds: PondSummary
               <Icon name="next" />
             </button>
           ))}
-          {needle && pool.length === 0 && <span class="label ink2" style={{ padding: '8px 0' }}>Tidak ada kolam dengan nama itu.</span>}
+          {needle && pool.length === 0 && <span class="label ink2" style={{ padding: '8px 0' }}>
+              {t('Tidak ada kolam dengan nama itu.', 'No pond with that name.')}
+            </span>}
         </div>
       )}
     </>
@@ -602,17 +639,17 @@ function Implausible({ issue, onFix }: { issue: Extract<RoundIssue, { kind: 'imp
     <div class="stack-sm">
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         <span class="strong num">
-          {FIELD[issue.field].label} terdengar {issue.heard}
+          {t(`${FIELD[issue.field].label} terdengar ${issue.heard}`, `${FIELD[issue.field].label} heard as ${issue.heard}`)}
         </span>
         <span class="label muted">{issue.note}</span>
       </div>
       {issue.suggestion !== null && !typing && (
         <>
           <button type="button" class="btn primary num" onClick={() => onFix(issue.suggestion!)}>
-            Maksudnya {withUnit(issue.field, issue.suggestion)}?
+            {t(`Maksudnya ${withUnit(issue.field, issue.suggestion)}?`, `Did you mean ${withUnit(issue.field, issue.suggestion)}?`)}
           </button>
           <button type="button" class="btn secondary rs-48 label" onClick={() => setTyping(true)}>
-            Bukan, ketik sendiri
+            {t('Bukan, ketik sendiri', 'No, type it in')}
           </button>
         </>
       )}
@@ -632,10 +669,10 @@ function TypeValue({ field, onDone }: { field: ReadingField; onDone: (v: number)
           {FIELD[field].label}
           {FIELD[field].unit ? ` (${FIELD[field].unit})` : ''}
         </span>
-        <input class="input" inputMode={field === 'tds' ? 'numeric' : 'decimal'} placeholder={`contoh: ${FIELD[field].example}`} value={v} onInput={(e) => setV(e.currentTarget.value)} autoFocus />
+        <input class="input" inputMode={field === 'tds' ? 'numeric' : 'decimal'} placeholder={`${t('contoh', 'example')}: ${FIELD[field].example}`} value={v} onInput={(e) => setV(e.currentTarget.value)} autoFocus />
       </label>
       <button type="button" class="btn primary" disabled={!ok} onClick={() => ok && onDone(n!)}>
-        Pakai angka ini
+        {t('Pakai angka ini', 'Use this number')}
       </button>
     </div>
   );
@@ -649,21 +686,26 @@ function Twice({ issue, onFix }: { issue: Extract<RoundIssue, { kind: 'twice' }>
   return (
     <div class="stack-sm" style={{ gap: 12 }}>
       <span class="label ink2">
-        {label} disebut {issue.values.length === 2 ? 'dua' : issue.values.length} kali, angkanya beda. Pakai yang mana?
+        {t(
+          `${label} disebut ${issue.values.length === 2 ? 'dua' : issue.values.length} kali, angkanya beda. Pakai yang mana?`,
+          `${label} was said ${issue.values.length === 2 ? 'twice' : `${issue.values.length} times`} with different numbers. Which one?`,
+        )}
       </span>
-      <div role="radiogroup" aria-label={`Pilih ${label.toLowerCase()}`} class="stack-sm">
+      <div role="radiogroup" aria-label={t(`Pilih ${label.toLowerCase()}`, `Choose ${label}`)} class="stack-sm">
         {issue.values.map((v, i) => (
           <button type="button" role="radio" aria-checked={i === sel} class={`rs-radio${i === sel ? ' on' : ''}`} key={i} onClick={() => setSel(i)}>
             <span class="rs-radio-dot">{i === sel && <Icon name="check" size={14} stroke={3} />}</span>
             <span class="grow" style={{ display: 'flex', flexDirection: 'column' }}>
               <span class="strong num">{said(issue.field, v)}</span>
-              <span class="label muted">{i === last ? 'disebut terakhir' : i === 0 ? 'disebut lebih dulu' : `disebut ke-${i + 1}`}</span>
+              <span class="label muted">{i === last ? t('disebut terakhir', 'said last') : i === 0 ? t('disebut lebih dulu', 'said first') : t(`disebut ke-${i + 1}`, `said as number ${i + 1}`)}</span>
             </span>
           </button>
         ))}
       </div>
       <button type="button" class="btn primary num" onClick={() => onFix(issue.values[sel])}>
-        Pakai {label === 'pH' ? 'pH' : label.toLowerCase()} {withUnit(issue.field, issue.values[sel])}
+        {isEn
+          ? `Use ${issue.field === 'temperature' ? 'temperature' : label} ${withUnit(issue.field, issue.values[sel])}`
+          : `Pakai ${label === 'pH' ? 'pH' : label.toLowerCase()} ${withUnit(issue.field, issue.values[sel])}`}
       </button>
     </div>
   );
@@ -689,7 +731,7 @@ function Unclear(props: { issue: Extract<RoundIssue, { kind: 'unclear' }>; item:
       setBusy(true);
       const { round } = await sendRound(await voiceToWav(audio));
       const d = round.drafts.find((x) => x.pondId === item.pondId) ?? round.drafts.find((x) => x.pondId === null) ?? round.drafts[0];
-      if (!d || d.issues.some((x) => x.kind === 'unclear')) return setError('Masih kurang jelas. Coba lagi lebih dekat ke HP, atau ketik sendiri.');
+      if (!d || d.issues.some((x) => x.kind === 'unclear')) return setError(t('Masih kurang jelas. Coba lagi lebih dekat ke HP, atau ketik sendiri.', 'Still not clear. Try again closer to the phone, or type it in.'));
       const twice = d.issues.find((x) => x.kind === 'twice');
       let data: LogData = { ...item.data, ...d.data, readings: { ...item.data.readings, ...d.data.readings } };
       if (twice?.kind === 'twice') data = setReading(data, twice.field, twice.values[twice.values.length - 1]);
@@ -699,14 +741,14 @@ function Unclear(props: { issue: Extract<RoundIssue, { kind: 'unclear' }>; item:
       const why = waitReason(err);
       setError(
         isDenied(err)
-          ? 'Mikrofon belum diizinkan. Ketik sendiri dulu.'
+          ? t('Mikrofon belum diizinkan. Ketik sendiri dulu.', 'The microphone is not allowed yet. Type it in for now.')
           : why === 'quota'
-            ? 'Jatah baca AI hari ini habis. Ketik sendiri dulu.'
+            ? t('Jatah baca AI hari ini habis. Ketik sendiri dulu.', "Today's AI reads are used up. Type it in for now.")
             : why
-              ? 'Belum bisa dibaca sekarang. Ketik sendiri dulu.'
+              ? t('Belum bisa dibaca sekarang. Ketik sendiri dulu.', 'It cannot be read right now. Type it in for now.')
               : err instanceof ApiError
                 ? err.message
-                : 'Mikrofon tidak bisa dipakai. Ketik sendiri dulu.',
+                : t('Mikrofon tidak bisa dipakai. Ketik sendiri dulu.', 'The microphone does not work. Type it in for now.'),
       );
     } finally {
       setBusy(false);
@@ -715,14 +757,18 @@ function Unclear(props: { issue: Extract<RoundIssue, { kind: 'unclear' }>; item:
 
   return (
     <>
-      {props.issue.text && <p class="label ink2">Terdengar sebagian: “{props.issue.text}”</p>}
+      {props.issue.text && (
+        <p class="label ink2">
+          {t('Terdengar sebagian', 'Heard in part')}: “{props.issue.text}”
+        </p>
+      )}
       <button type="button" class="rp-play" onClick={props.onPlay} aria-pressed={props.playing}>
         <Glyph name={props.playing ? 'pause' : 'play'} size={20} />
-        <span class="grow">{props.playing ? 'Memutar rekaman…' : 'Putar rekaman'}</span>
+        <span class="grow">{props.playing ? t('Memutar rekaman…', 'Playing the recording…') : t('Putar rekaman', 'Play the recording')}</span>
       </button>
       {busy && (
         <p class="working" role="status">
-          AI membaca suara…
+          {t('AI membaca suara…', 'AI is reading the voice recording…')}
         </p>
       )}
       {error && <p class="error">{error}</p>}
@@ -731,15 +777,15 @@ function Unclear(props: { issue: Extract<RoundIssue, { kind: 'unclear' }>; item:
       ) : rec ? (
         <button type="button" class="btn danger" onClick={again}>
           <span class="rs-rec-dot" />
-          Merekam… ketuk kalau selesai
+          {t('Merekam… ketuk kalau selesai', 'Recording… tap when done')}
         </button>
       ) : (
         <div class="row" style={{ gap: 8 }}>
           <button type="button" class="btn primary grow" onClick={again} disabled={busy}>
-            <Icon name="mic" /> Rekam ulang
+            <Icon name="mic" /> {t('Rekam ulang', 'Record again')}
           </button>
           <button type="button" class="btn secondary" onClick={() => setTyping(true)} disabled={busy}>
-            Ketik sendiri
+            {t('Ketik sendiri', 'Type it in')}
           </button>
         </div>
       )}
@@ -750,7 +796,7 @@ function Unclear(props: { issue: Extract<RoundIssue, { kind: 'unclear' }>; item:
 /** Type the numbers for one pond of the round. */
 function TypeAll({ data, onDone }: { data: LogData; onDone: (d: LogData) => void }) {
   const r = data.readings ?? {};
-  const show = (v?: number) => (v === undefined ? '' : String(v).replace('.', ','));
+  const show = (v?: number) => (v === undefined ? '' : isEn ? String(v) : String(v).replace('.', ','));
   const [v, setV] = useState<Record<ReadingField, string>>({ temperature: show(r.temperature), ph: show(r.ph), tds: show(r.tds) });
   const [dead, setDead] = useState(data.mortality ?? 0);
   const nums = Object.fromEntries((Object.keys(v) as ReadingField[]).map((k) => [k, parseNum(v[k])]));
@@ -767,16 +813,16 @@ function TypeAll({ data, onDone }: { data: LogData; onDone: (d: LogData) => void
             {FIELD[k].label}
             {FIELD[k].unit ? ` (${FIELD[k].unit})` : ''}
           </span>
-          <input class="input" inputMode={k === 'tds' ? 'numeric' : 'decimal'} placeholder={`contoh: ${FIELD[k].example}`} value={v[k]} onInput={(e) => setV({ ...v, [k]: e.currentTarget.value })} />
+          <input class="input" inputMode={k === 'tds' ? 'numeric' : 'decimal'} placeholder={`${t('contoh', 'example')}: ${FIELD[k].example}`} value={v[k]} onInput={(e) => setV({ ...v, [k]: e.currentTarget.value })} />
         </label>
       ))}
       <div class="field">
-        <span class="field-label">Sidat mati (ekor)</span>
+        <span class="field-label">{t('Sidat mati (ekor)', 'Dead eels')}</span>
         <Stepper value={dead} onChange={setDead} quick={[5, 10, 50]} />
       </div>
-      {bad && <p class="error">Angka pengukuran tidak valid</p>}
+      {bad && <p class="error">{t('Angka pengukuran tidak valid', 'A reading is not a valid number')}</p>}
       <button type="button" class="btn primary" disabled={bad} onClick={done}>
-        Pakai angka ini
+        {t('Pakai angka ini', 'Use this number')}
       </button>
     </div>
   );

@@ -5,6 +5,9 @@
 }
 .profile .size-opt.on { border: 3px solid var(--navy); }
 .profile .night-row { min-height: 64px; border-top: 1px solid var(--line); padding-top: 16px; }
+/* Language: the same choice tiles as text size, two across. */
+.profile .lang-row { border-top: 1px solid var(--line); padding-top: 16px; }
+.profile .lang-opt { min-height: 72px; padding: 0 32px; line-height: 1.25; text-align: center; }
 /* Features that do not exist yet: one quiet group, one chip. */
 .profile .later { padding: 16px 20px 4px; gap: 0; }
 .profile .later-title { font-size: 1rem; color: var(--ink-2); }

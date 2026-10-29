@@ -17,6 +17,7 @@ import { Help } from './screens/help.tsx';
 import { Alarm } from './screens/alarm.tsx';
 import { useAlarms, useWatchDot } from './alarms.ts';
 import { ConnectionBanner, Icon, type IconName } from './ui.tsx';
+import { t } from './i18n.ts';
 
 export type Route =
   | { name: 'today' }
@@ -40,10 +41,10 @@ export type Route =
 export type Go = (r: Route) => void;
 
 const tabs: { name: 'today' | 'record' | 'watch' | 'problem'; label: string; icon: IconName }[] = [
-  { name: 'today', label: 'Beranda', icon: 'home' },
-  { name: 'record', label: 'Catat', icon: 'pencil' },
-  { name: 'watch', label: 'Waspada', icon: 'eye' },
-  { name: 'problem', label: 'Masalah', icon: 'siren' },
+  { name: 'today', label: t('Beranda', 'Home'), icon: 'home' },
+  { name: 'record', label: t('Catat', 'Record'), icon: 'pencil' },
+  { name: 'watch', label: t('Waspada', 'Watch'), icon: 'eye' },
+  { name: 'problem', label: t('Masalah', 'Problem'), icon: 'siren' },
 ];
 
 const TAB_OF: Partial<Record<Route['name'], (typeof tabs)[number]['name']>> = {
@@ -143,7 +144,7 @@ export function App() {
     return () => clearInterval(timer);
   }, [offline, retry]);
   useEffect(() => {
-    const lost = () => meRef.current && setError('HP tidak tersambung ke internet');
+    const lost = () => meRef.current && setError(t('HP tidak tersambung ke internet', 'The phone is not connected to the internet'));
     const back = () => meRef.current && refresh();
     window.addEventListener('offline', lost);
     window.addEventListener('online', back);
@@ -195,9 +196,9 @@ export function App() {
   if (error && (me === undefined || !state)) {
     body = (
       <div class="screen">
-        <p class="error">Tidak bisa terhubung ke server: {error}</p>
+        <p class="error">{t('Tidak bisa terhubung ke server', 'Cannot reach the server')}: {error}</p>
         <button class="btn secondary" onClick={me ? refresh : loadMe}>
-          Coba lagi
+          {t('Coba lagi', 'Try again')}
         </button>
       </div>
     );
@@ -228,7 +229,7 @@ export function App() {
   } else if (!me || !state) {
     body = (
       <div class="screen">
-        <p class="muted">Memuat…</p>
+        <p class="muted">{t('Memuat…', 'Loading…')}</p>
       </div>
     );
   } else if (!state.farm) {
@@ -307,14 +308,14 @@ export function App() {
         {body}
       </main>
       {ready && (
-        <nav class="tabs" aria-label="Menu utama">
-          {tabs.map((t) => (
-            <button key={t.name} class={tabOf(route) === t.name ? 'active' : ''} aria-current={tabOf(route) === t.name ? 'page' : undefined} onClick={() => go({ name: t.name })}>
+        <nav class="tabs" aria-label={t('Menu utama', 'Main menu')}>
+          {tabs.map((tab) => (
+            <button key={tab.name} class={tabOf(route) === tab.name ? 'active' : ''} aria-current={tabOf(route) === tab.name ? 'page' : undefined} onClick={() => go({ name: tab.name })}>
               <span class="pill">
-                <Icon name={t.icon} />
-                {t.name === 'watch' && alerts && <span class="dot" aria-label="ada peringatan" />}
+                <Icon name={tab.icon} />
+                {tab.name === 'watch' && alerts && <span class="dot" aria-label={t('ada peringatan', 'warning')} />}
               </span>
-              {t.label}
+              {tab.label}
             </button>
           ))}
         </nav>

@@ -5,6 +5,7 @@
 //
 // All values are estimates, not measurements. The model re-anchors on every new
 // temperature reading and learns a per-pond offset from how wrong it was before.
+import { dec, tx } from './i18n.ts';
 import { DAY_MS, type Log, type Phase, type Pond } from './domain.ts';
 import { limitsFor, median, type Threshold } from './rules.ts';
 import type { WeatherHour } from './weather.ts';
@@ -157,7 +158,7 @@ const isSleeping = (hour: number) => hour >= 22 || hour < 5;
 
 // ---------- risk ----------
 
-const fmt = (n: number) => n.toLocaleString('id-ID', { maximumFractionDigits: 1 });
+const fmt = (n: number) => dec(n, 1);
 
 export function riskLevel(score: number): RiskLevel {
   return score >= 5 ? 'critical' : score >= 3 ? 'warning' : 'ok';
@@ -222,42 +223,42 @@ export function computeNowcast(input: NowcastInput): Nowcast {
     if (temp !== null && limits) {
       const crit = limits.critical?.above;
       const warn = limits.warning?.above;
-      if (crit !== undefined && temp > crit) factors.push({ id: 'temp', label: `Air diperkirakan ${fmt(temp)} °C, oksigen terlarut turun`, points: 3 });
-      else if (warn !== undefined && temp > warn) factors.push({ id: 'temp', label: `Air diperkirakan agak panas (${fmt(temp)} °C)`, points: 2 });
+      if (crit !== undefined && temp > crit) factors.push({ id: 'temp', label: tx(`Air diperkirakan ${fmt(temp)} °C, oksigen terlarut turun`, `Water estimated at ${fmt(temp)} °C, dissolved oxygen drops`), points: 3 });
+      else if (warn !== undefined && temp > warn) factors.push({ id: 'temp', label: tx(`Air diperkirakan agak panas (${fmt(temp)} °C)`, `Water estimated a bit hot (${fmt(temp)} °C)`), points: 2 });
     }
 
     const recent = within(DAY_MS, known);
     const signs = new Set(recent.flatMap((l) => l.data.behavior ?? []));
     if (signs.has('surfacing') || signs.has('gathering_inlet')) {
-      factors.push({ id: 'signs', label: 'Sidat terlihat naik ke permukaan atau berkumpul di air masuk', points: 3 });
+      factors.push({ id: 'signs', label: tx('Sidat terlihat naik ke permukaan atau berkumpul di air masuk', 'Eels seen rising to the surface or crowding at the water inlet'), points: 3 });
     }
 
     const lastAeration = recent.find((l) => l.data.aeration)?.data.aeration;
-    if (lastAeration === 'off') factors.push({ id: 'aeration_off', label: 'Aerator dilaporkan mati', points: 5 });
-    else if (lastAeration === 'weak') factors.push({ id: 'aeration_weak', label: 'Aerasi dilaporkan lemah', points: 2 });
-    if (pond.aeration === 'none') factors.push({ id: 'no_aeration', label: 'Kolam tanpa aerasi', points: 2 });
-    else if (pond.aeration === 'partial' && isNight(hour)) factors.push({ id: 'partial_aeration', label: 'Aerasi tidak 24 jam', points: 1 });
+    if (lastAeration === 'off') factors.push({ id: 'aeration_off', label: tx('Aerator dilaporkan mati', 'Aerator reported off'), points: 5 });
+    else if (lastAeration === 'weak') factors.push({ id: 'aeration_weak', label: tx('Aerasi dilaporkan lemah', 'Aeration reported weak'), points: 2 });
+    if (pond.aeration === 'none') factors.push({ id: 'no_aeration', label: tx('Kolam tanpa aerasi', 'Pond without aeration'), points: 2 });
+    else if (pond.aeration === 'partial' && isNight(hour)) factors.push({ id: 'partial_aeration', label: tx('Aerasi tidak 24 jam', 'Aeration not on 24 hours'), points: 1 });
 
     const green = within(3 * DAY_MS, known).find((l) => l.data.water?.color)?.data.water?.color === 'green';
-    if (outdoor && green && isNight(hour)) factors.push({ id: 'algae_night', label: 'Malam hari: alga di air hijau ikut memakai oksigen', points: 1 });
-    if (outdoor && green && (daylightCloud(t) ?? 0) > 80) factors.push({ id: 'cloudy', label: 'Hari mendung: alga menghasilkan sedikit oksigen', points: 1 });
+    if (outdoor && green && isNight(hour)) factors.push({ id: 'algae_night', label: tx('Malam hari: alga di air hijau ikut memakai oksigen', 'Night: algae in green water also use oxygen'), points: 1 });
+    if (outdoor && green && (daylightCloud(t) ?? 0) > 80) factors.push({ id: 'cloudy', label: tx('Hari mendung: alga menghasilkan sedikit oksigen', 'Cloudy day: algae make little oxygen'), points: 1 });
 
     if (phase === 'elver' && density !== undefined) {
-      if (density > 100) factors.push({ id: 'density', label: `Kolam padat (±${Math.round(density)} ekor/m²)`, points: 2 });
-      else if (density > 60) factors.push({ id: 'density', label: `Kepadatan di atas ideal (±${Math.round(density)} ekor/m²)`, points: 1 });
+      if (density > 100) factors.push({ id: 'density', label: tx(`Kolam padat (±${Math.round(density)} ekor/m²)`, `Crowded pond (about ${Math.round(density)} eels/m²)`), points: 2 });
+      else if (density > 60) factors.push({ id: 'density', label: tx(`Kepadatan di atas ideal (±${Math.round(density)} ekor/m²)`, `More crowded than ideal (about ${Math.round(density)} eels/m²)`), points: 1 });
     }
 
     if (within(2 * DAY_MS, known).some((l) => l.data.feeding?.leftover === 'much')) {
-      factors.push({ id: 'leftover', label: 'Sisa pakan banyak membusuk dan memakai oksigen', points: 1 });
+      factors.push({ id: 'leftover', label: tx('Sisa pakan banyak membusuk dan memakai oksigen', 'Lots of leftover feed rotting and using oxygen'), points: 1 });
     }
 
     const rain = [0, 1, 2].reduce((sum, back) => sum + (weatherAt(weather, t - back * HOUR_MS)?.rain ?? 0), 0);
-    if (outdoor && rain >= 10) factors.push({ id: 'rain', label: `Hujan deras (${fmt(rain)} mm/3 jam): pH dan TDS bisa berubah`, points: 1 });
+    if (outdoor && rain >= 10) factors.push({ id: 'rain', label: tx(`Hujan deras (${fmt(rain)} mm/3 jam): pH dan TDS bisa berubah`, `Heavy rain (${fmt(rain)} mm in 3 hours): pH and TDS can change`), points: 1 });
 
     // Nobody has looked for a long time: problems go unnoticed. This is what kills batches.
     if (lastCheckAt !== null && t >= lastCheckAt) {
       const gapH = (t - lastCheckAt) / HOUR_MS;
-      if (gapH >= 12) factors.push({ id: 'unwatched', label: `Belum dicek ${Math.floor(gapH)} jam`, points: 1 });
+      if (gapH >= 12) factors.push({ id: 'unwatched', label: tx(`Belum dicek ${Math.floor(gapH)} jam`, `Not checked for ${Math.floor(gapH)} hours`), points: 1 });
     }
 
     factors.sort((a, b) => b.points - a.points);
@@ -297,11 +298,11 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
 // ---------- checks ----------
 
 // A daily routine built from the Blueprint daily SOP and the partner farm's practice.
-const ROUTINE: { at: string; kind: SuggestedCheck['kind']; reason: string }[] = [
-  { at: '06:30', kind: 'measure', reason: 'Ukur suhu, pH, TDS dan amati sidat' },
-  { at: '12:00', kind: 'look', reason: 'Lihat perilaku sidat dan aerator' },
-  { at: '17:00', kind: 'measure', reason: 'Ukur suhu, pH, TDS dan buang sisa pakan' },
-  { at: '21:00', kind: 'look', reason: 'Pastikan aerator nyala sebelum tidur' },
+const ROUTINE: { at: string; kind: SuggestedCheck['kind']; reason: () => string }[] = [
+  { at: '06:30', kind: 'measure', reason: () => tx('Ukur suhu, pH, TDS dan amati sidat', 'Measure temperature, pH, TDS and watch the eels') },
+  { at: '12:00', kind: 'look', reason: () => tx('Lihat perilaku sidat dan aerator', 'Look at how the eels behave and at the aerator') },
+  { at: '17:00', kind: 'measure', reason: () => tx('Ukur suhu, pH, TDS dan buang sisa pakan', 'Measure temperature, pH, TDS and remove leftover feed') },
+  { at: '21:00', kind: 'look', reason: () => tx('Pastikan aerator nyala sebelum tidur', 'Make sure the aerator is on before bed') },
 ];
 
 export function suggestChecks(ahead: NowcastPoint[], now: number, timezone: string): SuggestedCheck[] {
@@ -311,7 +312,10 @@ export function suggestChecks(ahead: NowcastPoint[], now: number, timezone: stri
   const riskCheck = (h: NowcastPoint, t: number): SuggestedCheck => ({
     t,
     kind: 'look',
-    reason: `Risiko ${h.level === 'critical' ? 'tinggi' : 'naik'}: ${h.factors[0] ? h.factors[0].label[0].toLowerCase() + h.factors[0].label.slice(1) : 'beberapa faktor'}`,
+    reason: tx(
+      `Risiko ${h.level === 'critical' ? 'tinggi' : 'naik'}: ${h.factors[0] ? h.factors[0].label[0].toLowerCase() + h.factors[0].label.slice(1) : 'beberapa faktor'}`,
+      `Risk ${h.level === 'critical' ? 'high' : 'rising'}: ${h.factors[0] ? h.factors[0].label[0].toLowerCase() + h.factors[0].label.slice(1) : 'several factors'}`,
+    ),
     alarm: isSleeping(localParts(t, timezone).hour),
   });
 
@@ -341,7 +345,7 @@ export function suggestChecks(ahead: NowcastPoint[], now: number, timezone: stri
       const t = localTime(date, r.at, timezone);
       if (t <= now || t > end) continue;
       if (checks.some((c) => Math.abs(c.t - t) < 90 * 60_000)) continue;
-      checks.push({ t, kind: r.kind, reason: r.reason, alarm: false });
+      checks.push({ t, kind: r.kind, reason: r.reason(), alarm: false });
     }
   }
   return checks.sort((a, b) => a.t - b.t);

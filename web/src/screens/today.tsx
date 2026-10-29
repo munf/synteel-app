@@ -4,11 +4,12 @@ import { useState } from 'preact/hooks';
 import { fmtAgo, fmtClock, fmtNum, fmtTemp, greeting, phaseLabel, readingWord } from '../labels.ts';
 import { EmptyState, Icon, initialOf, PondThumb, pondMeta, Shape, StatusPill, type IconName } from '../ui.tsx';
 import { DueRechecks, useRechecks } from './recheck.tsx';
+import { LOCALE, t } from '../i18n.ts';
 import './today.css';
 
 const rank = { ok: 0, info: 0, warning: 1, critical: 2 } as const;
 const SHOWN = [
-  ['temperature', 'Suhu'],
+  ['temperature', t('Suhu', 'Temp')],
   ['ph', 'pH'],
   ['tds', 'TDS'],
 ] as const;
@@ -18,12 +19,13 @@ const BAR = { critical: '#D92D20', warning: '#A86A00', ok: '#1E8A5F', none: '#D9
 const fmtValue = (key: 'temperature' | 'ph' | 'tds', v: number) => (key === 'temperature' ? fmtTemp(v) : fmtNum(v));
 
 /** Farm-time date "YYYY-MM-DD" of a timestamp. */
-const ymdOf = (t: number) => new Date(t + 7 * 3600_000).toISOString().slice(0, 10);
+const ymdOf = (ms: number) => new Date(ms + 7 * 3600_000).toISOString().slice(0, 10);
 
 /** "Dicatat 17.15" today, "Dicatat Selasa 17.15" before; never an amber colour (amber is Perhatian). */
 function loggedLine(lastAt: number | null, today: string) {
-  if (lastAt === null) return 'Belum pernah dicatat';
-  return ymdOf(lastAt) === today ? `Dicatat ${fmtClock(lastAt)}` : `Dicatat ${fmtClock(lastAt, true)}`;
+  if (lastAt === null) return t('Belum pernah dicatat', 'Never recorded');
+  const when = ymdOf(lastAt) === today ? fmtClock(lastAt) : fmtClock(lastAt, true);
+  return t(`Dicatat ${when}`, `Recorded ${when}`);
 }
 
 /** A pond that needs attention: why, and only the readings that are not good. */
@@ -44,8 +46,8 @@ function AttentionCard({ pond, go, today }: { pond: PondSummary; go: Go; today: 
         <div class="grow stack-xs">
           <span class="h2">{pond.name}</span>
           <span class="meta num" style={{ display: 'flex', flexDirection: 'column' }}>
-            <span>{pond.batch && pond.program ? `${phaseLabel[pond.batch.phase]} · minggu ${pond.program.week}` : pondMeta(pond)}</span>
-            {alive != null && <span>sekitar {alive.toLocaleString('id-ID')} ekor</span>}
+            <span>{pond.batch && pond.program ? `${phaseLabel[pond.batch.phase]} · ${t('minggu', 'week')} ${pond.program.week}` : pondMeta(pond)}</span>
+            {alive != null && <span>{t(`sekitar ${alive.toLocaleString(LOCALE)} ekor`, `about ${alive.toLocaleString(LOCALE)} ${alive === 1 ? 'eel' : 'eels'}`)}</span>}
           </span>
         </div>
         <StatusPill level={pond.level} />
@@ -80,7 +82,7 @@ function UnrecordedCard({ pond, go }: { pond: PondSummary; go: Go }) {
           <div class="row between" style={{ gap: 8 }}>
             <span class="h2">{pond.name}</span>
             <span class="label ink2" style={{ whiteSpace: 'nowrap', fontWeight: 400 }}>
-              Belum dicatat hari ini
+              {t('Belum dicatat hari ini', 'Not recorded today')}
             </span>
           </div>
           <span class="label ink2 num">{pondMeta(pond)}</span>
@@ -93,11 +95,11 @@ function UnrecordedCard({ pond, go }: { pond: PondSummary; go: Go }) {
               {label}
             </span>
             <span class="v">–</span>
-            <span class="label ink2">belum diukur</span>
+            <span class="label ink2">{t('belum diukur', 'not measured yet')}</span>
           </div>
         ))}
       </div>
-      <span class="label ink2">Belum pernah dicatat</span>
+      <span class="label ink2">{t('Belum pernah dicatat', 'Never recorded')}</span>
     </button>
   );
 }
@@ -113,21 +115,21 @@ function SafeCard({ ponds, go, now }: { ponds: PondSummary[]; go: Go; now: numbe
           <Icon name="check" size={24} stroke={2.5} />
         </span>
         <div class="grow stack-xs">
-          <span class="h2">Semua kolam aman</span>
-          <span class="meta">{ponds.length} kolam dalam batas baik</span>
+          <span class="h2">{t('Semua kolam aman', 'All ponds safe')}</span>
+          <span class="meta">{t(`${ponds.length} kolam dalam batas baik`, `${ponds.length} ${ponds.length === 1 ? 'pond' : 'ponds'} within good limits`)}</span>
         </div>
       </div>
       <hr class="rule" />
       <div class="row">
         <PondThumb kind={oldest.kind} size={48} />
         <div class="grow stack-xs">
-          <span class="meta">Paling lama belum dicatat</span>
+          <span class="meta">{t('Paling lama belum dicatat', 'Longest without a record')}</span>
           <span class="strong">
-            {oldest.name} · {oldest.lastLogAt ? fmtAgo(at(oldest), now) : 'belum pernah dicatat'}
+            {oldest.name} · {oldest.lastLogAt ? fmtAgo(at(oldest), now) : t('belum pernah dicatat', 'never recorded')}
           </span>
         </div>
         <button class="btn compact tint" onClick={() => go({ name: 'record-pond', pondId: oldest.id })}>
-          Catat
+          {t('Catat', 'Record')}
         </button>
       </div>
     </section>
@@ -150,8 +152,8 @@ function classifyTemp(value: number, l: PondSummary['limits']['temperature']) {
   const out = (b: { below?: number; above?: number } | null) => !!b && ((b.below !== undefined && value < b.below) || (b.above !== undefined && value > b.above));
   if (out(l.critical)) return 'critical' as const;
   if (out(l.warning)) return 'warning' as const;
-  const t = l.target;
-  if (t && ((t.min !== undefined && value < t.min) || (t.max !== undefined && value > t.max))) return 'info' as const;
+  const tg = l.target;
+  if (tg && ((tg.min !== undefined && value < tg.min) || (tg.max !== undefined && value > tg.max))) return 'info' as const;
   return 'ok' as const;
 }
 
@@ -174,14 +176,18 @@ function WeatherCard({
   const [why, setWhy] = useState(false);
   const w = nowcast.weather;
   if (!w.available || w.hours.length === 0) {
-    const noPlace = w.error === 'Lokasi tambak belum diatur';
+    const noPlace = w.error === 'Lokasi tambak belum diatur' || w.error === 'Farm location not set';
     return (
       <EmptyState
         icon="cloud"
-        text={noPlace ? 'Atur lokasi tambak supaya cuaca dan suhu air bisa diperkirakan.' : 'Cuaca belum termuat; perkiraan memakai data terakhir.'}
+        text={
+          noPlace
+            ? t('Atur lokasi tambak supaya cuaca dan suhu air bisa diperkirakan.', 'Set the farm location so the weather and water temperature can be estimated.')
+            : t('Cuaca belum termuat; perkiraan memakai data terakhir.', 'The weather has not loaded; estimates use the latest data.')
+        }
         action={
           <button class="btn secondary" onClick={noPlace ? onPlace : onRetry}>
-            {noPlace ? 'Atur lokasi tambak' : 'Coba lagi'}
+            {noPlace ? t('Atur lokasi tambak', 'Set the farm location') : t('Coba lagi', 'Try again')}
           </button>
         }
       />
@@ -198,9 +204,9 @@ function WeatherCard({
   const rainy = w.hours.slice(0, 12).find((h) => h.rain >= 1);
   const hot = Math.max(...w.hours.slice(0, 12).map((h) => h.airTemp));
   const tip = rainy
-    ? `Hujan sekitar jam ${fmtClock(rainy.t)}. Jaga supaya air hujan tidak masuk kolam, lalu ukur TDS sesudahnya.`
+    ? t(`Hujan sekitar jam ${fmtClock(rainy.t)}. Jaga supaya air hujan tidak masuk kolam, lalu ukur TDS sesudahnya.`, `Rain around ${fmtClock(rainy.t)}. Keep rainwater out of the ponds, then measure TDS afterwards.`)
     : hot >= 32
-      ? `Siang panas sampai ${fmtTemp(Math.round(hot))}. Pastikan peneduh terpasang dan ukur suhu air sore.`
+      ? t(`Siang panas sampai ${fmtTemp(Math.round(hot))}. Pastikan peneduh terpasang dan ukur suhu air sore.`, `Hot day, up to ${fmtTemp(Math.round(hot))}. Make sure the shade is up and measure the water temperature in the afternoon.`)
       : null;
   const fit = focus?.basis.fit ?? [];
   const good = fit.filter((f) => Math.abs(f.error) <= 0.5).length;
@@ -215,11 +221,13 @@ function WeatherCard({
 
   return (
     <section class="card">
-      <span class="label ink2">Cuaca tambak{w.place ? ` · ${w.place}` : ''}</span>
+      <span class="label ink2">{t('Cuaca tambak', 'Farm weather')}{w.place ? ` · ${w.place}` : ''}</span>
       {water?.temp != null && (
         <div class="stack-sm">
           <span class="label semi ink2">
-            Perkiraan suhu air {many && pond ? pond.name : 'kolam'} jam {fmtClock(water.t)}
+            {many && pond
+              ? t(`Perkiraan suhu air ${pond.name} jam ${fmtClock(water.t)}`, `Estimated water temperature in ${pond.name} at ${fmtClock(water.t)}`)
+              : t(`Perkiraan suhu air kolam jam ${fmtClock(water.t)}`, `Estimated pond water temperature at ${fmtClock(water.t)}`)}
           </span>
           <div class="row between">
             <span class="big">{fmtTemp(water.temp)}</span>
@@ -239,7 +247,10 @@ function WeatherCard({
         <span class="num" style={{ fontSize: '1.125rem', fontWeight: 800, whiteSpace: 'nowrap' }}>
           {fmtTemp(Math.round(nowH.airTemp))}
         </span>
-        <span class="label ink2">suhu udara{rainy ? ` · hujan sekitar ${fmtClock(rainy.t)}` : ''}</span>
+        <span class="label ink2">
+          {t('suhu udara', 'air temperature')}
+          {rainy ? t(` · hujan sekitar ${fmtClock(rainy.t)}`, ` · rain around ${fmtClock(rainy.t)}`) : ''}
+        </span>
       </div>
       <div class="hours">
         {strip.map((h) => (
@@ -255,7 +266,7 @@ function WeatherCard({
         ))}
       </div>
       <button type="button" class="link-btn row" style={{ alignSelf: 'flex-start', gap: 8, fontWeight: 800 }} aria-expanded={why} onClick={() => setWhy(!why)}>
-        Kenapa?
+        {t('Kenapa?', 'Why?')}
         <span style={{ display: 'flex', transform: why ? 'rotate(180deg)' : 'none' }}>
           <Icon name="down" size={20} />
         </span>
@@ -270,7 +281,7 @@ function WeatherCard({
           )}
           <div class="row">
             {fit.length >= 3 ? (
-              <svg width="56" height="56" viewBox="0 0 64 64" role="img" aria-label={`Perkiraan cocok ${good} dari ${fit.length} kali`} style={{ flex: 'none' }}>
+              <svg width="56" height="56" viewBox="0 0 64 64" role="img" aria-label={t(`Perkiraan cocok ${good} dari ${fit.length} kali`, `Estimate matched ${good} of ${fit.length} times`)} style={{ flex: 'none' }}>
                 <circle cx="32" cy="32" r="26" fill="none" style={{ stroke: 'var(--tint)' }} stroke-width="8" />
                 <circle cx="32" cy="32" r="26" fill="none" stroke="#2F6FE4" stroke-width="8" stroke-linecap="round" stroke-dasharray={`${(good / fit.length) * circumference} ${circumference}`} transform="rotate(-90 32 32)" />
                 <text x="32" y="37" text-anchor="middle" font-size="16" font-weight="800" style={{ fill: 'var(--ink)' }}>
@@ -283,11 +294,18 @@ function WeatherCard({
               </span>
             )}
             <div class="stack-xs grow">
-              <span class="strong">{fit.length >= 3 ? (good / fit.length >= 0.7 ? 'Perkiraan bisa dipercaya' : 'Perkiraan masih sering meleset') : 'Perkiraan sedang belajar'}</span>
+              <span class="strong">{fit.length >= 3
+                  ? good / fit.length >= 0.7
+                    ? t('Perkiraan bisa dipercaya', 'The estimate can be trusted')
+                    : t('Perkiraan masih sering meleset', 'The estimate is still often off')
+                  : t('Perkiraan sedang belajar', 'The estimate is still learning')}</span>
               <span class="label ink2">
                 {fit.length >= 3
-                  ? `${good} dari ${fit.length} ukuran suhu terakhir cocok dengan perkiraan (selisih 0,5 °C atau kurang).`
-                  : 'Butuh beberapa ukuran suhu pagi dan sore untuk mencocokkan cuaca dengan kolam.'}
+                  ? t(
+                      `${good} dari ${fit.length} ukuran suhu terakhir cocok dengan perkiraan (selisih 0,5 °C atau kurang).`,
+                      `${good} of the last ${fit.length} temperature readings matched the estimate (0.5 °C off or less).`,
+                    )
+                  : t('Butuh beberapa ukuran suhu pagi dan sore untuk mencocokkan cuaca dengan kolam.', 'It needs a few morning and afternoon temperature readings to match the weather to the pond.')}
               </span>
             </div>
           </div>
@@ -341,8 +359,8 @@ export function Today({
   // The check after the next one, and tonight's peak, in one line under the hero.
   const after = next ? laterCheck(nowcast, next.check.t) : null;
   const peak = next?.check.nc.peak;
-  const peakLine = peak && peak.level !== 'ok' && peak.t > now ? `Puncak rawan jam ${fmtClock(peak.t)}.` : '';
-  const thenLine = [after ? `Lalu ${fmtClock(after.t)} ${lowerFirst(after.reason)}.` : '', peakLine].filter(Boolean).join(' ');
+  const peakLine = peak && peak.level !== 'ok' && peak.t > now ? t(`Puncak rawan jam ${fmtClock(peak.t)}.`, `Riskiest at ${fmtClock(peak.t)}.`) : '';
+  const thenLine = [after ? t(`Lalu ${fmtClock(after.t)} ${lowerFirst(after.reason)}.`, `Then at ${fmtClock(after.t)} ${lowerFirst(after.reason)}.`) : '', peakLine].filter(Boolean).join(' ');
 
   return (
     <div class="screen">
@@ -354,7 +372,7 @@ export function Today({
               {greeting()}, {userName}
             </span>
             <span class="more">
-              Profil dan info <Icon name="next" size={16} stroke={2.5} />
+              {t('Profil dan info', 'Profile and info')} <Icon name="next" size={16} stroke={2.5} />
             </span>
           </span>
         </button>
@@ -366,7 +384,7 @@ export function Today({
         <div class="note info" style={{ alignItems: 'center' }}>
           <Icon name="clock" />
           <span class="grow">
-            Cek ulang {soon.pondName} jam {fmtClock(soon.dueAt)}
+            {t(`Cek ulang ${soon.pondName} jam ${fmtClock(soon.dueAt)}`, `Re-check ${soon.pondName} at ${fmtClock(soon.dueAt)}`)}
           </span>
         </div>
       )}
@@ -377,7 +395,7 @@ export function Today({
           <div class="row top between">
             <div class="stack-sm">
               <span class="label semi" style={{ color: 'var(--on-navy-2)' }}>
-                Cek berikutnya
+                {t('Cek berikutnya', 'Next check')}
               </span>
               <span class="big">{fmtClock(next.check.t)}</span>
             </div>
@@ -395,19 +413,19 @@ export function Today({
             </div>
           )}
           <button class="btn light" onClick={() => go({ name: 'watch' })}>
-            Lihat Waspada <Icon name="arrow" size={20} />
+            {t('Lihat Waspada', 'Open Watch')} <Icon name="arrow" size={20} />
           </button>
         </section>
       ) : (
         <section class="hero">
           <span class="label semi" style={{ color: 'var(--on-navy-2)' }}>
-            Hari ini
+            {t('Hari ini', 'Today')}
           </span>
           <p class="h2" style={{ color: '#fff' }}>
-            Catat kondisi kolam pagi dan sore supaya Synteel bisa ikut menjaga.
+            {t('Catat kondisi kolam pagi dan sore supaya Synteel bisa ikut menjaga.', 'Record pond conditions morning and afternoon so Synteel can help keep watch.')}
           </p>
           <button class="btn light" onClick={() => go({ name: 'record' })}>
-            <Icon name="pencil" size={20} /> Catat kondisi sekarang
+            <Icon name="pencil" size={20} /> {t('Catat kondisi sekarang', 'Record conditions now')}
           </button>
         </section>
       )}
@@ -415,11 +433,14 @@ export function Today({
       <button
         class="summary-link"
         onClick={() => go({ name: 'record' })}
-        aria-label={`${ponds.length} kolam: ${counts.critical} bahaya, ${counts.warning} perhatian, ${counts.ok} aman, ${counts.none} belum dicatat hari ini. Buka daftar kolam`}
+        aria-label={t(
+          `${ponds.length} kolam: ${counts.critical} bahaya, ${counts.warning} perhatian, ${counts.ok} aman, ${counts.none} belum dicatat hari ini. Buka daftar kolam`,
+          `${ponds.length} ponds: ${counts.critical} danger, ${counts.warning} caution, ${counts.ok} safe, ${counts.none} not recorded today. Open the pond list`,
+        )}
       >
         <div class="row between" style={{ width: '100%' }}>
-          <h2>{ponds.length} kolam</h2>
-          <span class="label ink2">{alive ? `sekitar ${alive.toLocaleString('id-ID')} ekor` : ''}</span>
+          <h2>{t(`${ponds.length} kolam`, `${ponds.length} ${ponds.length === 1 ? 'pond' : 'ponds'}`)}</h2>
+          <span class="label ink2">{alive ? t(`sekitar ${alive.toLocaleString(LOCALE)} ekor`, `about ${alive.toLocaleString(LOCALE)} ${alive === 1 ? 'eel' : 'eels'}`) : ''}</span>
         </div>
         <div class="status-bar" style={{ width: '100%', gridTemplateColumns: groups.map((k) => `${counts[k]}fr`).join(' ') }}>
           {groups.map((k) => (
@@ -430,28 +451,28 @@ export function Today({
           <div class="grid3" style={{ width: '100%' }}>
             <span class="word bad">
               <Shape tone="bad" />
-              {counts.critical} Bahaya
+              {counts.critical} {t('Bahaya', 'Danger')}
             </span>
             <span class="word warn">
               <Shape tone="warn" />
-              {counts.warning} Perhatian
+              {counts.warning} {t('Perhatian', 'Caution')}
             </span>
             <span class="word ok">
               <Shape tone="ok" />
-              {counts.ok} Aman
+              {counts.ok} {t('Aman', 'Safe')}
             </span>
           </div>
         )}
         {counts.none > 0 && (
           <span class="label ink2" style={{ fontWeight: 400 }}>
-            {counts.none} belum dicatat hari ini · status muncul sesudah dicatat
+            {t(`${counts.none} belum dicatat hari ini · status muncul sesudah dicatat`, `${counts.none} not recorded today · status shows once recorded`)}
           </span>
         )}
       </button>
 
       {shown.length > 0 ? (
         <section class="stack">
-          <h2>Perlu perhatian</h2>
+          <h2>{t('Perlu perhatian', 'Needs attention')}</h2>
           {shown.map((p) => (
             <AttentionCard key={p.id} pond={p} go={go} today={state.today} />
           ))}
@@ -464,13 +485,18 @@ export function Today({
 
       {owner && never.length === ponds.length ? (
         <button class="btn dashed" onClick={() => go({ name: 'add-pond' })}>
-          <Icon name="plus" size={20} /> Tambah kolam
+          <Icon name="plus" size={20} /> {t('Tambah kolam', 'Add a pond')}
         </button>
       ) : (
         <button class="go-row" style={{ color: 'var(--ink)' }} onClick={() => go({ name: 'record' })}>
           <span class="grow" style={{ display: 'flex', flexDirection: 'column' }}>
-            <span class="strong">Lihat semua {ponds.length} kolam</span>
-            {need.length > shown.length && <span class="label ink2">{need.length - shown.length} kolam lain juga perlu perhatian</span>}
+            <span class="strong">{t(`Lihat semua ${ponds.length} kolam`, `See all ${ponds.length} ponds`)}</span>
+            {need.length > shown.length && <span class="label ink2">
+                {t(
+                  `${need.length - shown.length} kolam lain juga perlu perhatian`,
+                  need.length - shown.length === 1 ? '1 other pond also needs attention' : `${need.length - shown.length} other ponds also need attention`,
+                )}
+              </span>}
           </span>
           <Icon name="arrow" size={20} />
         </button>
@@ -479,7 +505,7 @@ export function Today({
       {nowcast ? (
         <WeatherCard nowcast={nowcast} focus={focus} pond={focusPond} many={ponds.length > 1} onRetry={onRetryWeather} onPlace={() => go({ name: 'profile' })} />
       ) : (
-        <p class="label ink2">Memuat cuaca…</p>
+        <p class="label ink2">{t('Memuat cuaca…', 'Loading the weather…')}</p>
       )}
 
       <button class="card" style={{ border: 0, flexDirection: 'row', alignItems: 'center', gap: 12, textAlign: 'left' }} onClick={() => go({ name: 'rewards' })}>
@@ -487,8 +513,10 @@ export function Today({
           <Icon name="flame" />
         </span>
         <span class="grow stack-xs">
-          <span class="strong">{state.streak > 0 ? `${state.streak} hari mencatat beruntun` : 'Mulai catat tiap hari'}</span>
-          <span class="label ink2">Lihat hadiah rajin mencatat</span>
+          <span class="strong">{state.streak > 0
+              ? t(`${state.streak} hari mencatat beruntun`, state.streak === 1 ? '1 day of recording' : `${state.streak} days of recording in a row`)
+              : t('Mulai catat tiap hari', 'Start recording every day')}</span>
+          <span class="label ink2">{t('Lihat hadiah rajin mencatat', 'See the rewards for steady recording')}</span>
         </span>
         <Icon name="next" />
       </button>
@@ -498,8 +526,8 @@ export function Today({
           <Icon name="headset" />
         </span>
         <span class="grow" style={{ display: 'flex', flexDirection: 'column' }}>
-          <span class="strong">Hubungi bantuan</span>
-          <span class="label ink2">Ada kendala? Tim Synteel membalas lewat WhatsApp</span>
+          <span class="strong">{t('Hubungi bantuan', 'Contact support')}</span>
+          <span class="label ink2">{t('Ada kendala? Tim Synteel membalas lewat WhatsApp', 'Having trouble? The Synteel team replies on WhatsApp')}</span>
         </span>
         <span class="muted" style={{ display: 'flex' }}>
           <Icon name="next" size={20} />
@@ -509,12 +537,12 @@ export function Today({
   );
 }
 
-const levelWord = { ok: 'Aman', warning: 'Perhatian', critical: 'Bahaya' } as const;
-const lowerFirst = (t: string) => t.charAt(0).toLowerCase() + t.slice(1);
+const levelWord = { ok: t('Aman', 'Safe'), warning: t('Perhatian', 'Caution'), critical: t('Bahaya', 'Danger') };
+const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 
 /** The first suggested check after `t` on any pond, for the "Lalu …" line. */
-function laterCheck(nowcast: NowcastState | null, t: number) {
-  const all = (nowcast?.ponds ?? []).flatMap((nc) => nc.checks.filter((c) => c.t > t));
+function laterCheck(nowcast: NowcastState | null, after: number) {
+  const all = (nowcast?.ponds ?? []).flatMap((nc) => nc.checks.filter((c) => c.t > after));
   all.sort((a, b) => a.t - b.t);
   return all[0] ?? null;
 }

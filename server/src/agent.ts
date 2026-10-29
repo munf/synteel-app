@@ -5,6 +5,7 @@
 //   - checks must name a real pond and fall within the next 18 hours;
 //   - nothing about medicines or doses gets through (decision support, not treatment).
 // When the model is unavailable the briefing is written from the rules alone.
+import { currentLang, tx, type Lang } from './i18n.ts';
 import { AiFailed, call, Retry, type ChatProvider } from './ai.ts';
 import { knowledge } from './knowledge.ts';
 import type { Nowcast } from './nowcast.ts';
@@ -53,12 +54,17 @@ export interface Briefing {
   /** What the agent looked at, in order: shown in the app so the reasoning is visible. */
   steps: { tool: string; args: Record<string, unknown> }[];
   generatedAt: number;
+  /** Language the summary and checks were written in (missing on older ones: Indonesian). */
+  lang?: Lang;
 }
 
 // Medicines and doses are out of scope for the app; anything that sounds like treatment is dropped.
 const TREATMENT = /\b(obat|antibiotik|dosis|formalin|metilen|methylene|malachite|kalium permanganat|\bpk\b|oxytetra|garam\s+\d|mg\/l\s+(obat|garam)|ppm\s+(obat|garam))/i;
 
-const clock = (t: number, tz: string) => new Date(t).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: tz }).replace(':', '.');
+const clock = (t: number, tz: string) => {
+  const hm = new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: tz });
+  return currentLang() === 'en' ? hm : hm.replace(':', '.');
+};
 
 /** "21:30" or "21.30" → the next such moment after `now` (in the farm's time zone, UTC+7 for WIB). */
 export function nextTime(hhmm: string, now: number, tzOffsetH = 7): number | null {
@@ -87,9 +93,12 @@ export function rulesBriefing(input: BriefingInput, steps: Briefing['steps'] = [
   const pond = worst && input.ponds.find((p) => p.id === worst.pondId);
   const summary =
     !worst || worst.peak.level === 'ok'
-      ? 'Malam ini semua kolam diperkirakan tenang. Tetap ukur suhu pagi dan sore.'
-      : `${pond?.name ?? 'Satu kolam'} paling rawan sekitar ${clock(worst.peak.t, input.timezone)}: ${worst.peak.factors[0]?.label.toLowerCase() ?? 'risiko oksigen naik'}. Pastikan aerator nyala dan lihat sidat sebelum tidur.`;
-  return { summary, checks: ruleChecks(input), source: 'rules', model: null, steps, generatedAt: input.now };
+      ? tx('Malam ini semua kolam diperkirakan tenang. Tetap ukur suhu pagi dan sore.', 'All ponds are expected to be calm tonight. Still measure the temperature morning and afternoon.')
+      : tx(
+          `${pond?.name ?? 'Satu kolam'} paling rawan sekitar ${clock(worst.peak.t, input.timezone)}: ${worst.peak.factors[0]?.label.toLowerCase() ?? 'risiko oksigen naik'}. Pastikan aerator nyala dan lihat sidat sebelum tidur.`,
+          `${pond?.name ?? 'One pond'} is most at risk around ${clock(worst.peak.t, input.timezone)}: ${worst.peak.factors[0]?.label.toLowerCase() ?? 'oxygen risk rising'}. Make sure the aerator is on and look at the eels before bed.`,
+        );
+  return { summary, checks: ruleChecks(input), source: 'rules', model: null, steps, generatedAt: input.now, lang: currentLang() };
 }
 
 // ---------- tools ----------
@@ -125,7 +134,7 @@ const TOOLS = [
     'submit_briefing',
     'Kirim briefing akhir. Wajib dipanggil sekali di akhir.',
     {
-      summary: { type: 'string', description: 'Maksimal 3 kalimat bahasa Indonesia sederhana untuk petani: apa yang perlu diwaspadai malam ini dan kenapa.' },
+      summary: { type: 'string', description: 'Maksimal 3 kalimat sederhana untuk petani, dalam bahasa yang diminta di aturan: apa yang perlu diwaspadai malam ini dan kenapa.' },
       checks: {
         type: 'array',
         description: 'Cek TAMBAHAN selain cek dari aturan (boleh kosong). Maksimal 5.',
@@ -156,7 +165,9 @@ const SYSTEM = (input: BriefingInput) =>
     '- Ini pendukung keputusan, bukan diagnosis. Jangan sebut obat, dosis, atau pengobatan.',
     '- Cek dari aturan sudah otomatis ada; jangan mengulanginya. Tambahkan cek hanya bila data memberi alasan jelas (mis. hujan deras, suhu turun, sisa pakan, kolam lama tidak diukur).',
     '- Jam cek harus dalam 18 jam ke depan. Tindakan harus bisa dilakukan petani tanpa alat khusus selain alat ukur pH, TDS, termometer.',
-    '- Bahasa Indonesia sederhana untuk petani lansia, tanpa singkatan teknis (pakai "oksigen air", bukan DO).',
+    currentLang() === 'en'
+      ? '- Write the summary, every action and every why in clear, natural English: short sentences, everyday farm words (aerator, water temperature, oxygen in the water, leftover feed, eels), no technical abbreviations such as DO. Pond names stay exactly as they are.'
+      : '- Bahasa Indonesia sederhana untuk petani lansia, tanpa singkatan teknis (pakai "oksigen air", bukan DO).',
   ].join('\n');
 
 /** Runs the agent; falls back to the rules-only briefing on any failure. */
@@ -202,7 +213,7 @@ export async function runBriefing(input: BriefingInput, providers: ChatProvider[
 
   const messages: any[] = [
     { role: 'system', content: SYSTEM(input) },
-    { role: 'user', content: 'Susun briefing malam ini.' },
+    { role: 'user', content: currentLang() === 'en' ? 'Susun briefing malam ini. Write the summary and every check in English.' : 'Susun briefing malam ini.' },
   ];
   try {
     for (let round = 0; round < MAX_ROUNDS; round++) {
@@ -265,5 +276,6 @@ export function guard(input: BriefingInput, proposal: Record<string, any>, steps
     model: usable ? model : null,
     steps,
     generatedAt: input.now,
+    lang: currentLang(),
   };
 }

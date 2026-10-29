@@ -3,6 +3,7 @@
 // and the ticks are still there when the screen is opened again. Unticking removes the note.
 import { useEffect, useState } from 'preact/hooks';
 import { api } from './api.ts';
+import { t } from './i18n.ts';
 import { fmtClock } from './labels.ts';
 import { Icon, TickBox } from './ui.tsx';
 
@@ -30,6 +31,9 @@ function store(pondId: number, done: Record<string, Done>) {
   }
 }
 
+/** The note saved in the pond's records, in the language the farmer uses. */
+const doneNote = (step: string) => t(`Sudah dilakukan: ${step}`, `Done: ${step}`);
+
 export function useSteps(pondId: number) {
   const [done, setDone] = useState<Record<string, Done>>(() => load(pondId));
   useEffect(() => {
@@ -37,7 +41,7 @@ export function useSteps(pondId: number) {
     // Ticks made without signal: put them in the records now.
     const pending = Object.entries(load(pondId)).filter(([, d]) => d.logId === null);
     for (const [step, d] of pending)
-      api.addLog(pondId, { note: `Sudah dilakukan: ${step}` }).then(
+      api.addLog(pondId, { note: doneNote(step) }).then(
         ({ log }) => {
           const now = load(pondId);
           if (now[step]) update({ ...now, [step]: { at: d.at, logId: log.id } });
@@ -63,7 +67,7 @@ export function useSteps(pondId: number) {
     const next = { ...done, [step]: { at, logId: null } };
     update(next);
     try {
-      const { log } = await api.addLog(pondId, { note: `Sudah dilakukan: ${step}` });
+      const { log } = await api.addLog(pondId, { note: doneNote(step) });
       update({ ...load(pondId), [step]: { at, logId: log.id } });
     } catch {
       // No signal: the tick stays on the phone; the step list says it isn't in the records yet.
@@ -96,7 +100,7 @@ export function StepList({ steps, done, toggle, onAllDone }: { steps: string[]; 
               <span style={d ? { textDecoration: 'line-through', textDecorationColor: 'rgba(255,255,255,0.5)' } : undefined}>{s}</span>
               {d && (
                 <span class="label" style={{ color: '#A7E3C8' }}>
-                  Dilakukan {fmtClock(d.at)} · {d.logId ? 'tercatat di riwayat' : 'tersimpan di HP, dicatat saat ada sinyal'}
+                  {t('Dilakukan', 'Done at')} {fmtClock(d.at)} · {d.logId ? t('tercatat di riwayat', 'saved in History') : t('tersimpan di HP, dicatat saat ada sinyal', 'kept on the phone, saved when there is signal')}
                 </span>
               )}
             </span>
@@ -107,10 +111,10 @@ export function StepList({ steps, done, toggle, onAllDone }: { steps: string[]; 
         <div class="stack-xs" style={{ gap: 8, padding: '12px 16px', borderRadius: 16, background: 'rgba(63,185,132,0.18)', color: '#fff' }}>
           <span class="row" style={{ gap: 8 }}>
             <Icon name="check" size={20} />
-            <span class="strong">Semua langkah selesai {fmtClock(last)}</span>
+            <span class="strong">{t(`Semua langkah selesai ${fmtClock(last)}`, `All steps done at ${fmtClock(last)}`)}</span>
           </span>
           <span class="label" style={{ color: '#C9D4EA' }}>
-            Lihat lagi sidat sekitar 1 jam lagi. Kalau belum membaik, minta bantuan.
+            {t('Lihat lagi sidat sekitar 1 jam lagi. Kalau belum membaik, minta bantuan.', 'Look at the eels again in about 1 hour. If they are no better, ask for help.')}
           </span>
           {onAllDone && (
             <button type="button" class="btn" style={{ background: '#fff', color: '#13264A' }} onClick={onAllDone.run}>

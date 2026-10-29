@@ -3,6 +3,7 @@ import { api, type Aeration, type Farm, type Me, type Phase, type PondSummary, t
 import { aerationLabel, phaseLabel, settingLabel } from '../labels.ts';
 import { Chips, Field, Icon, initialOf, Soon, tankPath, Tick, Wordmark } from '../ui.tsx';
 import { JoinByCode } from '../join.tsx';
+import { LOCALE, t } from '../i18n.ts';
 
 /** The phone's GPS position, rounded to about 10 m; enough for the hourly weather. */
 export function useLocate() {
@@ -11,7 +12,7 @@ export function useLocate() {
   const [error, setError] = useState('');
   const locate = () => {
     setError('');
-    if (!navigator.geolocation) return setError('HP ini tidak mendukung GPS di browser. Isi nama lokasi saja.');
+    if (!navigator.geolocation) return setError(t('HP ini tidak mendukung GPS di browser. Isi nama lokasi saja.', 'This phone does not support GPS in the browser. Just type the location name.'));
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -19,7 +20,7 @@ export function useLocate() {
         setLocating(false);
       },
       () => {
-        setError('Lokasi tidak bisa diambil. Isi nama lokasi saja.');
+        setError(t('Lokasi tidak bisa diambil. Isi nama lokasi saja.', 'Could not get the location. Just type the location name.'));
         setLocating(false);
       },
       { enableHighAccuracy: false, timeout: 15_000 },
@@ -41,7 +42,7 @@ export function LocateButton({ gps }: { gps: ReturnType<typeof useLocate> }) {
         </span>
       )}
       <span class="stack-xs" style={{ gap: 0, alignItems: 'flex-start', textAlign: 'left' }}>
-        {coords ? 'Lokasi HP tersimpan' : locating ? 'Mengambil lokasi…' : 'Pakai lokasi HP'}
+        {coords ? t('Lokasi HP tersimpan', 'Phone location saved') : locating ? t('Mengambil lokasi…', 'Getting location…') : t('Pakai lokasi HP', 'Use phone location')}
         {coords && (
           <span class="meta num" style={{ fontWeight: 400 }}>
             {fmtCoord(coords.lat)}, {fmtCoord(coords.lon)}
@@ -77,47 +78,47 @@ export function FarmSetup({ onDone, onLogout, onJoined, newPin }: { onDone: () =
     <form class="screen" onSubmit={submit}>
       <Wordmark />
       <section class="stack-sm">
-        <h1>Siapkan tambak</h1>
-        <p class="ink2">Cukup sekali. Setelah ini, tambahkan kolam.</p>
+        <h1>{t('Siapkan tambak', 'Set up your farm')}</h1>
+        <p class="ink2">{t('Cukup sekali. Setelah ini, tambahkan kolam.', 'Only once. After this, add your ponds.')}</p>
       </section>
       {newPin && (
         <div class="note ok" role="status" style={{ alignItems: 'center' }}>
           <Icon name="lock" />
           <span class="stack-xs" style={{ gap: 0 }}>
             <b class="note-title">
-              Akun dibuat. PIN baru:{' '}
+              {t('Akun dibuat. PIN baru:', 'Account created. New PIN:')}{' '}
               <span class="num" style={{ letterSpacing: '0.15em', whiteSpace: 'nowrap' }}>
                 {newPin.split('').join(' ')}
               </span>
             </b>
-            <span>Catat di tempat aman. PIN ini dipakai setiap kali masuk.</span>
+            <span>{t('Catat di tempat aman. PIN ini dipakai setiap kali masuk.', 'Write it down somewhere safe. You need this PIN every time you sign in.')}</span>
           </span>
         </div>
       )}
       <section class="card">
-        <Field label="Nama tambak">
-          <input value={name} onInput={(e) => setName(e.currentTarget.value)} placeholder="contoh: Tambak Sidat Mitra" required />
+        <Field label={t('Nama tambak', 'Farm name')}>
+          <input value={name} onInput={(e) => setName(e.currentTarget.value)} placeholder={t('contoh: Tambak Sidat Mitra', 'example: Mitra Eel Farm')} required />
         </Field>
-        <Field label="Lokasi" hint="Dipakai untuk cuaca per jam, supaya suhu air bisa diperkirakan.">
-          <input value={locationName} onInput={(e) => setLocationName(e.currentTarget.value)} placeholder="contoh: Sleman, Yogyakarta" />
+        <Field label={t('Lokasi', 'Location')} hint={t('Dipakai untuk cuaca per jam, supaya suhu air bisa diperkirakan.', 'Used for hourly weather, so the water temperature can be estimated.')}>
+          <input value={locationName} onInput={(e) => setLocationName(e.currentTarget.value)} placeholder={t('contoh: Sleman, Yogyakarta', 'example: Sleman, Yogyakarta')} />
         </Field>
         <LocateButton gps={gps} />
       </section>
       {(error || gps.error) && <p class="error">{error || gps.error}</p>}
       <button class="btn primary" disabled={busy}>
-        Simpan
+        {t('Simpan', 'Save')}
       </button>
       {onJoined && (
         <div class="stack-sm">
           <p class="meta center" style={{ textWrap: 'balance' }}>
-            Diundang ke tambak orang lain? Masukkan kodenya, tidak perlu membuat tambak sendiri.
+            {t('Diundang ke tambak orang lain? Masukkan kodenya, tidak perlu membuat tambak sendiri.', "Invited to someone else's farm? Enter the code; no need to set up your own farm.")}
           </p>
           <JoinByCode onJoined={onJoined} />
         </div>
       )}
       {onLogout && (
         <button type="button" class="link-row label" style={{ justifyContent: 'center' }} onClick={onLogout}>
-          <Icon name="logout" size={20} /> Keluar
+          <Icon name="logout" size={20} /> {t('Keluar', 'Sign out')}
         </button>
       )}
     </form>
@@ -140,7 +141,7 @@ export function NoPonds({
   return (
     <div class="screen" style={{ minHeight: '100dvh' }}>
       <header class="row">
-        <button class="avatar" style={{ border: 0 }} aria-label="Profil" onClick={onProfile}>
+        <button class="avatar" style={{ border: 0 }} aria-label={t('Profil', 'Profile')} onClick={onProfile}>
           {initialOf(userName)}
         </button>
         <span class="meta grow">{farm.name}</span>
@@ -154,14 +155,16 @@ export function NoPonds({
           <circle cx="148" cy="30" r="20" fill="#13264A" />
           <path d="M148 21v18M139 30h18" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" />
         </svg>
-        <h1>Belum ada kolam</h1>
+        <h1>{t('Belum ada kolam', 'No ponds yet')}</h1>
         <p class="ink2" style={{ textWrap: 'balance' }}>
-          {onAdd ? 'Tambahkan kolam pertama, lalu Synteel ikut memantau cuaca dan risiko oksigen.' : 'Pemilik tambak belum menambahkan kolam. Setelah kolam ditambahkan, kolam muncul di sini.'}
+          {onAdd
+            ? t('Tambahkan kolam pertama, lalu Synteel ikut memantau cuaca dan risiko oksigen.', 'Add your first pond, then Synteel helps watch the weather and oxygen risk.')
+            : t('Pemilik tambak belum menambahkan kolam. Setelah kolam ditambahkan, kolam muncul di sini.', 'The farm owner has not added any ponds yet. Once they do, the ponds show up here.')}
         </p>
       </section>
       {onAdd && (
         <button class="btn primary" onClick={onAdd}>
-          <Icon name="plus" size={20} /> Tambah kolam
+          <Icon name="plus" size={20} /> {t('Tambah kolam', 'Add a pond')}
         </button>
       )}
     </div>
@@ -169,14 +172,16 @@ export function NoPonds({
 }
 
 const TYPES = [
-  { id: 'bulat', label: 'Tangki bulat' },
-  { id: 'terpal', label: 'Terpal / beton' },
-  { id: 'fiber', label: 'Bak fiber' },
+  { id: 'bulat', label: t('Tangki bulat', 'Round tank') },
+  { id: 'terpal', label: t('Terpal / beton', 'Tarp or concrete') },
+  { id: 'fiber', label: t('Bak fiber', 'Fiber tub') },
 ] as const;
 
 /** "Kolam D" after A, B and C. */
 function nextName(names: string[]) {
-  for (const letter of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') if (!names.some((n) => n.toLowerCase() === `kolam ${letter.toLowerCase()}`)) return `Kolam ${letter}`;
+  // Either language's word counts as taken ("Kolam A" and "Pond A" are the same pond to the farmer).
+  const taken = (l: string) => names.some((n) => [`kolam ${l}`, `pond ${l}`].includes(n.toLowerCase()));
+  for (const letter of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') if (!taken(letter.toLowerCase())) return `${t('Kolam', 'Pond')} ${letter}`;
   return '';
 }
 
@@ -193,8 +198,8 @@ function following(name: string, names: string[]) {
   return next;
 }
 
-const typeLabel = (kind: string) => TYPES.find((t) => t.id === kind)?.label ?? 'Kolam';
-const longDate = (ymd: string) => new Date(`${ymd}T00:00:00`).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+const typeLabel = (kind: string) => TYPES.find((ty) => ty.id === kind)?.label ?? t('Kolam', 'Pond');
+const longDate = (ymd: string) => new Date(`${ymd}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
 interface Saved {
   id: number;
@@ -205,26 +210,26 @@ interface Saved {
 /** Nicknames the farmer says out loud ("kolam pojok"); the voice reader matches them to this pond. */
 function Nicknames({ nicks, onChange, draft, onDraft }: { nicks: string[]; onChange: (v: string[]) => void; draft: string; onDraft: (v: string) => void }) {
   const add = () => {
-    const t = draft.trim();
-    if (t && !nicks.some((n) => n.toLowerCase() === t.toLowerCase())) onChange([...nicks, t]);
+    const nick = draft.trim();
+    if (nick && !nicks.some((n) => n.toLowerCase() === nick.toLowerCase())) onChange([...nicks, nick]);
     onDraft('');
   };
   return (
     <div class="field">
       <label class="field-label" for="nick-add">
-        Nama panggilan{' '}
+        {t('Nama panggilan', 'Nicknames')}{' '}
         <span class="label muted" style={{ fontWeight: 400 }}>
-          (boleh kosong)
+          {t('(boleh kosong)', '(optional)')}
         </span>
       </label>
       {nicks.length > 0 && (
-        <div role="list" aria-label="Nama panggilan" class="chips">
+        <div role="list" aria-label={t('Nama panggilan', 'Nicknames')} class="chips">
           {nicks.map((n) => (
             <span key={n} role="listitem" class="chip" style={{ paddingRight: 0, background: 'var(--tint)', borderColor: 'var(--tint)', color: 'var(--navy)' }}>
               {n}
               <button
                 type="button"
-                aria-label={`Hapus ${n}`}
+                aria-label={t(`Hapus ${n}`, `Delete ${n}`)}
                 onClick={() => onChange(nicks.filter((x) => x !== n))}
                 style={{ width: 44, height: 40, border: 0, borderRadius: 20, background: 'transparent', color: 'inherit', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
               >
@@ -248,13 +253,15 @@ function Nicknames({ nicks, onChange, draft, onDraft }: { nicks: string[]; onCha
               add();
             }
           }}
-          placeholder="contoh: pojok"
+          placeholder={t('contoh: pojok', 'example: corner')}
         />
         <button type="button" class="btn secondary" style={{ color: 'var(--navy)', fontWeight: 800, padding: '0 16px' }} onClick={add}>
-          <Icon name="plus" size={20} /> Tambah
+          <Icon name="plus" size={20} /> {t('Tambah', 'Add')}
         </button>
       </div>
-      <span class="field-hint">Sebutan sehari-hari, contoh: kolam dekat pintu. AI memakai ini saat mendengar suara.</span>
+      <span class="field-hint">
+        {t('Sebutan sehari-hari, contoh: kolam dekat pintu. AI memakai ini saat mendengar suara.', 'Your everyday name for it, for example: pond by the door. The AI listens for it.')}
+      </span>
     </div>
   );
 }
@@ -327,7 +334,7 @@ export function AddPond({
       };
       const { pond } = await api.addPond(body);
       await api.startBatch(pond.id, { phase: phase[0] ?? 'elver', stockedAt, initialCount: initialCount ? Number(initialCount) : undefined });
-      const summary = [typeLabel(kind), phaseLabel[phase[0] ?? 'elver'], `tebar ${longDate(stockedAt)}`.replace(/ /g, '\u00a0'), initialCount ? `${initialCount} ekor` : null]
+      const summary = [typeLabel(kind), phaseLabel[phase[0] ?? 'elver'], t(`tebar ${longDate(stockedAt)}`, `stocked ${longDate(stockedAt)}`).replace(/ /g, '\u00a0'), initialCount ? t(`${initialCount} ekor`, `${initialCount} eels`) : null]
         .filter(Boolean)
         .join(' · ');
       setAdded([...added, pond.name]);
@@ -384,13 +391,13 @@ export function AddPond({
   const header = (
     <header class="row">
       {back && (
-        <button type="button" class="icon-btn" aria-label="Kembali" onClick={back}>
+        <button type="button" class="icon-btn" aria-label={t('Kembali', 'Back')} onClick={back}>
           <Icon name="back" />
         </button>
       )}
       <div class="stack-xs">
-        <h1 style={{ lineHeight: 1 }}>Tambah kolam</h1>
-        <span class="meta">Isi yang diketahui saja. Bisa diubah nanti.</span>
+        <h1 style={{ lineHeight: 1 }}>{t('Tambah kolam', 'Add a pond')}</h1>
+        <span class="meta">{t('Isi yang diketahui saja. Bisa diubah nanti.', 'Fill in only what you know. You can change it later.')}</span>
       </div>
     </header>
   );
@@ -405,25 +412,25 @@ export function AddPond({
               <Icon name="check" size={24} stroke={2.5} />
             </span>
             <div class="grow stack-xs" style={{ gap: 0 }}>
-              <span class="h2">{saved.name} tersimpan</span>
+              <span class="h2">{t(`${saved.name} tersimpan`, `${saved.name} saved`)}</span>
               <span class="meta">{saved.summary}</span>
             </div>
           </div>
           <button type="button" class="btn primary" style={{ flexDirection: 'column', gap: 4, padding: '12px 20px' }} onClick={() => copyNext(saved)}>
-            <span>Tambah {following(saved.name, names)}, isian sama</span>
+            <span>{t(`Tambah ${following(saved.name, names)}, isian sama`, `Add ${following(saved.name, names)}, same details`)}</span>
             <span class="label" style={{ fontWeight: 400, color: 'var(--on-navy)' }}>
-              Tinggal ganti nama dan jumlah benih
+              {t('Tinggal ganti nama dan jumlah benih', 'Just change the name and number stocked')}
             </span>
           </button>
           <button type="button" class="btn secondary" onClick={fresh}>
-            Tambah kolam lain, isian kosong
+            {t('Tambah kolam lain, isian kosong', 'Add another pond, empty form')}
           </button>
           <div class="grid2" style={{ gap: 8 }}>
             <button type="button" class="link-row label strong" style={{ justifyContent: 'center', textAlign: 'center' }} onClick={() => onDone(saved.id)}>
-              Lihat {saved.name}
+              {t(`Lihat ${saved.name}`, `View ${saved.name}`)}
             </button>
             <button type="button" class="link-row label strong" style={{ justifyContent: 'center', textAlign: 'center' }} onClick={leave}>
-              Selesai, ke Beranda
+              {t('Selesai, ke Beranda', 'Done, go to Home')}
             </button>
           </div>
         </section>
@@ -442,9 +449,9 @@ export function AddPond({
           </svg>
           <span class="grow stack-xs" style={{ gap: 2 }}>
             <span class="strong" style={{ fontSize: '1rem' }}>
-              Isian disalin dari {copied}
+              {t(`Isian disalin dari ${copied}`, `Details copied from ${copied}`)}
             </span>
-            <span>Ganti nama dan jumlah benih. Jenis kolam, fase dan tanggal tebar sudah sama.</span>
+            <span>{t('Ganti nama dan jumlah benih. Jenis kolam, fase dan tanggal tebar sudah sama.', 'Change the name and the number stocked. Pond type, stage and stocking date stay the same.')}</span>
           </span>
         </div>
       )}
@@ -453,30 +460,30 @@ export function AddPond({
         <span class="icon-box" style={{ width: 56, height: 56, borderRadius: 28 }}>
           <Icon name="camera" size={26} />
         </span>
-        <span class="strong">Foto kolam</span>
-        <span class="meta">Supaya mudah dikenali.</span>
+        <span class="strong">{t('Foto kolam', 'Pond photo')}</span>
+        <span class="meta">{t('Supaya mudah dikenali.', 'So it is easy to recognize.')}</span>
         <Soon />
       </div>
 
       <section class="card">
-        <Field label="Nama kolam">
-          <input value={name} onInput={(e) => setName(e.currentTarget.value)} placeholder="contoh: Kolam A" required />
+        <Field label={t('Nama kolam', 'Pond name')}>
+          <input value={name} onInput={(e) => setName(e.currentTarget.value)} placeholder={t('contoh: Kolam A', 'example: Pond A')} required />
         </Field>
 
         <Nicknames nicks={nicks} onChange={setNicks} draft={nickDraft} onDraft={setNickDraft} />
 
         <div class="field">
-          <span class="field-label">Jenis kolam</span>
+          <span class="field-label">{t('Jenis kolam', 'Pond type')}</span>
           <div class="grid3">
-            {TYPES.map((t) => (
-              <button type="button" key={t.id} class={`type-tile${kind === t.id ? ' on' : ''}`} aria-pressed={kind === t.id} onClick={() => setKind(t.id)}>
+            {TYPES.map((ty) => (
+              <button type="button" key={ty.id} class={`type-tile${kind === ty.id ? ' on' : ''}`} aria-pressed={kind === ty.id} onClick={() => setKind(ty.id)}>
                 <span class="thumb sm" style={{ width: 48, height: 48, background: 'var(--bg)', color: 'var(--ink-2)' }}>
                   <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d={tankPath(t.id)} />
+                    <path d={tankPath(ty.id)} />
                   </svg>
                 </span>
-                {t.label}
-                {kind === t.id && (
+                {ty.label}
+                {kind === ty.id && (
                   <span class="corner-tick">
                     <Icon name="check" size={14} stroke={3} />
                   </span>
@@ -487,18 +494,18 @@ export function AddPond({
         </div>
 
         <div class="field">
-          <span class="field-label">Fase sidat</span>
+          <span class="field-label">{t('Fase sidat', 'Eel stage')}</span>
           <Chips options={phaseLabel} value={phase} onChange={(v) => v.length && setPhase(v)} />
         </div>
 
         <div class="field">
-          <span class="field-label">Tanggal tebar</span>
+          <span class="field-label">{t('Tanggal tebar', 'Stocking date')}</span>
           <div class="chips">
             {(
               [
-                ['today', 'Hari ini'],
-                ['yesterday', 'Kemarin'],
-                ['pick', 'Pilih tanggal'],
+                ['today', t('Hari ini', 'Today')],
+                ['yesterday', t('Kemarin', 'Yesterday')],
+                ['pick', t('Pilih tanggal', 'Pick a date')],
               ] as const
             ).map(([mode, label]) => (
               <button type="button" key={mode} class={`chip${dateMode === mode ? ' on' : ''}`} aria-pressed={dateMode === mode} onClick={() => chooseDate(mode)}>
@@ -511,8 +518,8 @@ export function AddPond({
           <div class="box stack-sm" style={{ background: 'var(--tint)' }}>
             <span class="strong">{longDate(stockedAt)}</span>
             <span class="label" style={{ color: 'var(--accent-ink)' }}>
-              Sekarang minggu ke-{week}
-              {phase[0] === 'glass_eel' && ' dari 12'}
+              {t(`Sekarang minggu ke-${week}`, `Now in week ${week}`)}
+              {phase[0] === 'glass_eel' && t(' dari 12', ' of 12')}
             </span>
             {phase[0] === 'glass_eel' && (
               <span class="progress" style={{ background: 'var(--surface)' }}>
@@ -522,49 +529,49 @@ export function AddPond({
           </div>
         </div>
 
-        <Field label="Kira-kira jumlah benih" hint="Boleh kosong kalau tidak tahu.">
-          <input inputMode="numeric" value={initialCount} onInput={(e) => setInitialCount(e.currentTarget.value)} placeholder="contoh: 500" />
+        <Field label={t('Kira-kira jumlah benih', 'About how many eels stocked')} hint={t('Boleh kosong kalau tidak tahu.', 'Leave it empty if you do not know.')}>
+          <input inputMode="numeric" value={initialCount} onInput={(e) => setInitialCount(e.currentTarget.value)} placeholder={t('contoh: 500', 'example: 500')} />
         </Field>
       </section>
 
       <details class="card more">
         <summary>
           <span class="stack-xs">
-            <span class="strong">Detail lain</span>
-            <span class="meta">Membuat perkiraan suhu air lebih tepat</span>
+            <span class="strong">{t('Detail lain', 'More details')}</span>
+            <span class="meta">{t('Membuat perkiraan suhu air lebih tepat', 'Makes the water temperature forecast more accurate')}</span>
           </span>
           <Icon name="down" />
         </summary>
         <div class="stack" style={{ marginTop: 16 }}>
-          <Field label="Luas dasar kolam (m²)" hint="Panjang × lebar, untuk menghitung kepadatan.">
-            <input inputMode="decimal" value={areaM2} onInput={(e) => setAreaM2(e.currentTarget.value)} placeholder="contoh: 12" />
+          <Field label={t('Luas dasar kolam (m²)', 'Pond floor area (m²)')} hint={t('Panjang × lebar, untuk menghitung kepadatan.', 'Length × width, to work out stocking density.')}>
+            <input inputMode="decimal" value={areaM2} onInput={(e) => setAreaM2(e.currentTarget.value)} placeholder={t('contoh: 12', 'example: 12')} />
           </Field>
           <div class="field">
-            <span class="field-label">Tempat</span>
+            <span class="field-label">{t('Tempat', 'Location')}</span>
             <Chips options={settingLabel} value={setting} onChange={setSetting} />
           </div>
           {setting[0] === 'outdoor' && (
             <div class="field">
-              <span class="field-label">Ada peneduh (paranet atau atap)?</span>
-              <Chips options={{ yes: 'Ya', no: 'Tidak' }} value={shaded} onChange={setShaded} />
+              <span class="field-label">{t('Ada peneduh (paranet atau atap)?', 'Any shade (shade net or roof)?')}</span>
+              <Chips options={{ yes: t('Ya', 'Yes'), no: t('Tidak', 'No') }} value={shaded} onChange={setShaded} />
             </div>
           )}
           <div class="field">
-            <span class="field-label">Aerasi</span>
+            <span class="field-label">{t('Aerasi', 'Aeration')}</span>
             <Chips options={aerationLabel} value={aeration} onChange={setAeration} />
           </div>
-          <Field label="Kedalaman air (cm)">
+          <Field label={t('Kedalaman air (cm)', 'Water depth (cm)')}>
             <input inputMode="decimal" value={depthCm} onInput={(e) => setDepthCm(e.currentTarget.value)} placeholder="30" />
           </Field>
-          <Field label="Volume air (liter)">
-            <input inputMode="numeric" value={volumeL} onInput={(e) => setVolumeL(e.currentTarget.value)} placeholder="contoh: 870" />
+          <Field label={t('Volume air (liter)', 'Water volume (liters)')}>
+            <input inputMode="numeric" value={volumeL} onInput={(e) => setVolumeL(e.currentTarget.value)} placeholder={t('contoh: 870', 'example: 870')} />
           </Field>
         </div>
       </details>
 
       {error && <p class="error">{error}</p>}
       <button class="btn primary" disabled={busy}>
-        Simpan kolam
+        {t('Simpan kolam', 'Save pond')}
       </button>
     </form>
   );

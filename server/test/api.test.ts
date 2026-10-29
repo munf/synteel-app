@@ -345,3 +345,42 @@ test('a signed-in account joins another farm with a code from Profil or "Siapkan
   assert.equal(both.json.farm.name, 'Tambak Mitra');
   assert.equal(both.json.farms.length, 2);
 });
+
+test('x-lang: en answers in English; the same farm still answers in Indonesian without it', async () => {
+  const { api } = server('2026-10-28T03:00:00Z');
+  let cookie = '';
+  const call = async (method: string, path: string, body?: unknown, lang?: string) => {
+    const res = await api.request(path, {
+      method,
+      headers: { ...(body !== undefined && { 'content-type': 'application/json' }), ...(cookie && { cookie }), ...(lang && { 'x-lang': lang }) },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const set = res.headers.get('set-cookie');
+    if (set) cookie = set.split(';')[0];
+    return { status: res.status, json: res.status === 204 ? null : await res.json() };
+  };
+  await call('POST', '/auth/register', { name: 'Pak Joko', phone: '0812 3456 7890', pin: '246810' });
+  await call('PUT', '/farm', { name: 'T' });
+  const pond = (await call('POST', '/ponds', { name: 'Kolam A' })).json.pond;
+  await call('POST', `/ponds/${pond.id}/batches`, { phase: 'glass_eel', stockedAt: '2026-10-07', initialCount: 500 });
+  const logged = await call('POST', `/ponds/${pond.id}/logs`, { readings: { temperature: 30.5 }, behavior: ['surfacing'] }, 'en');
+  const low = logged.json.pond.findings.find((f: { id: string }) => f.id === 'sign:low_do');
+  assert.equal(low.title, 'Possibly low oxygen in the water');
+  assert.match(low.detail, /^Eels seen rising to the surface\. A temperature of 30\.5 °C/);
+  assert.equal(logged.json.pond.program.stage.name, 'Paste transition');
+
+  const id = (await call('GET', `/ponds/${pond.id}`)).json.pond;
+  assert.equal(id.findings.find((f: { id: string }) => f.id === 'sign:low_do').title, 'Kemungkinan oksigen air rendah');
+  assert.equal(id.program.stage.name, 'Transisi pasta');
+
+  assert.equal((await call('POST', '/ponds', { name: '' }, 'en')).json.error, 'Pond name is required');
+  assert.equal((await call('POST', '/ponds', { name: '' })).json.error, 'nama kolam wajib diisi');
+
+  // A briefing saved in Indonesian is shown rules-only in English, and the other way round.
+  const made = (await call('POST', '/briefing')).json.briefing;
+  assert.equal(made.lang, 'id');
+  const en = (await call('GET', '/briefing', undefined, 'en')).json.briefing;
+  assert.equal(en.lang, 'en');
+  assert.match(en.summary, /most at risk|calm tonight/);
+  assert.equal((await call('GET', '/briefing')).json.briefing.summary, made.summary);
+});

@@ -3,21 +3,24 @@ import { api, type HistoryLog, type Limits, type LogData, type LogSource, type P
 import type { Go } from '../app.tsx';
 import { aerationCheckLabel, behaviorLabel, colorLabel, fmtNum, leftoverLabel, phaseLabel, readingLabel, smellLabel, summarizeLog } from '../labels.ts';
 import { Icon, roleLabel, Shape, type IconName, type Tone } from '../ui.tsx';
+import { isEn, LOCALE, t } from '../i18n.ts';
 import './history.css';
 
 const TZ = 'Asia/Jakarta';
 const DAY = 86400_000;
-const clock = (t: number) => new Date(t).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: TZ });
+const clock = (t: number) => new Date(t).toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit', timeZone: TZ });
 const dayKey = (t: number) => new Date(t).toLocaleDateString('en-CA', { timeZone: TZ });
 /** "Rabu 28 Oktober": full day and month names, no abbreviations. */
 const shortDate = (t: number, _weekday: 'long' | 'short' = 'long') =>
-  new Date(t).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', timeZone: TZ }).replace(',', '');
+  isEn
+    ? new Date(t).toLocaleDateString(LOCALE, { weekday: 'long', day: 'numeric', month: 'long', timeZone: TZ })
+    : new Date(t).toLocaleDateString(LOCALE, { weekday: 'long', day: 'numeric', month: 'long', timeZone: TZ }).replace(',', '');
 
 const SRC: Record<LogSource, { short: string; long: string; icon: IconName; ai: boolean }> = {
-  voice: { short: 'Suara', long: 'Suara, dibaca AI lalu dicek', icon: 'mic', ai: true },
-  photo: { short: 'Foto', long: 'Foto alat ukur, dibaca AI lalu dicek', icon: 'camera', ai: true },
-  video: { short: 'Video', long: 'Video harian, dibaca AI lalu dicek', icon: 'video', ai: true },
-  manual: { short: 'Ketik', long: 'Diketik manual', icon: 'pencil', ai: false },
+  voice: { short: t('Suara', 'Voice'), long: t('Suara, dibaca AI lalu dicek', 'Voice, read by the AI then checked'), icon: 'mic', ai: true },
+  photo: { short: t('Foto', 'Photo'), long: t('Foto alat ukur, dibaca AI lalu dicek', 'Photo of a meter, read by the AI then checked'), icon: 'camera', ai: true },
+  video: { short: 'Video', long: t('Video harian, dibaca AI lalu dicek', 'Daily video, read by the AI then checked'), icon: 'video', ai: true },
+  manual: { short: t('Ketik', 'Typed'), long: t('Diketik manual', 'Typed in'), icon: 'pencil', ai: false },
 };
 
 const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
@@ -26,7 +29,7 @@ const unitOf = (k: ReadingKey) => (k === 'temperature' ? '°C' : readingLabel[k]
 /** "Suhu 29,8 °C · pH 7,33 · TDS 145": the line under each record. */
 function valuesLine(d: LogData) {
   const r = Object.entries(d.readings ?? {}) as [ReadingKey, number][];
-  if (r.length === 0) return summarizeLog(d) || 'Cek tanpa angka';
+  if (r.length === 0) return summarizeLog(d) || t('Cek tanpa angka', 'Check without numbers');
   return r.map(([k, v]) => `${readingLabel[k].name} ${fmtNum(v)}${k === 'temperature' ? ' °C' : ''}`).join(' · ');
 }
 
@@ -39,19 +42,25 @@ function readingTone(v: number, l: Limits | undefined): Tone | null {
 }
 
 // Perhatian → "agak …", Bahaya → "terlalu …" (FAKTA words).
-const WORD = {
-  temperature: { warn: ['Suhu agak dingin', 'Suhu agak panas'], bad: ['Suhu terlalu dingin', 'Suhu terlalu panas'] },
-  ph: { warn: ['pH agak rendah', 'pH agak tinggi'], bad: ['pH terlalu rendah', 'pH terlalu tinggi'] },
-  tds: { warn: ['TDS agak rendah', 'TDS agak tinggi'], bad: ['TDS terlalu rendah', 'TDS terlalu tinggi'] },
-} as const;
+const WORD = isEn
+  ? {
+      temperature: { warn: ['Temperature a bit cold', 'Temperature a bit hot'], bad: ['Temperature too cold', 'Temperature too hot'] },
+      ph: { warn: ['pH a bit low', 'pH a bit high'], bad: ['pH too low', 'pH too high'] },
+      tds: { warn: ['TDS a bit low', 'TDS a bit high'], bad: ['TDS too low', 'TDS too high'] },
+    }
+  : {
+      temperature: { warn: ['Suhu agak dingin', 'Suhu agak panas'], bad: ['Suhu terlalu dingin', 'Suhu terlalu panas'] },
+      ph: { warn: ['pH agak rendah', 'pH agak tinggi'], bad: ['pH terlalu rendah', 'pH terlalu tinggi'] },
+      tds: { warn: ['TDS agak rendah', 'TDS agak tinggi'], bad: ['TDS terlalu rendah', 'TDS terlalu tinggi'] },
+    };
 
 /** Shape + word flags for one record, worst first. */
 function flags(d: LogData, pond: PondSummary | undefined): { tone: Tone; word: string }[] {
   const out: { tone: Tone; word: string }[] = [];
   const b = d.behavior ?? [];
-  if (b.includes('surfacing')) out.push({ tone: 'bad', word: 'Sidat naik ke permukaan' });
-  if (b.includes('gathering_inlet')) out.push({ tone: 'bad', word: 'Sidat kumpul di air masuk' });
-  if (d.aeration === 'off') out.push({ tone: 'bad', word: 'Aerator mati' });
+  if (b.includes('surfacing')) out.push({ tone: 'bad', word: t('Sidat naik ke permukaan', 'Eels rising to the surface') });
+  if (b.includes('gathering_inlet')) out.push({ tone: 'bad', word: t('Sidat kumpul di air masuk', 'Eels gathering at the inlet') });
+  if (d.aeration === 'off') out.push({ tone: 'bad', word: t('Aerator mati', 'Aerator off') });
   for (const k of ['temperature', 'ph', 'tds'] as const) {
     const v = d.readings?.[k];
     if (v === undefined) continue;
@@ -61,7 +70,7 @@ function flags(d: LogData, pond: PondSummary | undefined): { tone: Tone; word: s
     const low = v < (l?.target?.min ?? l?.warning?.below ?? -Infinity);
     out.push({ tone, word: WORD[k][tone === 'bad' ? 'bad' : 'warn'][low ? 0 : 1] });
   }
-  if (d.mortality) out.push({ tone: 'warn', word: `${d.mortality} ekor mati` });
+  if (d.mortality) out.push({ tone: 'warn', word: t(`${d.mortality} ekor mati`, `${d.mortality} dead`) });
   return out.sort((a, b) => (a.tone === 'bad' ? 0 : 1) - (b.tone === 'bad' ? 0 : 1));
 }
 
@@ -79,7 +88,11 @@ function suspectNote(l: HistoryLog, all: HistoryLog[], pondName: string) {
   const mid = sorted[Math.floor(sorted.length / 2)];
   const diff = v - mid;
   if (Math.abs(diff) < 2) return null;
-  return `Suhu ${fmtNum(Math.round(Math.abs(diff) * 10) / 10)} °C lebih ${diff < 0 ? 'rendah' : 'tinggi'} dari catatan ${pondName} lain hari ini. Mungkin alat ukur dicelup di kolam lain.`;
+  const gap = fmtNum(Math.round(Math.abs(diff) * 10) / 10);
+  return t(
+    `Suhu ${gap} °C lebih ${diff < 0 ? 'rendah' : 'tinggi'} dari catatan ${pondName} lain hari ini. Mungkin alat ukur dicelup di kolam lain.`,
+    `Temperature ${gap} °C ${diff < 0 ? 'lower' : 'higher'} than the other ${pondName} records today. The meter may have been dipped in another pond.`,
+  );
 }
 
 /** Label/value pairs for the open record. */
@@ -87,29 +100,34 @@ function fields(log: HistoryLog) {
   const d = log.data;
   const out: [string, string][] = [];
   for (const [k, v] of Object.entries(d.readings ?? {}) as [ReadingKey, number][]) out.push([readingLabel[k].name, `${fmtNum(v)}${unitOf(k) ? ` ${unitOf(k)}` : ''}`]);
-  if (d.mortality !== undefined) out.push(['Sidat mati', `${d.mortality} ekor`]);
-  if (d.feeding?.leftover) out.push(['Sisa pakan', leftoverLabel[d.feeding.leftover]]);
-  if (d.behavior?.length) out.push(['Perilaku sidat', d.behavior.map((b, i) => (i ? lower(behaviorLabel[b]) : behaviorLabel[b])).join(', ')]);
+  if (d.mortality !== undefined) out.push([t('Sidat mati', 'Dead eels'), t(`${d.mortality} ekor`, `${d.mortality} ${d.mortality === 1 ? 'eel' : 'eels'}`)]);
+  if (d.feeding?.leftover) out.push([t('Sisa pakan', 'Leftover feed'), leftoverLabel[d.feeding.leftover]]);
+  if (d.behavior?.length) out.push([t('Perilaku sidat', 'Eel behavior'), d.behavior.map((b, i) => (i ? lower(behaviorLabel[b]) : behaviorLabel[b])).join(', ')]);
   if (d.aeration) out.push(['Aerator', aerationCheckLabel[d.aeration]]);
-  if (d.water?.color) out.push(['Warna air', colorLabel[d.water.color]]);
-  if (d.water?.smell) out.push(['Bau air', smellLabel[d.water.smell]]);
-  if (d.waterChangePct) out.push(['Ganti air', `${d.waterChangePct}%`]);
-  if (d.note) out.push(['Catatan', d.note]);
-  out.push(['Sumber', SRC[log.source].long]);
+  if (d.water?.color) out.push([t('Warna air', 'Water color'), colorLabel[d.water.color]]);
+  if (d.water?.smell) out.push([t('Bau air', 'Water smell'), smellLabel[d.water.smell]]);
+  if (d.waterChangePct) out.push([t('Ganti air', 'Water changed'), `${d.waterChangePct}%`]);
+  if (d.note) out.push([t('Catatan', 'Note'), d.note]);
+  out.push([t('Sumber', 'Source'), SRC[log.source].long]);
   return out;
 }
 
 /** "Diubah 17.40 oleh Petani Demo: suhu 28,9 → 29,8". */
 function trace(e: HistoryLog['edits'][number], now: number) {
-  const t = Date.parse(e.at);
-  const when = dayKey(t) === dayKey(now) ? clock(t) : `${shortDate(t, 'short')} ${clock(t)}`;
-  return /^dipindahkan /.test(e.text) ? `Dipindahkan ${when} oleh ${e.byName} ${e.text.slice('dipindahkan '.length)}` : `Diubah ${when} oleh ${e.byName}: ${e.text}`;
+  const at = Date.parse(e.at);
+  const when = dayKey(at) === dayKey(now) ? clock(at) : `${shortDate(at, 'short')} ${clock(at)}`;
+  const moved = /^(dipindahkan|moved) /.exec(e.text);
+  if (moved) {
+    const rest = e.text.slice(moved[0].length);
+    return t(`Dipindahkan ${when} oleh ${e.byName} ${rest}`, `Moved ${when} by ${e.byName} ${rest}`);
+  }
+  return t(`Diubah ${when} oleh ${e.byName}: ${e.text}`, `Changed ${when} by ${e.byName}: ${e.text}`);
 }
 
 // Numbers "Ubah angka" can change. Text fields stay as recorded.
 type NumKey = ReadingKey | 'mortality';
-const NUM_LABEL = (k: NumKey) => (k === 'mortality' ? 'Sidat mati' : readingLabel[k].name);
-const NUM_UNIT = (k: NumKey) => (k === 'mortality' ? 'ekor' : unitOf(k));
+const NUM_LABEL = (k: NumKey) => (k === 'mortality' ? t('Sidat mati', 'Dead eels') : readingLabel[k].name);
+const NUM_UNIT = (k: NumKey) => (k === 'mortality' ? t('ekor', 'eels') : unitOf(k));
 const parseNum = (s: string) => Number(s.trim().replace(/\s/g, '').replace(',', '.'));
 
 type Mode = 'lihat' | 'ubah' | 'pindah' | 'hapus';
@@ -172,7 +190,7 @@ export function History({ ponds, pondId, role, onChanged, go }: { ponds: PondSum
           continue;
         }
         const v = parseNum(raw);
-        if (!Number.isFinite(v) || v < 0) throw new Error(`${NUM_LABEL(k)}: angka tidak terbaca`);
+        if (!Number.isFinite(v) || v < 0) throw new Error(`${NUM_LABEL(k)}: ${t('angka tidak terbaca', 'not a readable number')}`);
         if (v === old) continue;
         if (k === 'mortality') data.mortality = Math.round(v);
         else data.readings![k] = v;
@@ -221,11 +239,11 @@ export function History({ ponds, pondId, role, onChanged, go }: { ponds: PondSum
   const shown = [...(logs ?? []).filter((l) => !notices[l.id]), ...Object.values(notices).map((n) => n.log)].sort((a, b) => Date.parse(b.loggedAt) - Date.parse(a.loggedAt));
   const groups: { key: string; label: string; date: string; logs: HistoryLog[] }[] = [];
   for (const l of shown) {
-    const t = Date.parse(l.loggedAt);
-    const k = dayKey(t);
+    const at = Date.parse(l.loggedAt);
+    const k = dayKey(at);
     let g = groups.find((x) => x.key === k);
     if (!g) {
-      g = { key: k, label: k === today ? 'Hari ini' : k === yesterday ? 'Kemarin' : shortDate(t), date: k === today || k === yesterday ? shortDate(t) : '', logs: [] };
+      g = { key: k, label: k === today ? t('Hari ini', 'Today') : k === yesterday ? t('Kemarin', 'Yesterday') : shortDate(at), date: k === today || k === yesterday ? shortDate(at) : '', logs: [] };
       groups.push(g);
     }
     g.logs.push(l);
@@ -250,33 +268,36 @@ export function History({ ponds, pondId, role, onChanged, go }: { ponds: PondSum
     return scored.slice(0, 2).map((x) => x.p);
   };
   const lastHint = (p: PondSummary) => {
-    const parts = [p.latest.temperature && `suhu ${fmtNum(p.latest.temperature.value)} °C`, p.latest.ph && `pH ${fmtNum(p.latest.ph.value)}`].filter(Boolean);
-    return parts.length ? `Terakhir ${parts.join(' · ')}` : pondSub(p);
+    const parts = [p.latest.temperature && `${t('suhu', 'temperature')} ${fmtNum(p.latest.temperature.value)} °C`, p.latest.ph && `pH ${fmtNum(p.latest.ph.value)}`].filter(Boolean);
+    return parts.length ? t(`Terakhir ${parts.join(' · ')}`, `Last: ${parts.join(' · ')}`) : pondSub(p);
   };
-  const pondSub = (p: PondSummary) => (p.batch && p.program ? `${phaseLabel[p.batch.phase]} · minggu ${p.program.week}` : 'Belum ada batch');
+  const pondSub = (p: PondSummary) => (p.batch && p.program ? `${phaseLabel[p.batch.phase]} · ${t('minggu', 'week')} ${p.program.week}` : t('Belum ada batch', 'No batch yet'));
 
   /** The line about who may change this record, and until when. */
   const permLine = (l: HistoryLog) => {
-    if (!l.canEdit) return l.lockReason ?? 'Terkunci.';
+    if (!l.canEdit) return l.lockReason ?? t('Terkunci.', 'Locked.');
     if (l.editableUntil) {
-      const t = Date.parse(l.editableUntil);
-      return `Bisa diubah atau dihapus sampai ${dayKey(t) === today ? 'hari ini' : 'besok'} ${clock(t)}.`;
+      const until = Date.parse(l.editableUntil);
+      return t(
+        `Bisa diubah atau dihapus sampai ${dayKey(until) === today ? 'hari ini' : 'besok'} ${clock(until)}.`,
+        `Can be edited or deleted until ${dayKey(until) === today ? 'today' : 'tomorrow'} ${clock(until)}.`,
+      );
     }
     const fresh = now - Date.parse(l.loggedAt) < DAY;
-    if (!fresh) return 'Lewat 24 jam. Pemilik tambak tetap bisa mengubah.';
-    if (l.by && me && l.by.id !== me.id) return `Dicatat ${l.by.name}. Pemilik tambak bisa mengubah kapan saja.`;
-    return 'Pemilik tambak bisa mengubah kapan saja.';
+    if (!fresh) return t('Lewat 24 jam. Pemilik tambak tetap bisa mengubah.', 'Older than 24 hours. The farm owner can still edit it.');
+    if (l.by && me && l.by.id !== me.id) return t(`Dicatat ${l.by.name}. Pemilik tambak bisa mengubah kapan saja.`, `Recorded by ${l.by.name}. The farm owner can edit it at any time.`);
+    return t('Pemilik tambak bisa mengubah kapan saja.', 'The farm owner can edit it at any time.');
   };
 
   return (
     <div class="screen">
       <header class="row">
-        <button class="icon-btn" aria-label={`Kembali ke ${pond?.name ?? 'kolam'}`} onClick={() => go({ name: 'pond', id: pondId })}>
+        <button class="icon-btn" aria-label={t(`Kembali ke ${pond?.name ?? 'kolam'}`, `Back to ${pond?.name ?? 'the pond'}`)} onClick={() => go({ name: 'pond', id: pondId })}>
           <Icon name="back" />
         </button>
         <div class="grow stack-xs" style={{ gap: 0 }}>
-          <h1>Riwayat catatan</h1>
-          <span class="meta">{pond ? [pond.name, pond.batch && phaseLabel[pond.batch.phase], pond.program && `minggu ${pond.program.week}`].filter(Boolean).join(' · ') : ''}</span>
+          <h1>{t('Riwayat catatan', 'Record history')}</h1>
+          <span class="meta">{pond ? [pond.name, pond.batch && phaseLabel[pond.batch.phase], pond.program && `${t('minggu', 'week')} ${pond.program.week}`].filter(Boolean).join(' · ') : ''}</span>
         </div>
       </header>
 
@@ -287,20 +308,25 @@ export function History({ ponds, pondId, role, onChanged, go }: { ponds: PondSum
         <span class="stack-xs">
           {me && role && (
             <span class="strong">
-              Masuk sebagai {me.name}, {roleLabel[role].toLowerCase()}.
+              {t(`Masuk sebagai ${me.name}, ${roleLabel[role].toLowerCase()}.`, `Signed in as ${me.name}, ${roleLabel[role].toLowerCase()}.`)}
             </span>
           )}
-          <span>Catatan bisa diubah atau dihapus oleh yang mencatat sampai 24 jam. Pemilik tambak bisa kapan saja. Setiap perubahan tetap tercatat.</span>
+          <span>
+            {t(
+              'Catatan bisa diubah atau dihapus oleh yang mencatat sampai 24 jam. Pemilik tambak bisa kapan saja. Setiap perubahan tetap tercatat.',
+              'Whoever made a record can edit or delete it for 24 hours. The farm owner can at any time. Every change stays on record.',
+            )}
+          </span>
         </span>
       </div>
 
       {error && <p class="error">{error}</p>}
-      {!logs && !error && <p class="muted">Memuat…</p>}
+      {!logs && !error && <p class="muted">{t('Memuat…', 'Loading…')}</p>}
       {logs && shown.length === 0 && (
         <div class="card">
-          <p>Belum ada catatan 14 hari terakhir.</p>
+          <p>{t('Belum ada catatan 14 hari terakhir.', 'No records in the last 14 days.')}</p>
           <button class="btn primary" onClick={() => go({ name: 'record-pond', pondId })}>
-            <Icon name="pencil" size={20} /> Catat sekarang
+            <Icon name="pencil" size={20} /> {t('Catat sekarang', 'Record now')}
           </button>
         </div>
       )}
@@ -313,7 +339,7 @@ export function History({ ponds, pondId, role, onChanged, go }: { ponds: PondSum
           </div>
           <div class="h-rows">
             {g.logs.map((l) => {
-              const t = clock(Date.parse(l.loggedAt));
+              const time = clock(Date.parse(l.loggedAt));
               const notice = notices[l.id];
               if (notice)
                 return (
@@ -323,14 +349,14 @@ export function History({ ponds, pondId, role, onChanged, go }: { ponds: PondSum
                         {notice.kind === 'moved' ? <Icon name="check" size={20} stroke={3} /> : <TrashIcon />}
                       </span>
                       <span class="grow stack-xs" style={{ gap: 0 }}>
-                        <span class="strong">{notice.kind === 'moved' ? `Dipindahkan ke ${notice.to}` : 'Catatan dihapus'}</span>
+                        <span class="strong">{notice.kind === 'moved' ? t(`Dipindahkan ke ${notice.to}`, `Moved to ${notice.to}`) : t('Catatan dihapus', 'Record deleted')}</span>
                         <span class="meta">
-                          Catatan {t}
-                          {l.by ? ` dari ${l.by.name}` : ''}
+                          {t(`Catatan ${time}`, `Record ${time}`)}
+                          {l.by ? t(` dari ${l.by.name}`, ` from ${l.by.name}`) : ''}
                         </span>
                       </span>
                       <button type="button" class="h-undo" disabled={busy} onClick={() => undo(notice)}>
-                        Batalkan
+                        {t('Batalkan', 'Undo')}
                       </button>
                     </div>
                   </div>
@@ -339,7 +365,7 @@ export function History({ ponds, pondId, role, onChanged, go }: { ponds: PondSum
               const isOpen = open === l.id;
               const src = SRC[l.source];
               const fl = flags(l.data, pond);
-              const suspect = suspectNote(l, logs ?? [], pond?.name ?? 'kolam ini');
+              const suspect = suspectNote(l, logs ?? [], pond?.name ?? t('kolam ini', 'this pond'));
               const numKeys: NumKey[] = [...(Object.keys(l.data.readings ?? {}) as ReadingKey[]), ...(l.data.mortality !== undefined ? (['mortality'] as const) : [])];
               const editKeys: NumKey[] = numKeys.length ? numKeys : ['temperature', 'ph', 'tds'];
               const q = query.trim().toLowerCase();
@@ -349,14 +375,14 @@ export function History({ ponds, pondId, role, onChanged, go }: { ponds: PondSum
                 <div key={l.id} class="h-row">
                   <button type="button" class="h-head" aria-expanded={isOpen} onClick={() => (isOpen ? close() : (close(), setOpen(l.id)))}>
                     <span class="row" style={{ gap: 8, width: '100%' }}>
-                      <span class="strong num">{t}</span>
+                      <span class="strong num">{time}</span>
                       <span class={`h-src${src.ai ? ' ai' : ''}`}>
                         <Icon name={src.icon} size={16} />
                         {src.short}
                       </span>
-                      <span class="h-who">· {l.by ? `${l.by.name}, ${roleLabel[l.by.role].toLowerCase()}` : 'sebelum ada akun'}</span>
+                      <span class="h-who">· {l.by ? `${l.by.name}, ${roleLabel[l.by.role].toLowerCase()}` : t('sebelum ada akun', 'before accounts')}</span>
                       {!l.canEdit && (
-                        <span class="h-ico" aria-label="terkunci">
+                        <span class="h-ico" aria-label={t('terkunci', 'locked')}>
                           <LockIcon />
                         </span>
                       )}
@@ -370,7 +396,7 @@ export function History({ ponds, pondId, role, onChanged, go }: { ponds: PondSum
                         {suspect && (
                           <span class="h-info">
                             <Icon name="info" size={16} />
-                            Mungkin salah kolam
+                            {t('Mungkin salah kolam', 'Maybe the wrong pond')}
                           </span>
                         )}
                         {fl.map((f) => (
@@ -417,17 +443,17 @@ export function History({ ponds, pondId, role, onChanged, go }: { ponds: PondSum
                             <div class="stack-sm">
                               <button type="button" class="h-act" onClick={() => setMode('ubah')}>
                                 <Icon name="pencil" size={20} />
-                                Ubah angka
+                                {t('Ubah angka', 'Edit numbers')}
                               </button>
                               {others.length > 0 && (
                                 <button type="button" class="h-act" onClick={() => setMode('pindah')}>
                                   <Icon name="arrow" size={20} />
-                                  Pindahkan ke kolam lain
+                                  {t('Pindahkan ke kolam lain', 'Move to another pond')}
                                 </button>
                               )}
                               <button type="button" class="h-act bad" onClick={() => setMode('hapus')}>
                                 <TrashIcon />
-                                Hapus
+                                {t('Hapus', 'Delete')}
                               </button>
                             </div>
                           )}
@@ -436,7 +462,7 @@ export function History({ ponds, pondId, role, onChanged, go }: { ponds: PondSum
 
                       {mode === 'ubah' && (
                         <>
-                          <span class="strong">Ubah angka catatan {t}</span>
+                          <span class="strong">{t(`Ubah angka catatan ${time}`, `Edit the numbers of the ${time} record`)}</span>
                           <div class="stack-sm">
                             {editKeys.map((k) => {
                               const old = k === 'mortality' ? l.data.mortality : l.data.readings?.[k];
@@ -454,25 +480,29 @@ export function History({ ponds, pondId, role, onChanged, go }: { ponds: PondSum
                               );
                             })}
                           </div>
-                          <span class="meta">Angka lama tetap terlihat di riwayat perubahan.</span>
+                          <span class="meta">{t('Angka lama tetap terlihat di riwayat perubahan.', 'The old numbers stay visible in the change history.')}</span>
                           {actionError && <p class="error">{actionError}</p>}
                           <button type="button" class="btn primary" disabled={busy} onClick={() => saveEdit(l, editKeys)}>
-                            {busy ? 'Menyimpan…' : 'Simpan perubahan'}
+                            {busy ? t('Menyimpan…', 'Saving…') : t('Simpan perubahan', 'Save changes')}
                           </button>
                           <button type="button" class="btn secondary" style={{ minHeight: 48 }} onClick={() => (setMode('lihat'), setDraft({}), setActionError(''))}>
-                            Batal
+                            {t('Batal', 'Cancel')}
                           </button>
                         </>
                       )}
 
                       {mode === 'pindah' && (
                         <>
-                          <span class="strong">Pindahkan ke kolam mana?</span>
+                          <span class="strong">{t('Pindahkan ke kolam mana?', 'Move to which pond?')}</span>
                           <label class="h-search">
                             <Icon name="search" size={20} />
-                            <input aria-label="Cari kolam" placeholder="Cari nama kolam" value={query} onInput={(e) => setQuery(e.currentTarget.value)} />
+                            <input aria-label={t('Cari kolam', 'Search ponds')} placeholder={t('Cari nama kolam', 'Search pond name')} value={query} onInput={(e) => setQuery(e.currentTarget.value)} />
                           </label>
-                          <span class="meta">{q ? `${found.length} kolam cocok` : found.length ? 'Angkanya mirip catatan terakhir kolam ini:' : 'Kolam lain:'}</span>
+                          <span class="meta">{q
+                              ? t(`${found.length} kolam cocok`, `${found.length} matching ${found.length === 1 ? 'pond' : 'ponds'}`)
+                              : found.length
+                                ? t('Angkanya mirip catatan terakhir kolam ini:', 'Numbers close to the last record of these ponds:')
+                                : t('Kolam lain:', 'Other ponds:')}</span>
                           <div class="stack-sm">
                             {picks.slice(0, 6).map((p) => (
                               <button key={p.id} type="button" class="h-pick" disabled={busy} onClick={() => move(l, p)}>
@@ -483,27 +513,39 @@ export function History({ ponds, pondId, role, onChanged, go }: { ponds: PondSum
                                 <Icon name="next" size={20} />
                               </button>
                             ))}
-                            {q && found.length === 0 && <span class="label ink2 center" style={{ padding: '8px 0' }}>Tidak ada kolam dengan nama itu.</span>}
+                            {q && found.length === 0 && <span class="label ink2 center" style={{ padding: '8px 0' }}>{t('Tidak ada kolam dengan nama itu.', 'No pond with that name.')}</span>}
                           </div>
-                          {!q && others.length > picks.length && <span class="meta">Bukan ini? Ketik nama kolam, ada {others.length - picks.length} kolam lain.</span>}
+                          {!q && others.length > picks.length && (
+                            <span class="meta">
+                              {t(
+                                `Bukan ini? Ketik nama kolam, ada ${others.length - picks.length} kolam lain.`,
+                                `Not these? Type a pond name; there are ${others.length - picks.length} other ponds.`,
+                              )}
+                            </span>
+                          )}
                           {actionError && <p class="error">{actionError}</p>}
                           <button type="button" class="btn secondary" style={{ minHeight: 48 }} onClick={() => (setMode('lihat'), setQuery(''), setActionError(''))}>
-                            Batal
+                            {t('Batal', 'Cancel')}
                           </button>
                         </>
                       )}
 
                       {mode === 'hapus' && (
                         <>
-                          <span class="strong">Hapus catatan {t}?</span>
-                          <span class="label ink2">Angkanya tidak dipakai lagi untuk grafik dan peringatan {pond?.name ?? 'kolam ini'}. Masih bisa dibatalkan sesudahnya.</span>
+                          <span class="strong">{t(`Hapus catatan ${time}?`, `Delete the ${time} record?`)}</span>
+                          <span class="label ink2">
+                            {t(
+                              `Angkanya tidak dipakai lagi untuk grafik dan peringatan ${pond?.name ?? 'kolam ini'}. Masih bisa dibatalkan sesudahnya.`,
+                              `Its numbers are no longer used for ${pond ? `${pond.name}'s` : 'this pond’s'} charts and warnings. You can still undo it afterwards.`,
+                            )}
+                          </span>
                           {actionError && <p class="error">{actionError}</p>}
                           <div class="grid2" style={{ gap: 8 }}>
                             <button type="button" class="btn secondary" style={{ minHeight: 48 }} onClick={() => (setMode('lihat'), setActionError(''))}>
-                              Batal
+                              {t('Batal', 'Cancel')}
                             </button>
                             <button type="button" class="btn danger" style={{ minHeight: 48 }} disabled={busy} onClick={() => remove(l)}>
-                              Ya, hapus
+                              {t('Ya, hapus', 'Yes, delete')}
                             </button>
                           </div>
                         </>

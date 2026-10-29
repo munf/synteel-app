@@ -2,6 +2,7 @@ import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Finding, Level, PondSummary } from './api.ts';
 import { fmtClock, levelLabel, phaseLabel } from './labels.ts';
+import { LOCALE, t } from './i18n.ts';
 
 // ---------- icons (stroke, 24 grid) ----------
 
@@ -104,7 +105,7 @@ export function StatusPill({ level, children }: { level: Level; children?: Compo
 }
 
 /** Marks a part of the design that is not live yet. */
-export const Soon = ({ children = 'Belum tersedia' }: { children?: ComponentChildren }) => <span class="soon">{children}</span>;
+export const Soon = ({ children = t('Belum tersedia', 'Not available yet') }: { children?: ComponentChildren }) => <span class="soon">{children}</span>;
 
 // ---------- pond thumbnail: the farmer's photo later; a line drawing of the pond type for now ----------
 // Line drawings, never a plain circle or square: those shapes mean Aman and Perhatian.
@@ -115,7 +116,12 @@ const TANK: Record<string, string> = {
   fiber: 'M4 6h16v3H4zM5 9l1 10h12l1-10M8 14c1.3-.8 2.7-.8 4 0s2.7.8 4 0',
 };
 export const tankPath = (kind: string | null) => TANK[kind === 'beton' ? 'terpal' : (kind ?? 'terpal')] ?? TANK.terpal;
-export const kindLabel: Record<string, string> = { bulat: 'Tangki bulat', terpal: 'Terpal', beton: 'Beton', fiber: 'Bak fiber' };
+export const kindLabel: Record<string, string> = {
+  bulat: t('Tangki bulat', 'Round tank'),
+  terpal: t('Terpal', 'Tarp'),
+  beton: t('Beton', 'Concrete'),
+  fiber: t('Bak fiber', 'Fiber tub'),
+};
 
 export function PondThumb({ kind, size = 56 }: { kind: string | null; size?: number }) {
   return (
@@ -128,9 +134,9 @@ export function PondThumb({ kind, size = 56 }: { kind: string | null; size?: num
 }
 
 export function pondMeta(p: PondSummary): string {
-  if (!p.batch || !p.program) return p.kind ? kindLabel[p.kind] ?? p.kind : 'Belum ada batch';
-  const parts = [phaseLabel[p.batch.phase], `minggu ${Math.max(1, p.program.week)}`];
-  if (p.program.estimatedAlive !== null) parts.push(`sekitar ${p.program.estimatedAlive.toLocaleString('id-ID')} ekor`);
+  if (!p.batch || !p.program) return p.kind ? kindLabel[p.kind] ?? p.kind : t('Belum ada batch', 'No batch yet');
+  const parts = [phaseLabel[p.batch.phase], t(`minggu ${Math.max(1, p.program.week)}`, `week ${Math.max(1, p.program.week)}`)];
+  if (p.program.estimatedAlive !== null) parts.push(t(`sekitar ${p.program.estimatedAlive.toLocaleString(LOCALE)} ekor`, `about ${p.program.estimatedAlive.toLocaleString(LOCALE)} ${p.program.estimatedAlive === 1 ? 'eel' : 'eels'}`));
   return parts.join(' · ');
 }
 
@@ -180,8 +186,8 @@ export function PondPicker({
           </span>
         )}
         <span class="grow stack-xs">
-          <span class="h2">{cur ? cur.name : (placeholder ?? 'Pilih kolam')}</span>
-          <span class="meta">{cur ? pondMeta(cur) : 'Belum dipilih'}</span>
+          <span class="h2">{cur ? cur.name : (placeholder ?? t('Pilih kolam', 'Choose a pond'))}</span>
+          <span class="meta">{cur ? pondMeta(cur) : t('Belum dipilih', 'Not chosen yet')}</span>
         </span>
         <Icon name="down" />
       </button>
@@ -190,10 +196,10 @@ export function PondPicker({
           {ponds.length > 5 && (
             <label class="picker-search">
               <Icon name="search" size={20} />
-              <input aria-label="Cari kolam" placeholder="Cari nama kolam" value={query} onInput={(e) => setQuery(e.currentTarget.value)} />
+              <input aria-label={t('Cari kolam', 'Search ponds')} placeholder={t('Cari nama kolam', 'Search pond name')} value={query} onInput={(e) => setQuery(e.currentTarget.value)} />
             </label>
           )}
-          <div role="listbox" aria-label="Daftar kolam" class="stack-xs">
+          <div role="listbox" aria-label={t('Daftar kolam', 'Pond list')} class="stack-xs">
             {shown.map((p) => (
               <button
                 type="button"
@@ -218,7 +224,7 @@ export function PondPicker({
                 {p.id === value && <Tick />}
               </button>
             ))}
-            {shown.length === 0 && <p class="meta" style={{ padding: '16px 8px' }}>Tidak ada kolam dengan nama itu.</p>}
+            {shown.length === 0 && <p class="meta" style={{ padding: '16px 8px' }}>{t('Tidak ada kolam dengan nama itu.', 'No pond with that name.')}</p>}
           </div>
         </div>
       )}
@@ -273,7 +279,7 @@ export function fmtPhone(phone: string) {
 
 export const initialOf = (name: string | undefined) => (name ?? 'S').replace(/^tambak\s+/i, '').trim().charAt(0).toUpperCase() || 'S';
 
-export const roleLabel: Record<'owner' | 'worker', string> = { owner: 'Pemilik', worker: 'Pekerja' };
+export const roleLabel: Record<'owner' | 'worker', string> = { owner: t('Pemilik', 'Owner'), worker: t('Pekerja', 'Worker') };
 
 export function Chips<T extends string>(props: {
   options: Record<T, string>;
@@ -321,24 +327,24 @@ export function Stepper({ value, onChange, min = 0, quick }: { value: number; on
   return (
     <div class="stepper-wrap">
       <div class="stepper">
-        <button type="button" aria-label="Kurangi" onClick={() => set(value - 1)}>
+        <button type="button" aria-label={t('Kurangi', 'Less')} onClick={() => set(value - 1)}>
           −
         </button>
         <input
           type="text"
           inputMode="numeric"
           pattern="[0-9]*"
-          aria-label="Jumlah, ketuk untuk mengetik"
+          aria-label={t('Jumlah, ketuk untuk mengetik', 'Amount, tap to type')}
           value={typing ?? String(value)}
           onFocus={(e) => (setTyping(String(value)), e.currentTarget.select())}
           onInput={(e) => {
-            const t = e.currentTarget.value.replace(/\D/g, '').slice(0, 5);
-            setTyping(t);
-            if (t !== '') set(Number(t));
+            const typed = e.currentTarget.value.replace(/\D/g, '').slice(0, 5);
+            setTyping(typed);
+            if (typed !== '') set(Number(typed));
           }}
           onBlur={() => setTyping(null)}
         />
-        <button type="button" aria-label="Tambah" onClick={() => set(value + 1)}>
+        <button type="button" aria-label={t('Tambah', 'More')} onClick={() => set(value + 1)}>
           +
         </button>
       </div>
@@ -349,7 +355,7 @@ export function Stepper({ value, onChange, min = 0, quick }: { value: number; on
               +{q}
             </button>
           ))}
-          <span class="label muted">atau ketuk angkanya</span>
+          <span class="label muted">{t('atau ketuk angkanya', 'or tap the number')}</span>
         </div>
       )}
     </div>
@@ -388,7 +394,7 @@ export function FindingCard({ finding, pondName }: { finding: Finding; pondName?
           ))}
         </ol>
       )}
-      <p class="meta">Sumber: {finding.source}</p>
+      <p class="meta">{t('Sumber', 'Source')}: {finding.source}</p>
     </article>
   );
 }
@@ -443,16 +449,19 @@ export function ConnectionBanner({ since, retrying, stillOff, onRetry }: { since
       <div class="row top">
         <Icon name="offline" />
         <span class="stack-xs">
-          <span class="note-title">Belum tersambung ke server</span>
+          <span class="note-title">{t('Belum tersambung ke server', 'Not connected to the server')}</span>
           <span>
-            Data yang sudah tampil masih bisa dibaca{since ? ` (terakhir ${fmtClock(since)})` : ''}. Catatan baru disimpan di HP dan terkirim sendiri saat tersambung.
+            {t(
+              `Data yang sudah tampil masih bisa dibaca${since ? ` (terakhir ${fmtClock(since)})` : ''}. Catatan baru disimpan di HP dan terkirim sendiri saat tersambung.`,
+              `Data already shown can still be read${since ? ` (last updated ${fmtClock(since)})` : ''}. New records are saved on the phone and sent once connected.`,
+            )}
           </span>
-          {stillOff && <span class="semi">Masih belum tersambung. Dicoba lagi otomatis tiap 30 detik.</span>}
+          {stillOff && <span class="semi">{t('Masih belum tersambung. Dicoba lagi otomatis tiap 30 detik.', 'Still not connected. Trying again on its own every 30 seconds.')}</span>}
         </span>
       </div>
       <button type="button" disabled={retrying} onClick={onRetry}>
         <Icon name="refresh" size={20} />
-        {retrying ? 'Menyambung…' : 'Coba lagi'}
+        {retrying ? t('Menyambung…', 'Connecting…') : t('Coba lagi', 'Try again')}
       </button>
     </div>
   );
@@ -508,16 +517,16 @@ export function PinBoxes({
     <div class="stack-sm">
       <div class="row between" style={{ gap: 8 }}>
         <label for={id} class="field-label" style={locked ? { color: 'var(--ink-2)' } : undefined}>
-          {locked ? 'PIN' : 'PIN 6 angka'}
+          {locked ? 'PIN' : t('PIN 6 angka', '6-digit PIN')}
         </label>
         {locked ? (
           <span class="label strong row" style={{ minHeight: 44, gap: 4, color: 'var(--ink-2)' }}>
-            <Icon name="lock" size={18} /> Dikunci
+            <Icon name="lock" size={18} /> {t('Dikunci', 'Locked')}
           </span>
         ) : (
           <button type="button" class="link-btn label row" style={{ gap: 4, fontWeight: 800 }} aria-pressed={show} onClick={() => setShow(!show)}>
             {show ? <Glyph d={GLYPH.eyeOff} size={18} /> : <Icon name="eye" size={18} />}
-            {show ? 'Sembunyikan' : 'Lihat PIN'}
+            {show ? t('Sembunyikan', 'Hide') : t('Lihat PIN', 'Show PIN')}
           </button>
         )}
       </div>
@@ -564,7 +573,7 @@ export function PinBoxes({
             pattern="[0-9]*"
             maxLength={6}
             autoComplete={autoComplete}
-            aria-label="PIN 6 angka"
+            aria-label={t('PIN 6 angka', '6-digit PIN')}
             aria-invalid={error || undefined}
             value={value}
             onFocus={() => setFocus(true)}

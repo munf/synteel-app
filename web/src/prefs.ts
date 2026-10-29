@@ -12,10 +12,12 @@ export interface Prefs {
   night: boolean;
   /** Night-check alarms ring on this phone (on by default). */
   alarms: boolean;
+  /** Interface language (i18n.ts); switching reloads the app. */
+  lang: 'id' | 'en';
 }
 
 const KEY = 'synteel.prefs';
-const DEFAULTS: Prefs = { textSize: 0, techOpen: false, shareData: false, night: false, alarms: true };
+const DEFAULTS: Prefs = { textSize: 0, techOpen: false, shareData: false, night: false, alarms: true, lang: 'id' };
 export const TEXT_PX = [16, 18, 20] as const;
 
 function load(): Prefs {

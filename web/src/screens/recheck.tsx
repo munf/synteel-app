@@ -5,6 +5,7 @@ import { api } from '../api.ts';
 import type { Go } from '../app.tsx';
 import { fmtClock } from '../labels.ts';
 import { Icon, Stepper } from '../ui.tsx';
+import { t } from '../i18n.ts';
 import { loadRechecks, saveRechecks, type Recheck } from './problem.tsx';
 
 function Due({ r, go, onDone }: { r: Recheck; go: Go; onDone: (next?: Recheck) => void }) {
@@ -17,7 +18,7 @@ function Due({ r, go, onDone }: { r: Recheck; go: Go; onDone: (next?: Recheck) =
   const better = async () => {
     setBusy(true);
     try {
-      await api.addLog(r.pondId, { behavior: ['normal'], note: 'Cek ulang: membaik' });
+      await api.addLog(r.pondId, { behavior: ['normal'], note: t('Cek ulang: membaik', 'Re-check: better') });
       onDone();
     } catch (err) {
       setError((err as Error).message);
@@ -29,9 +30,15 @@ function Due({ r, go, onDone }: { r: Recheck; go: Go; onDone: (next?: Recheck) =
   const notBetter = async () => {
     setBusy(true);
     try {
-      await api.addLog(r.pondId, { mortality: more || undefined, behavior: ['surfacing'], note: 'Cek ulang: belum membaik' });
+      await api.addLog(r.pondId, { mortality: more || undefined, behavior: ['surfacing'], note: t('Cek ulang: belum membaik', 'Re-check: not better yet') });
       setSent(
-        [`Cek ulang ${r.pondName}, ${fmtClock(Date.now())}: belum membaik.`, `Lapor masalah ${fmtClock(r.at)}: ${r.dead} ekor mati.`, more ? `Sejak itu mati lagi ${more} ekor.` : ''].filter(Boolean).join('\n'),
+        [
+          t(`Cek ulang ${r.pondName}, ${fmtClock(Date.now())}: belum membaik.`, `Re-check ${r.pondName}, ${fmtClock(Date.now())}: not better yet.`),
+          t(`Lapor masalah ${fmtClock(r.at)}: ${r.dead} ekor mati.`, `Problem reported ${fmtClock(r.at)}: ${r.dead} ${r.dead === 1 ? 'eel' : 'eels'} dead.`),
+          more ? t(`Sejak itu mati lagi ${more} ekor.`, `Since then ${more} more dead.`) : '',
+        ]
+          .filter(Boolean)
+          .join('\n'),
       );
     } catch (err) {
       setError((err as Error).message);
@@ -47,46 +54,46 @@ function Due({ r, go, onDone }: { r: Recheck; go: Go; onDone: (next?: Recheck) =
           <Icon name="clock" />
         </span>
         <div class="stack-xs grow">
-          <h2 style={{ color: 'var(--bad)' }}>Cek ulang {r.pondName}</h2>
+          <h2 style={{ color: 'var(--bad)' }}>{t(`Cek ulang ${r.pondName}`, `Re-check ${r.pondName}`)}</h2>
           <span class="label" style={{ color: 'var(--ink-2)' }}>
-            Lapor masalah jam {fmtClock(r.at)}
-            {r.dead ? ` · ${r.dead} ekor mati` : ''}
+            {t(`Lapor masalah jam ${fmtClock(r.at)}`, `Problem reported at ${fmtClock(r.at)}`)}
+            {r.dead ? t(` · ${r.dead} ekor mati`, ` · ${r.dead} ${r.dead === 1 ? 'eel' : 'eels'} dead`) : ''}
           </span>
         </div>
       </div>
       {sent ? (
         <>
-          <p>Tercatat. Kirim kabar sekarang, lalu cek lagi 1 jam lagi.</p>
+          <p>{t('Tercatat. Kirim kabar sekarang, lalu cek lagi 1 jam lagi.', 'Recorded. Send an update now, then check again in 1 hour.')}</p>
           <a class="btn danger" href={`https://wa.me/?text=${encodeURIComponent(sent)}`} target="_blank" rel="noopener">
-            <Icon name="chat" size={20} /> Kirim kabar lewat WhatsApp
+            <Icon name="chat" size={20} /> {t('Kirim kabar lewat WhatsApp', 'Send an update on WhatsApp')}
           </a>
           <button class="btn secondary" onClick={() => onDone({ ...r, dueAt: Date.now() + 3600_000, dead: r.dead + more })}>
-            Ingatkan 1 jam lagi
+            {t('Ingatkan 1 jam lagi', 'Remind me in 1 hour')}
           </button>
         </>
       ) : !worse ? (
         <>
-          <p class="strong">Sidat sudah turun dan berenang normal?</p>
+          <p class="strong">{t('Sidat sudah turun dan berenang normal?', 'Are the eels back down and swimming normally?')}</p>
           <div class="grid2">
             <button class="btn primary" disabled={busy} onClick={better}>
-              Ya, membaik
+              {t('Ya, membaik', 'Yes, better')}
             </button>
             <button class="btn secondary" disabled={busy} onClick={() => setWorse(true)}>
-              Belum
+              {t('Belum', 'Not yet')}
             </button>
           </div>
         </>
       ) : (
         <>
           <div class="field">
-            <span class="field-label">Ada yang mati lagi sejak tadi?</span>
+            <span class="field-label">{t('Ada yang mati lagi sejak tadi?', 'Any more dead since then?')}</span>
             <Stepper value={more} onChange={setMore} quick={[5, 10]} />
           </div>
           <button class="btn danger" disabled={busy} onClick={notBetter}>
-            Catat dan minta bantuan
+            {t('Catat dan minta bantuan', 'Record and ask for help')}
           </button>
           <button class="btn secondary" onClick={() => go({ name: 'problem', pondId: r.pondId })}>
-            Lihat langkah darurat lagi
+            {t('Lihat langkah darurat lagi', 'See the emergency steps again')}
           </button>
         </>
       )}

@@ -4,6 +4,7 @@ import { api, type Farm, type FarmState, type Me, type QuotaState } from '../api
 import type { Go } from '../app.tsx';
 import { askNotifyPermission } from '../alarms.ts';
 import { setPrefs, usePrefs, type Prefs } from '../prefs.ts';
+import { isEn, lang, LOCALE, setLang, t, type Lang } from '../i18n.ts';
 import { Field, Icon, initialOf, roleLabel, Shape, Soon, Switch, Tick } from '../ui.tsx';
 import { ChangePin, Members } from './members.tsx';
 import { MediaDone, QuotaBar } from './quota.tsx';
@@ -35,9 +36,15 @@ function QuotaRow({ go }: { go: Go }) {
   useEffect(() => {
     api.quota().then(setQ, () => setFailed(true));
   }, []);
-  const sub = q ? (q.unlimited ? 'Tidak ada batas harian saat ini' : `${q.left} dari ${q.cap} bacaan tersisa hari ini`) : failed ? 'Lihat sisa hari ini' : 'Memuat…';
+  const sub = q
+    ? q.unlimited
+      ? t('Tidak ada batas harian saat ini', 'No daily limit right now')
+      : t(`${q.left} dari ${q.cap} bacaan tersisa hari ini`, `${q.left} of ${q.cap} ${q.cap === 1 ? 'read' : 'reads'} left today`)
+    : failed
+      ? t('Lihat sisa hari ini', 'See what is left today')
+      : t('Memuat…', 'Loading…');
   return (
-    <LinkCard icon={<Icon name="sparkle" />} title="Jatah baca AI" sub={sub} onClick={() => go({ name: 'quota' })}>
+    <LinkCard icon={<Icon name="sparkle" />} title={t('Jatah baca AI', 'Daily AI reads')} sub={sub} onClick={() => go({ name: 'quota' })}>
       {q && !q.unlimited && <QuotaBar q={q} />}
     </LinkCard>
   );
@@ -73,13 +80,17 @@ function FarmLocation({ farm, onSaved }: { farm: Farm; onSaved: (f: Farm) => voi
     return (
       <LinkCard
         icon={<Icon name="home" />}
-        title="Lokasi tambak"
-        sub={farm.locationName ? farm.locationName : farm.lat !== null ? 'Titik lokasi HP' : 'Belum diatur. Dipakai untuk cuaca per jam.'}
+        title={t('Lokasi tambak', 'Farm location')}
+        sub={farm.locationName ? farm.locationName : farm.lat !== null ? t('Titik lokasi HP', 'Phone location') : t('Belum diatur. Dipakai untuk cuaca per jam.', 'Not set. Used for the hourly weather.')}
         onClick={() => setOpen(true)}
       >
         {notFound && (
           <span class="note info" style={{ width: '100%' }}>
-            <Icon name="info" size={20} /> Tempat ini belum ditemukan di peta, jadi cuaca belum bisa dihitung. Tulis nama kecamatan dan kabupaten, atau pakai lokasi HP.
+            <Icon name="info" size={20} />{' '}
+            {t(
+              'Tempat ini belum ditemukan di peta, jadi cuaca belum bisa dihitung. Tulis nama kecamatan dan kabupaten, atau pakai lokasi HP.',
+              'This place was not found on the map, so the weather cannot be worked out yet. Write the district and regency, or use the phone location.',
+            )}
           </span>
         )}
       </LinkCard>
@@ -87,17 +98,17 @@ function FarmLocation({ farm, onSaved }: { farm: Farm; onSaved: (f: Farm) => voi
   }
   return (
     <form class="card" id="lokasi" onSubmit={save}>
-      <Field label="Lokasi tambak" hint="Dipakai untuk cuaca per jam, supaya suhu air bisa diperkirakan.">
-        <input value={place} onInput={(e) => setPlace(e.currentTarget.value)} placeholder="contoh: Sleman, Yogyakarta" />
+      <Field label={t('Lokasi tambak', 'Farm location')} hint={t('Dipakai untuk cuaca per jam, supaya suhu air bisa diperkirakan.', 'Used for the hourly weather, so the water temperature can be estimated.')}>
+        <input value={place} onInput={(e) => setPlace(e.currentTarget.value)} placeholder={t('contoh: Sleman, Yogyakarta', 'example: Sleman, Yogyakarta')} />
       </Field>
       <LocateButton gps={gps} />
       {(error || gps.error) && <p class="error">{error || gps.error}</p>}
       <div class="grid2" style={{ gap: 8 }}>
         <button type="button" class="btn secondary" onClick={() => setOpen(false)}>
-          Batal
+          {t('Batal', 'Cancel')}
         </button>
         <button class="btn primary" disabled={busy || (!place.trim() && !gps.coords)}>
-          Simpan
+          {t('Simpan', 'Save')}
         </button>
       </div>
     </form>
@@ -114,8 +125,10 @@ function week(streak: number, todayLogged: boolean) {
     const d = new Date(today.getTime() - back * 86400_000);
     // A streak that has no reading today yet ends yesterday.
     const done = todayLogged ? back < streak : back >= 1 && back <= streak;
-    const date = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long' });
-    return { label: String(d.getDate()), aria: `${DAY_LONG[d.getDay()]} ${date}, ${done ? 'sudah mencatat' : back === 0 ? 'hari ini, belum mencatat' : 'belum mencatat'}`, done, today: back === 0 };
+    const date = d.toLocaleDateString(LOCALE, { day: 'numeric', month: 'long' });
+    const day = lang === 'en' ? d.toLocaleDateString(LOCALE, { weekday: 'long' }) : DAY_LONG[d.getDay()];
+    const status = done ? t('sudah mencatat', 'recorded') : back === 0 ? t('hari ini, belum mencatat', 'today, not recorded yet') : t('belum mencatat', 'not recorded');
+    return { label: String(d.getDate()), aria: `${day} ${date}, ${status}`, done, today: back === 0 };
   });
 }
 
@@ -126,7 +139,7 @@ const loggedToday = (state: FarmState) =>
 function StreakDays({ state }: { state: FarmState }) {
   const days = week(state.streak, loggedToday(state));
   return (
-    <div role="list" aria-label="7 hari terakhir" style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 4 }}>
+    <div role="list" aria-label={t('7 hari terakhir', 'Last 7 days')} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 4 }}>
       {days.map((d, i) => (
         <span key={i} role="img" aria-label={d.aria} class="stack-xs" style={{ alignItems: 'center' }}>
           <span
@@ -157,7 +170,7 @@ function StreakDays({ state }: { state: FarmState }) {
 /** Everything that does not exist yet, in one quiet group with one "Belum tersedia" chip. */
 function LaterList({ title, items }: { title: string; items: { label: string; sub: string }[] }) {
   return (
-    <section class="card later" aria-label="Belum tersedia">
+    <section class="card later" aria-label={t('Belum tersedia', 'Not available yet')}>
       <div class="row between" style={{ paddingBottom: 8 }}>
         <h2 class="later-title">{title}</h2>
         <Soon />
@@ -221,27 +234,31 @@ export function Profile({
   };
   const toggles: { label: string; sub: string; checked: boolean; onChange: (v: boolean) => void }[] = [
     // The alarm rings in the app whenever a night check is due; the tap also lets the phone show it and play sound.
-    { label: 'Alarm cek malam', sub: 'Berbunyi selama aplikasi terbuka', checked: prefs.alarms, onChange: (v) => { setPrefs({ alarms: v }); if (v) void askNotifyPermission(); } },
-    { label: 'Detail teknis terbuka', sub: 'Grafik dan angka langsung tampil', checked: prefs.techOpen, onChange: (v) => setPrefs({ techOpen: v }) },
+    { label: t('Alarm cek malam', 'Night check alarm'), sub: t('Berbunyi selama aplikasi terbuka', 'Rings while the app is open'), checked: prefs.alarms, onChange: (v) => { setPrefs({ alarms: v }); if (v) void askNotifyPermission(); } },
+    { label: t('Detail teknis terbuka', 'Show technical details'), sub: t('Grafik dan angka langsung tampil', 'Charts and numbers show right away'), checked: prefs.techOpen, onChange: (v) => setPrefs({ techOpen: v }) },
   ];
   // On the type scale: the "Aa" sample grows 16 → 18 → 24.
   const sizes: { label: string; px: number }[] = [
     { label: 'Normal', px: 16 },
-    { label: 'Besar', px: 18 },
-    { label: 'Sangat besar', px: 24 },
+    { label: t('Besar', 'Large'), px: 18 },
+    { label: t('Sangat besar', 'Very large'), px: 24 },
+  ];
+  // Language names are never translated.
+  const langs: { id: Lang; label: string }[] = [
+    { id: 'id', label: 'Bahasa Indonesia' },
+    { id: 'en', label: 'English' },
   ];
   const later = [
-    { label: 'Telepon penyuluh', sub: 'Penyuluh perikanan' },
-    { label: 'Laporan mingguan', sub: 'Ringkasan mati, suhu dan pakan seminggu' },
-    { label: 'Teruskan alarm ke pemilik', sub: 'Kalau alarm cek malam tidak dijawab' },
-    { label: 'Bahasa Inggris', sub: 'Menu dan saran AI' },
-    { label: 'Lihat atau hapus data', sub: 'Data yang dipakai melatih AI' },
+    { label: t('Telepon penyuluh', 'Call an extension officer'), sub: t('Penyuluh perikanan', 'Fisheries extension officer') },
+    { label: t('Laporan mingguan', 'Weekly report'), sub: t('Ringkasan mati, suhu dan pakan seminggu', 'A week of deaths, temperature and feed') },
+    { label: t('Teruskan alarm ke pemilik', 'Forward alarms to the owner'), sub: t('Kalau alarm cek malam tidak dijawab', 'If the night check alarm is not answered') },
+    { label: t('Lihat atau hapus data', 'View or delete data'), sub: t('Data yang dipakai melatih AI', 'Data used to train the AI') },
   ];
 
   return (
     <div class="screen profile">
       <header class="row between">
-        <button class="icon-btn" aria-label="Kembali ke Beranda" onClick={() => go({ name: 'today' })}>
+        <button class="icon-btn" aria-label={t('Kembali ke Beranda', 'Back to Home')} onClick={() => go({ name: 'today' })}>
           <Icon name="back" />
         </button>
       </header>
@@ -251,21 +268,21 @@ export function Profile({
           <span class="avatar lg">{initialOf(me.user.name)}</span>
           <div class="stack-xs" style={{ minWidth: 0 }}>
             <span class="title" style={{ lineHeight: 1.1, overflowWrap: 'anywhere' }}>
-              Halo, {me.user.name}
+              {t('Halo', 'Hello')}, {me.user.name}
             </span>
             <span class="semi" style={{ color: '#fff' }}>
               {farm?.name}
             </span>
             <span class="label" style={{ color: '#C9D4EA' }}>
-              {[state.role && roleLabel[state.role], farm?.locationName ?? 'Lokasi belum diatur'].filter(Boolean).join(' · ')}
+              {[state.role && roleLabel[state.role], farm?.locationName ?? t('Lokasi belum diatur', 'Location not set')].filter(Boolean).join(' · ')}
             </span>
           </div>
         </div>
         <div class="stack-sm" style={{ background: 'rgba(255,255,255,0.08)', borderRadius: 16, padding: 16 }}>
           <div class="row between" style={{ alignItems: 'baseline' }}>
-            <span class="strong num">{state.streak} hari beruntun</span>
+            <span class="strong num">{t(`${state.streak} hari beruntun`, `${state.streak} ${state.streak === 1 ? 'day' : 'days'} in a row`)}</span>
             <span class="label" style={{ color: '#B9C6E0', whiteSpace: 'nowrap' }}>
-              7 hari terakhir
+              {t('7 hari terakhir', 'Last 7 days')}
             </span>
           </div>
           <StreakDays state={state} />
@@ -275,7 +292,7 @@ export function Profile({
             <span style={{ color: '#2F6FE4', display: 'flex' }}>
               <Icon name="gift" />
             </span>
-            Lihat hadiah
+            {t('Lihat hadiah', 'View rewards')}
           </span>
           <span style={{ width: 40, height: 40, borderRadius: 20, background: '#13264A', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Icon name="arrow" size={18} />
@@ -284,9 +301,9 @@ export function Profile({
       </section>
 
       <section class="card">
-        <h2>Tampilan</h2>
-        <span class="strong">Ukuran huruf</span>
-        <div role="radiogroup" aria-label="Ukuran huruf" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr)', gap: 8 }}>
+        <h2>{t('Tampilan', 'Display')}</h2>
+        <span class="strong">{t('Ukuran huruf', 'Text size')}</span>
+        <div role="radiogroup" aria-label={t('Ukuran huruf', 'Text size')} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr)', gap: 8 }}>
           {sizes.map((s, i) => {
             const on = prefs.textSize === i;
             return (
@@ -313,16 +330,37 @@ export function Profile({
         <div class="box stack-sm">
           <span class="row strong" style={{ gap: 8, lineHeight: 1.25 }}>
             <Shape tone="bad" />
-            Kolam B · Bahaya
+            {t('Kolam B · Bahaya', 'Pond B · Danger')}
           </span>
-          <span class="ink2">Sidat naik ke permukaan. Cek aerator sekarang.</span>
+          <span class="ink2">{t('Sidat naik ke permukaan. Cek aerator sekarang.', 'Eels are coming up to the surface. Check the aerator now.')}</span>
         </div>
         <div class="row night-row">
           <div class="grow stack-xs">
-            <span class="strong">Tampilan malam</span>
-            <span class="label ink2">Layar gelap untuk cek kolam malam hari</span>
+            <span class="strong">{t('Tampilan malam', 'Night display')}</span>
+            <span class="label ink2">{t('Layar gelap untuk cek kolam malam hari', 'Dark screen for checking ponds at night')}</span>
           </div>
-          <Switch checked={prefs.night} label="Tampilan malam" onChange={(v) => setPrefs({ night: v })} />
+          <Switch checked={prefs.night} label={t('Tampilan malam', 'Night display')} onChange={(v) => setPrefs({ night: v })} />
+        </div>
+        <div class="stack lang-row">
+          <div class="stack-xs">
+            <span class="strong">{t('Bahasa', 'Language')}</span>
+            <span class="label ink2">{t('Menu dan saran AI', 'Menus and AI advice')}</span>
+          </div>
+          <div role="radiogroup" aria-label={t('Bahasa', 'Language')} class="grid2" style={{ gap: 8 }}>
+            {langs.map((g) => {
+              const on = lang === g.id;
+              return (
+                <button key={g.id} role="radio" aria-checked={on} lang={g.id} class={`size-opt lang-opt${on ? ' on' : ''}`} onClick={() => setLang(g.id)}>
+                  <span class="semi">{g.label}</span>
+                  {on && (
+                    <span class="corner-tick">
+                      <Tick size={14} />
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </section>
 
@@ -331,8 +369,8 @@ export function Profile({
       {me.farms.length > 1 && (
         <section class="card list">
           <div class="stack-xs" style={{ padding: '20px 0 8px' }}>
-            <h2>Pilih tambak</h2>
-            <span class="meta">Terdaftar di {me.farms.length} tambak</span>
+            <h2>{t('Pilih tambak', 'Choose a farm')}</h2>
+            <span class="meta">{t(`Terdaftar di ${me.farms.length} tambak`, `Member of ${me.farms.length} farms`)}</span>
           </div>
           {me.farms.map((f) => {
             const on = f.id === me.farm?.id;
@@ -349,7 +387,7 @@ export function Profile({
               >
                 <span class="grow stack-xs" style={{ gap: 0 }}>
                   <span class="strong">{f.name}</span>
-                  <span class="meta">{switching === f.id ? 'Membuka…' : roleLabel[f.role]}</span>
+                  <span class="meta">{switching === f.id ? t('Membuka…', 'Opening…') : roleLabel[f.role]}</span>
                 </span>
                 <span class={`tick-box${on ? ' on' : ''}`}>{on && <Tick />}</span>
               </button>
@@ -366,8 +404,8 @@ export function Profile({
       {onJoined && (
         <section class="card stack">
           <div class="stack-xs">
-            <h2>Gabung tambak lain</h2>
-            <span class="meta">Pakai kode undangan dari pemilik tambak. Tambak ini tetap ada di daftar.</span>
+            <h2>{t('Gabung tambak lain', 'Join another farm')}</h2>
+            <span class="meta">{t('Pakai kode undangan dari pemilik tambak. Tambak ini tetap ada di daftar.', 'Use an invite code from the farm owner. This farm stays in your list.')}</span>
           </div>
           <JoinByCode onJoined={onJoined} />
         </section>
@@ -386,13 +424,13 @@ export function Profile({
       )}
 
       <section class="card list">
-        {toggles.map((t) => (
-          <div key={t.label} class="list-row" style={{ minHeight: 72, padding: '12px 0' }}>
+        {toggles.map((tg) => (
+          <div key={tg.label} class="list-row" style={{ minHeight: 72, padding: '12px 0' }}>
             <div class="grow stack-xs">
-              <span class="semi">{t.label}</span>
-              <span class="label ink2">{t.sub}</span>
+              <span class="semi">{tg.label}</span>
+              <span class="label ink2">{tg.sub}</span>
             </div>
-            <Switch checked={t.checked} label={t.label} onChange={t.onChange} />
+            <Switch checked={tg.checked} label={tg.label} onChange={tg.onChange} />
           </div>
         ))}
       </section>
@@ -402,21 +440,21 @@ export function Profile({
           <Icon name="heart" />
         </span>
         <div class="grow stack-xs">
-          <span class="strong">Bantu kembangkan Synteel</span>
-          <span class="label ink2">Foto, video dan catatan untuk melatih AI. Nama dan nomor HP tidak ikut.</span>
+          <span class="strong">{t('Bantu kembangkan Synteel', 'Help improve Synteel')}</span>
+          <span class="label ink2">{t('Foto, video dan catatan untuk melatih AI. Nama dan nomor HP tidak ikut.', 'Photos, videos and records to train the AI. Name and phone number are not shared.')}</span>
         </div>
-        <Switch checked={prefs.shareData} label="Bantu kembangkan Synteel" onChange={(v) => setPrefs({ shareData: v })} />
+        <Switch checked={prefs.shareData} label={t('Bantu kembangkan Synteel', 'Help improve Synteel')} onChange={(v) => setPrefs({ shareData: v })} />
       </section>
 
       {!me.demo && <ChangePin />}
 
       {me.demo && (
         <p class="note info">
-          <Icon name="info" size={20} /> Akun demo: data direset tiap malam
+          <Icon name="info" size={20} /> {t('Akun demo: data direset tiap malam', 'Demo account: data resets every night')}
         </p>
       )}
 
-      <LaterList title="Sedang disiapkan" items={later} />
+      <LaterList title={t('Sedang disiapkan', 'In the works')} items={later} />
 
       <button type="button" class="go-row help-row" onClick={() => go({ name: 'help' })}>
         <span style={{ color: 'var(--accent)', display: 'flex' }}>
@@ -424,9 +462,9 @@ export function Profile({
         </span>
         <span class="grow stack-xs" style={{ gap: 0 }}>
           <span class="strong" style={{ color: 'var(--ink)' }}>
-            Hubungi bantuan
+            {t('Hubungi bantuan', 'Contact support')}
           </span>
-          <span class="meta">Ada kendala? Tim Synteel membalas lewat WhatsApp</span>
+          <span class="meta">{t('Ada kendala? Tim Synteel membalas lewat WhatsApp', 'Having trouble? The Synteel team replies on WhatsApp')}</span>
         </span>
         <span style={{ color: 'var(--muted)', display: 'flex' }}>
           <Icon name="next" size={20} />
@@ -435,15 +473,16 @@ export function Profile({
 
       <section class="stack-sm">
         <button type="button" class="btn secondary" onClick={logout} disabled={leaving}>
-          <Icon name="logout" size={20} /> Keluar
+          <Icon name="logout" size={20} /> {t('Keluar', 'Sign out')}
         </button>
-        <span class="meta center">Masuk sebagai {me.user.name}</span>
+        <span class="meta center">{t(`Masuk sebagai ${me.user.name}`, `Signed in as ${me.user.name}`)}</span>
       </section>
     </div>
   );
 }
 
 const WEEKS = ['Seminggu', 'Dua minggu', 'Tiga minggu', 'Empat minggu', 'Lima minggu', 'Enam minggu', 'Tujuh minggu', 'Delapan minggu'];
+const WEEKS_EN = ['One full week', 'Two full weeks', 'Three full weeks', 'Four full weeks', 'Five full weeks', 'Six full weeks', 'Seven full weeks', 'Eight full weeks'];
 const STREAK_BONUS = 10;
 
 export function Rewards({ state, go }: { state: FarmState; go: Go }) {
@@ -459,33 +498,33 @@ export function Rewards({ state, go }: { state: FarmState; go: Go }) {
   const ladder = [0, 1, 2, 3].map((i) => {
     const day = first + i * 7;
     const weeks = day / 7;
-    return { day, sub: `${WEEKS[weeks - 1] ?? `${weeks} minggu`} penuh` };
+    return { day, sub: t(`${WEEKS[weeks - 1] ?? `${weeks} minggu`} penuh`, WEEKS_EN[weeks - 1] ?? `${weeks} full weeks`) };
   });
   const pv = q?.earn.photoVideo;
 
   return (
     <div class="screen profile">
       <header class="row">
-        <button class="icon-btn" aria-label="Kembali ke Profil" onClick={() => go({ name: 'profile' })}>
+        <button class="icon-btn" aria-label={t('Kembali ke Profil', 'Back to Profile')} onClick={() => go({ name: 'profile' })}>
           <Icon name="back" />
         </button>
-        <h1>Hadiah rajin mencatat</h1>
+        <h1>{t('Hadiah rajin mencatat', 'Rewards for steady recording')}</h1>
       </header>
 
       <p class="note info">
         <Icon name="info" size={20} />
-        <span>Simulasi: hitungan beruntun asli dari catatan kolam.</span>
+        <span>{t('Simulasi: hitungan beruntun asli dari catatan kolam.', 'Simulation: the real streak count comes from the pond records.')}</span>
       </p>
 
       <section class="hero" style={{ gap: 16 }}>
         <div class="row top between">
           <div class="stack-sm">
             <span class="label semi" style={{ color: '#B9C6E0' }}>
-              Mencatat beruntun
+              {t('Mencatat beruntun', 'Recording streak')}
             </span>
             <span class="row" style={{ alignItems: 'baseline', gap: 8 }}>
               <span class="big">{streak}</span>
-              <span class="h2">hari beruntun</span>
+              <span class="h2">{t('hari beruntun', streak === 1 ? 'day in a row' : 'days in a row')}</span>
             </span>
           </div>
           <span style={{ width: 56, height: 56, flex: 'none', borderRadius: 28, background: '#2F6FE4', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -494,40 +533,48 @@ export function Rewards({ state, go }: { state: FarmState; go: Go }) {
         </div>
         <div class="stack-sm" style={{ background: 'rgba(255,255,255,0.08)', borderRadius: 16, padding: 16 }}>
           <span class="label" style={{ color: '#B9C6E0' }}>
-            7 hari terakhir
+            {t('7 hari terakhir', 'Last 7 days')}
           </span>
           <StreakDays state={state} />
         </div>
         <p style={{ color: '#DCE4F2' }}>
-          Catat {nextAt - streak} hari lagi untuk +{bonus} bacaan di <span style={{ whiteSpace: 'nowrap' }}>hari ke-{nextAt}</span>.
+          {isEn ? (
+            <>
+              Record {nextAt - streak} more {nextAt - streak === 1 ? 'day' : 'days'} for +{bonus} reads on <span style={{ whiteSpace: 'nowrap' }}>day {nextAt}</span>.
+            </>
+          ) : (
+            <>
+              Catat {nextAt - streak} hari lagi untuk +{bonus} bacaan di <span style={{ whiteSpace: 'nowrap' }}>hari ke-{nextAt}</span>.
+            </>
+          )}
         </p>
       </section>
 
       <section class="card">
         <div class="row top between">
           <div class="stack-xs">
-            <h2>Hadiah hari ini</h2>
-            <span class="label ink2">1 foto + 1 video kolam hari ini</span>
+            <h2>{t('Hadiah hari ini', "Today's reward")}</h2>
+            <span class="label ink2">{t('1 foto + 1 video kolam hari ini', '1 pond photo + 1 pond video today')}</span>
           </div>
           <span class="pill blue bonus-pill">
-            {pv?.earned && <Tick />}+{pv?.bonus ?? 2} bacaan
+            {pv?.earned && <Tick />}+{pv?.bonus ?? 2} {t('bacaan', 'reads')}
           </span>
         </div>
         {pv && (
           <span class="row label" style={{ gap: 16 }}>
-            <MediaDone on={pv.photo} label="Foto" />
+            <MediaDone on={pv.photo} label={t('Foto', 'Photo')} />
             <MediaDone on={pv.video} label="Video" />
           </span>
         )}
         <button class="btn primary" onClick={() => go({ name: 'record' })}>
-          <Icon name="pencil" size={20} /> Catat kondisi sekarang
+          <Icon name="pencil" size={20} /> {t('Catat kondisi sekarang', 'Record conditions now')}
         </button>
       </section>
 
       <section class="card" style={{ gap: 4 }}>
-        <h2>Tiap 7 hari beruntun</h2>
+        <h2>{t('Tiap 7 hari beruntun', 'Every 7 days in a row')}</h2>
         <span class="label ink2" style={{ marginBottom: 8 }}>
-          +{bonus} bacaan untuk hari itu
+          +{bonus} {t('bacaan untuk hari itu', 'reads for that day')}
         </span>
         {ladder.map((s) => {
           const got = streak >= s.day;
@@ -537,9 +584,9 @@ export function Rewards({ state, go }: { state: FarmState; go: Go }) {
               <span class={`ladder-day${got ? ' got' : isNext ? ' next' : ''}`}>{s.day}</span>
               <span class="grow stack-xs" style={{ gap: 0 }}>
                 <span class="strong">{s.sub}</span>
-                <span class="label ink2">+{bonus} bacaan</span>
+                <span class="label ink2">+{bonus} {t('bacaan', 'reads')}</span>
               </span>
-              <span class={`pill ${got ? 'ok' : isNext ? 'blue' : 'grey'}`}>{got ? 'tercapai' : isNext ? 'berikutnya' : `${s.day - streak} hari lagi`}</span>
+              <span class={`pill ${got ? 'ok' : isNext ? 'blue' : 'grey'}`}>{got ? t('tercapai', 'reached') : isNext ? t('berikutnya', 'next') : t(`${s.day - streak} hari lagi`, `${s.day - streak} ${s.day - streak === 1 ? 'day' : 'days'} to go`)}</span>
             </div>
           );
         })}
@@ -547,8 +594,13 @@ export function Rewards({ state, go }: { state: FarmState; go: Go }) {
 
       <button type="button" class="card quota-link" onClick={() => go({ name: 'quota' })}>
         <span class="grow stack-xs">
-          <span class="h2">Jatah baca AI</span>
-          <span class="label ink2">Satu bacaan = satu foto, suara atau video yang dibaca AI. Ketik sendiri dan laporan darurat tidak memakai jatah.</span>
+          <span class="h2">{t('Jatah baca AI', 'Daily AI reads')}</span>
+          <span class="label ink2">
+            {t(
+              'Satu bacaan = satu foto, suara atau video yang dibaca AI. Ketik sendiri dan laporan darurat tidak memakai jatah.',
+              'One read = one photo, voice note or video the AI reads. “Type it in” and emergency reports do not use reads.',
+            )}
+          </span>
         </span>
         <span class="ink2" style={{ display: 'flex' }}>
           <Icon name="next" size={20} />
@@ -556,17 +608,17 @@ export function Rewards({ state, go }: { state: FarmState; go: Go }) {
       </button>
 
       <LaterList
-        title="Hadiah lain"
+        title={t('Hadiah lain', 'Other rewards')}
         items={[
-          { label: 'Laporan mingguan', sub: 'Ringkasan mati, suhu dan pakan seminggu' },
-          { label: 'Hadiah mitra', sub: 'contoh: diskon pakan' },
+          { label: t('Laporan mingguan', 'Weekly report'), sub: t('Ringkasan mati, suhu dan pakan seminggu', 'A week of deaths, temperature and feed') },
+          { label: t('Hadiah mitra', 'Partner rewards'), sub: t('contoh: diskon pakan', 'for example: feed discounts') },
         ]}
       />
 
       <section class="card tint" style={{ gap: 12 }}>
-        <h2>Cara menghitung</h2>
-        <span>Satu hari dihitung kalau ada minimal satu ukuran suhu, pH atau TDS.</span>
-        <span>Lupa sehari, hitungan mulai lagi dari 1. Belum ada hari libur untuk menjaga hitungan.</span>
+        <h2>{t('Cara menghitung', 'How it counts')}</h2>
+        <span>{t('Satu hari dihitung kalau ada minimal satu ukuran suhu, pH atau TDS.', 'A day counts if it has at least one temperature, pH or TDS reading.')}</span>
+        <span>{t('Lupa sehari, hitungan mulai lagi dari 1. Belum ada hari libur untuk menjaga hitungan.', 'Miss a day and the count starts again from 1. There are no days off that keep the count yet.')}</span>
       </section>
     </div>
   );

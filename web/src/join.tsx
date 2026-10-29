@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { api, ApiError, type Me, type Role } from './api.ts';
 import { Field, Icon, Notice, roleLabel } from './ui.tsx';
+import { t } from './i18n.ts';
 
 export function JoinByCode({ onJoined, open: startOpen = false }: { onJoined: (m: Me) => void; open?: boolean }) {
   const [open, setOpen] = useState(startOpen);
@@ -36,7 +37,7 @@ export function JoinByCode({ onJoined, open: startOpen = false }: { onJoined: (m
   if (!open)
     return (
       <button type="button" class="btn secondary block" onClick={() => setOpen(true)}>
-        <Icon name="users" size={20} /> Punya kode undangan
+        <Icon name="users" size={20} /> {t('Punya kode undangan', 'Have an invite code')}
       </button>
     );
 
@@ -54,7 +55,7 @@ export function JoinByCode({ onJoined, open: startOpen = false }: { onJoined: (m
 
   return (
     <div class="stack">
-      <Field label="Kode undangan" hint="6 huruf dan angka, dari pesan pemilik tambak">
+      <Field label={t('Kode undangan', 'Invite code')} hint={t('6 huruf dan angka, dari pesan pemilik tambak', "6 letters and numbers, from the farm owner's message")}>
         <input
           class="code-input"
           value={code}
@@ -62,7 +63,7 @@ export function JoinByCode({ onJoined, open: startOpen = false }: { onJoined: (m
           autoCapitalize="characters"
           autoComplete="off"
           spellcheck={false}
-          placeholder="contoh: K7QM2P"
+          placeholder={t('contoh: K7QM2P', 'example: K7QM2P')}
           onInput={(e) => {
             const v = e.currentTarget.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
             e.currentTarget.value = v;
@@ -70,10 +71,10 @@ export function JoinByCode({ onJoined, open: startOpen = false }: { onJoined: (m
           }}
         />
       </Field>
-      {checking && <p class="working">Memeriksa kode…</p>}
+      {checking && <p class="working">{t('Memeriksa kode…', 'Checking the code…')}</p>}
       {bad && (
-        <Notice tone="info" icon="info" title="Kode ini sudah tidak berlaku" role="alert">
-          Kode undangan berlaku 7 hari dan hanya bisa dipakai sekali. Minta kode baru ke pemilik tambak.
+        <Notice tone="info" icon="info" title={t('Kode ini sudah tidak berlaku', 'This code no longer works')} role="alert">
+          {t('Kode undangan berlaku 7 hari dan hanya bisa dipakai sekali. Minta kode baru ke pemilik tambak.', 'An invite code works for 7 days and only once. Ask the farm owner for a new code.')}
         </Notice>
       )}
       {farm && (
@@ -81,7 +82,7 @@ export function JoinByCode({ onJoined, open: startOpen = false }: { onJoined: (m
           <Icon name="check" stroke={3} />
           <span style={{ display: 'flex', flexDirection: 'column' }}>
             <b>{farm.farmName}</b>
-            <span>Bergabung sebagai {roleLabel[farm.role].toLowerCase()}</span>
+            <span>{t('Bergabung sebagai', 'Joining as a')} {roleLabel[farm.role].toLowerCase()}</span>
           </span>
         </div>
       )}
@@ -92,7 +93,7 @@ export function JoinByCode({ onJoined, open: startOpen = false }: { onJoined: (m
       )}
       {farm && (
         <button type="button" class="btn primary block" disabled={busy} onClick={join}>
-          {busy ? 'Tunggu…' : `Gabung ke ${farm.farmName}`}
+          {busy ? t('Tunggu…', 'Wait…') : t(`Gabung ke ${farm.farmName}`, `Join ${farm.farmName}`)}
         </button>
       )}
     </div>

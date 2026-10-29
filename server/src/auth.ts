@@ -1,5 +1,6 @@
 // Accounts for farmers: phone number + 6-digit PIN. No SMS or e-mail needed, which keeps
 // it free and usable for older farmers; an owner can reset a worker's PIN.
+import { tx } from './i18n.ts';
 import { createHash, randomBytes, randomInt, scryptSync, timingSafeEqual } from 'node:crypto';
 
 export class AuthError extends Error {
@@ -21,18 +22,18 @@ export function normalizePhone(input: unknown): string {
   let digits = String(input ?? '').replace(/\D/g, '');
   if (digits.startsWith('0')) digits = '62' + digits.slice(1);
   else if (digits.startsWith('8')) digits = '62' + digits;
-  if (!/^\d{10,15}$/.test(digits)) throw new AuthError('Nomor HP tidak valid', 400);
+  if (!/^\d{10,15}$/.test(digits)) throw new AuthError(tx('Nomor HP tidak valid', 'Phone number is not valid'), 400);
   return digits;
 }
 
 /** Six digits, and not one anybody would guess first. */
 export function checkPin(input: unknown): string {
   const pin = String(input ?? '');
-  if (!/^\d{6}$/.test(pin)) throw new AuthError('PIN harus 6 angka', 400);
+  if (!/^\d{6}$/.test(pin)) throw new AuthError(tx('PIN harus 6 angka', 'The PIN must be 6 digits'), 400);
   const ascending = '0123456789012';
   const descending = '9876543210987';
   if (/^(\d)\1{5}$/.test(pin) || ascending.includes(pin) || descending.includes(pin)) {
-    throw new AuthError('PIN terlalu mudah ditebak. Pilih 6 angka lain.', 400);
+    throw new AuthError(tx('PIN terlalu mudah ditebak. Pilih 6 angka lain.', 'That PIN is too easy to guess. Choose 6 other digits.'), 400);
   }
   return pin;
 }
@@ -76,7 +77,7 @@ export function tempPin(): string {
  * further tries are refused for 15 minutes. In memory: a restart clears it, which is fine
  * for a single small server.
  */
-export function attemptLimiter(max = 5, windowMs = 15 * 60_000, now = () => Date.now(), message = 'Terlalu banyak percobaan. Coba lagi 15 menit lagi.') {
+export function attemptLimiter(max = 5, windowMs = 15 * 60_000, now = () => Date.now(), message = () => tx('Terlalu banyak percobaan. Coba lagi 15 menit lagi.', 'Too many tries. Try again in 15 minutes.')) {
   const fails = new Map<string, number[]>();
   const recent = (key: string) => (fails.get(key) ?? []).filter((t) => now() - t < windowMs);
   return {
@@ -85,7 +86,7 @@ export function attemptLimiter(max = 5, windowMs = 15 * 60_000, now = () => Date
       const full = keys.map(recent).filter((r) => r.length >= max);
       if (full.length) {
         const retryAt = Math.max(...full.map((r) => r[r.length - max] + windowMs));
-        throw new AuthError(message, 429, 'locked', new Date(retryAt).toISOString());
+        throw new AuthError(message(), 429, 'locked', new Date(retryAt).toISOString());
       }
     },
     fail(...keys: string[]) {

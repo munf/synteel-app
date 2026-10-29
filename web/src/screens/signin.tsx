@@ -3,31 +3,37 @@ import { api, API, ApiError, type Me, type Role } from '../api.ts';
 import { fmtClock } from '../labels.ts';
 import { Eel, Field, fmtPhone, Glyph, GLYPH, Icon, Notice, PinBoxes, roleLabel } from '../ui.tsx';
 import type { SignInMode } from './welcome.tsx';
+import { lang, t } from '../i18n.ts';
 
 type Mode = SignInMode;
 
 const SUBS: Record<'login' | 'register', string> = {
-  login: 'Nomor HP dan PIN 6 angka.',
-  register: 'Buat akun pemilik tambak, lalu siapkan tambak.',
+  login: t('Nomor HP dan PIN 6 angka.', 'Phone number and 6-digit PIN.'),
+  register: t('Buat akun pemilik tambak, lalu siapkan tambak.', 'Create a farm owner account, then set up your farm.'),
 };
-const BUTTONS: Record<Mode, string> = { login: 'Masuk', register: 'Daftar dan siapkan tambak', join: 'Gabung ke tambak' };
+const BUTTONS: Record<Mode, string> = {
+  login: t('Masuk', 'Sign in'),
+  register: t('Daftar dan siapkan tambak', 'Create account and set up farm'),
+  join: t('Gabung ke tambak', 'Join the farm'),
+};
+const PIN_SHORT = t('PIN harus 6 angka', 'The PIN must be 6 digits');
 
 /** How long the server locks the PIN when it gives no time (matches its limiter). */
 const LOCK_FALLBACK_MS = 15 * 60_000;
 
 /** Login, keeping the lockout time the server sends with a 429 (api.ts drops extra fields). */
 async function login(phone: string, pin: string): Promise<Me> {
-  const res = await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ phone, pin }) });
+  const res = await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'x-lang': lang, 'content-type': 'application/json' }, body: JSON.stringify({ phone, pin }) });
   const json = await res.json().catch(() => ({}));
   if (res.ok) return json as Me;
   if (res.status === 429 || json.code === 'locked') throw new Locked(json.retryAt ? Date.parse(json.retryAt) : Date.now() + LOCK_FALLBACK_MS);
-  throw new ApiError(json.error ?? `Gagal (${res.status})`, res.status, json.code);
+  throw new ApiError(json.error ?? t(`Gagal (${res.status})`, `Failed (${res.status})`), res.status, json.code);
 }
 
 class Locked extends Error {
   until: number;
   constructor(until: number) {
-    super('Terlalu banyak percobaan');
+    super(t('Terlalu banyak percobaan', 'Too many tries'));
     this.until = until;
   }
 }
@@ -63,7 +69,7 @@ function Header() {
           <circle cx="141" cy="3" r="1.6" fill="none" stroke="#5E7BB0" stroke-width="1.6" />
         </svg>
       </div>
-      <p style={{ fontSize: '1.125rem', fontWeight: 800, lineHeight: 1.3 }}>Jaga kolam sidat, siang dan malam</p>
+      <p style={{ fontSize: '1.125rem', fontWeight: 800, lineHeight: 1.3 }}>{t('Jaga kolam sidat, siang dan malam', 'Look after your eel ponds, day and night')}</p>
     </header>
   );
 }
@@ -81,7 +87,7 @@ function PhoneInput({ value, onChange, border }: { value: string; onChange: (v: 
         autoComplete="tel"
         value={value}
         onInput={(e) => onChange(e.currentTarget.value)}
-        placeholder="contoh: 0812 3456 7890"
+        placeholder={t('contoh: 0812 3456 7890', 'example: 0812 3456 7890')}
         required
         style={{ paddingLeft: 48, fontVariantNumeric: 'tabular-nums', ...(border ? { borderColor: border } : {}) }}
       />
@@ -184,24 +190,27 @@ export function SignIn({
     e.preventDefault();
     if (locked || busy) return;
     if (taken) return choose('login');
-    if (pin.length !== 6) return setError('PIN harus 6 angka');
+    if (pin.length !== 6) return setError(PIN_SHORT);
     if (mode === 'login') return run(() => login(phone, pin));
     if (mode === 'register') return run(() => api.register(name, phone, pin), pin);
-    if (!invite) return setError('Masukkan kode undangan yang berlaku');
+    if (!invite) return setError(t('Masukkan kode undangan yang berlaku', 'Enter a valid invite code'));
     return run(() => api.join(code, name, phone, pin));
   };
 
   const locked = mode === 'login' && lockedUntil !== null;
   const join = mode === 'join';
   const showForm = !join || invite !== null;
-  const askOwner = `Halo, kode undangan Synteel ${code} sudah tidak berlaku. Boleh minta kode baru?`;
+  const askOwner = t(
+    `Halo, kode undangan Synteel ${code} sudah tidak berlaku. Boleh minta kode baru?`,
+    `Hello, the Synteel invite code ${code} no longer works. Could I have a new code?`,
+  );
   const pinHint =
     mode === 'register'
-      ? 'PIN terlihat supaya tidak salah ketik. Mudah diingat, tapi jangan 123456 atau 111111.'
+      ? t('PIN terlihat supaya tidak salah ketik. Mudah diingat, tapi jangan 123456 atau 111111.', 'The PIN is shown so you do not mistype it. Easy to remember, but not 123456 or 111111.')
       : join
-        ? 'PIN terlihat supaya tidak salah ketik.'
+        ? t('PIN terlihat supaya tidak salah ketik.', 'The PIN is shown so you do not mistype it.')
         : sessionEnded
-          ? 'PIN baru dari pemilik tambak, kalau baru diatur ulang.'
+          ? t('PIN baru dari pemilik tambak, kalau baru diatur ulang.', 'Use the new PIN from the farm owner if it was just reset.')
           : undefined;
   const phoneBorder = taken ? 'var(--ink)' : wrong ? 'var(--bad-dot)' : undefined;
 
@@ -227,14 +236,14 @@ export function SignIn({
         {join ? (
           <div class="stack-xs">
             <button type="button" class="link-btn row" style={{ alignSelf: 'flex-start', gap: 8, fontWeight: 600 }} onClick={() => choose('login')}>
-              <Icon name="back" size={20} /> Kembali ke Masuk
+              <Icon name="back" size={20} /> {t('Kembali ke Masuk', 'Back to Sign in')}
             </button>
-            <h1>Gabung dengan kode</h1>
-            <p class="ink2">Kode undangan didapat dari pemilik tambak.</p>
+            <h1>{t('Gabung dengan kode', 'Join with a code')}</h1>
+            <p class="ink2">{t('Kode undangan didapat dari pemilik tambak.', 'You get the invite code from the farm owner.')}</p>
           </div>
         ) : (
           <div class="stack-sm">
-            <div role="tablist" aria-label="Masuk atau daftar" style={{ background: 'var(--bg)', borderRadius: 16, padding: 4, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 4 }}>
+            <div role="tablist" aria-label={t('Masuk atau daftar', 'Sign in or create account')} style={{ background: 'var(--bg)', borderRadius: 16, padding: 4, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 4 }}>
               {(['login', 'register'] as const).map((m) => {
                 const on = mode === m;
                 return (
@@ -259,7 +268,7 @@ export function SignIn({
                     }}
                   >
                     {on && <Icon name="check" size={16} stroke={3} />}
-                    {m === 'login' ? 'Masuk' : 'Daftar'}
+                    {m === 'login' ? t('Masuk', 'Sign in') : t('Daftar', 'Create account')}
                   </button>
                 );
               })}
@@ -269,13 +278,16 @@ export function SignIn({
         )}
 
         {sessionEnded && mode === 'login' && (
-          <Notice tone="info" icon="login" title="Akun ini sudah keluar" role="status">
-            Karena PIN diatur ulang oleh pemilik tambak, atau akun ini masuk di HP lain. Masuk lagi untuk lanjut.
+          <Notice tone="info" icon="login" title={t('Akun ini sudah keluar', 'This account was signed out')} role="status">
+            {t(
+              'Karena PIN diatur ulang oleh pemilik tambak, atau akun ini masuk di HP lain. Masuk lagi untuk lanjut.',
+              'The farm owner reset the PIN, or this account signed in on another phone. Sign in again to continue.',
+            )}
           </Notice>
         )}
 
         {join && (
-          <Field label="Kode undangan" hint="6 huruf dan angka, dari pesan pemilik tambak">
+          <Field label={t('Kode undangan', 'Invite code')} hint={t('6 huruf dan angka, dari pesan pemilik tambak', "6 letters and numbers, from the farm owner's message")}>
             <input
               class="code-input"
               value={code}
@@ -289,19 +301,22 @@ export function SignIn({
                 e.currentTarget.value = v;
                 setCode(v);
               }}
-              placeholder="contoh: K7QM2P"
+              placeholder={t('contoh: K7QM2P', 'example: K7QM2P')}
               required
             />
           </Field>
         )}
         {join && checking && (
           <p role="status" class="row ink2" style={{ gap: 8 }}>
-            <Glyph d={GLYPH.spinner} size={20} stroke={2.5} /> Memeriksa kode…
+            <Glyph d={GLYPH.spinner} size={20} stroke={2.5} /> {t('Memeriksa kode…', 'Checking the code…')}
           </p>
         )}
         {join && inviteBad && (
-          <Notice tone="info" icon="info" title="Kode ini sudah tidak berlaku" role="alert">
-            Kode undangan berlaku 7 hari dan hanya bisa dipakai sekali. Kode ini sudah lewat 7 hari atau sudah dipakai.
+          <Notice tone="info" icon="info" title={t('Kode ini sudah tidak berlaku', 'This code no longer works')} role="alert">
+            {t(
+              'Kode undangan berlaku 7 hari dan hanya bisa dipakai sekali. Kode ini sudah lewat 7 hari atau sudah dipakai.',
+              'An invite code works for 7 days and only once. This code is older than 7 days or was already used.',
+            )}
           </Notice>
         )}
         {join && invite && (
@@ -309,18 +324,18 @@ export function SignIn({
             <Icon name="check" stroke={3} />
             <span style={{ display: 'flex', flexDirection: 'column' }}>
               <b>{invite.farmName}</b>
-              <span class="label">Bergabung sebagai {roleLabel[invite.role].toLowerCase()}</span>
+              <span class="label">{t('Bergabung sebagai', 'Joining as a')} {roleLabel[invite.role].toLowerCase()}</span>
             </span>
           </div>
         )}
 
         {showForm && mode !== 'login' && !taken && (
-          <Field label="Nama" hint={join ? 'Sudah punya akun? Isi nomor HP dan PIN yang biasa dipakai.' : undefined}>
-            <input autoComplete="name" value={name} onInput={(e) => setName(e.currentTarget.value)} placeholder="contoh: Pak Joko" required={mode === 'register'} />
+          <Field label={t('Nama', 'Name')} hint={join ? t('Sudah punya akun? Isi nomor HP dan PIN yang biasa dipakai.', 'Already have an account? Enter your usual phone number and PIN.') : undefined}>
+            <input autoComplete="name" value={name} onInput={(e) => setName(e.currentTarget.value)} placeholder={t('contoh: Pak Joko', 'example: Pak Joko')} required={mode === 'register'} />
           </Field>
         )}
         {showForm && (
-          <Field label="Nomor HP">
+          <Field label={t('Nomor HP', 'Phone number')}>
             <PhoneInput
               value={phone}
               border={phoneBorder}
@@ -333,8 +348,8 @@ export function SignIn({
           </Field>
         )}
         {taken && (
-          <Notice tone="info" icon="userCheck" title="Nomor ini sudah punya akun" role="status">
-            Tidak perlu daftar lagi. Masuk dengan PIN yang biasa dipakai.
+          <Notice tone="info" icon="userCheck" title={t('Nomor ini sudah punya akun', 'This number already has an account')} role="status">
+            {t('Tidak perlu daftar lagi. Masuk dengan PIN yang biasa dipakai.', 'No need to sign up again. Sign in with your usual PIN.')}
           </Notice>
         )}
         {showForm && !taken && (
@@ -345,7 +360,7 @@ export function SignIn({
               onChange={(v) => {
                 setPin(v);
                 setWrong(false);
-                if (error === 'PIN harus 6 angka') setError('');
+                if (error === PIN_SHORT) setError('');
               }}
               defaultShow={mode !== 'login'}
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
@@ -355,14 +370,14 @@ export function SignIn({
             />
             {wrong && (
               <p role="alert" class="row label" style={{ gap: 8, fontWeight: 600, color: 'var(--bad)' }}>
-                <Glyph d={GLYPH.errorCircle} size={18} /> Nomor HP atau PIN salah. Cek nomornya, lalu ketik PIN lagi.
+                <Glyph d={GLYPH.errorCircle} size={18} /> {t('Nomor HP atau PIN salah. Cek nomornya, lalu ketik PIN lagi.', 'Wrong phone number or PIN. Check the number, then type the PIN again.')}
               </p>
             )}
           </div>
         )}
         {locked && (
-          <Notice tone="info" icon="lock" title="Terlalu banyak percobaan" role="alert">
-            Coba lagi {Math.max(1, Math.ceil((lockedUntil! - Date.now()) / 60_000))} menit lagi (jam {fmtClock(lockedUntil!)}). PIN dikunci sebentar supaya akun aman.
+          <Notice tone="info" icon="lock" title={t('Terlalu banyak percobaan', 'Too many tries')} role="alert">
+            {lockText(Math.max(1, Math.ceil((lockedUntil! - Date.now()) / 60_000)), fmtClock(lockedUntil!))}
           </Notice>
         )}
 
@@ -375,7 +390,7 @@ export function SignIn({
         {taken ? (
           <div class="stack-sm">
             <button class="btn primary">
-              Masuk dengan nomor ini <Icon name="arrow" size={20} stroke={2.2} />
+              {t('Masuk dengan nomor ini', 'Sign in with this number')} <Icon name="arrow" size={20} stroke={2.2} />
             </button>
             <button
               type="button"
@@ -386,18 +401,18 @@ export function SignIn({
                 setTaken(false);
               }}
             >
-              Pakai nomor lain
+              {t('Pakai nomor lain', 'Use another number')}
             </button>
           </div>
         ) : locked ? (
           <button class="btn primary" disabled>
-            Masuk lagi jam {fmtClock(lockedUntil!)}
+            {t(`Masuk lagi jam ${fmtClock(lockedUntil!)}`, `Sign in again at ${fmtClock(lockedUntil!)}`)}
           </button>
         ) : (
           showForm && (
             <button class="btn primary" disabled={busy}>
               {busy ? (
-                'Tunggu…'
+                t('Tunggu…', 'Wait…')
               ) : (
                 <>
                   {BUTTONS[mode]} <Icon name="arrow" size={20} stroke={2.2} />
@@ -410,22 +425,22 @@ export function SignIn({
         {join && inviteBad && (
           <div class="stack-sm">
             <a class="btn primary" href={`https://wa.me/?text=${encodeURIComponent(askOwner)}`} target="_blank" rel="noopener">
-              <Icon name="chat" size={20} /> Minta kode baru ke pemilik tambak
+              <Icon name="chat" size={20} /> {t('Minta kode baru ke pemilik tambak', 'Ask the farm owner for a new code')}
             </a>
-            <p class="label ink2 center">Membuka WhatsApp dengan pesan yang siap dikirim.</p>
+            <p class="label ink2 center">{t('Membuka WhatsApp dengan pesan yang siap dikirim.', 'Opens WhatsApp with a message ready to send.')}</p>
           </div>
         )}
 
         {mode === 'login' && (
           <div class="label ink2 center" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <span>Pekerja lupa PIN: minta pemilik tambak mengatur ulang.</span>
+            <span>{t('Pekerja lupa PIN: minta pemilik tambak mengatur ulang.', 'Worker forgot the PIN: ask the farm owner to reset it.')}</span>
             <button
               type="button"
               class="inline-link"
               style={{ minHeight: 44, display: 'inline-flex', alignItems: 'center', textDecoration: 'underline', textUnderlineOffset: 3 }}
               onClick={onHelp}
             >
-              Pemilik lupa PIN? Hubungi bantuan
+              {t('Pemilik lupa PIN? Hubungi bantuan', 'Owner forgot the PIN? Contact support')}
             </button>
           </div>
         )}
@@ -434,27 +449,27 @@ export function SignIn({
           <div class="stack-sm" style={{ gap: 12 }}>
             <div class="row label ink2" style={{ gap: 12 }}>
               <span class="grow" style={{ height: 1, background: 'var(--line)' }} />
-              atau
+              {t('atau', 'or')}
               <span class="grow" style={{ height: 1, background: 'var(--line)' }} />
             </div>
             <div class={demo ? 'grid2' : 'stack-sm'}>
               <button type="button" style={TILE} onClick={() => choose('join')}>
                 <Icon name="users" />
                 <span class="strong" style={{ lineHeight: 1.25 }}>
-                  Punya kode undangan
+                  {t('Punya kode undangan', 'Have an invite code')}
                 </span>
                 <span class="label ink2" style={{ lineHeight: 1.25 }}>
-                  Untuk pekerja
+                  {t('Untuk pekerja', 'For workers')}
                 </span>
               </button>
               {demo && (
                 <button type="button" style={TILE} disabled={busy} onClick={() => run(api.demo)}>
                   <Glyph d={GLYPH.play} />
                   <span class="strong" style={{ lineHeight: 1.25 }}>
-                    Coba demo
+                    {t('Coba demo', 'Try the demo')}
                   </span>
                   <span class="label ink2" style={{ lineHeight: 1.25 }}>
-                    Tambak contoh, direset tiap malam
+                    {t('Tambak contoh, direset tiap malam', 'Sample farm, reset every night')}
                   </span>
                 </button>
               )}
@@ -465,6 +480,12 @@ export function SignIn({
     </div>
   );
 }
+
+const lockText = (min: number, at: string) =>
+  t(
+    `Coba lagi ${min} menit lagi (jam ${at}). PIN dikunci sebentar supaya akun aman.`,
+    `Try again in ${min} ${min === 1 ? 'minute' : 'minutes'} (at ${at}). The PIN is locked for a while to keep the account safe.`,
+  );
 
 const TILE = {
   minHeight: 88,

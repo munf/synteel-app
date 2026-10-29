@@ -8,6 +8,7 @@ import { aerationCheckLabel, behaviorLabel, colorLabel, fmtClock, leftoverLabel,
 import { newId, onClips, retryAll } from '../queue.ts';
 import { ActionBar, Chips, Field, FindingCard, Icon, PondThumb, StatusPill, Stepper, type IconName } from '../ui.tsx';
 import { secondsLeft, sendCapture, type Progress } from '../upload.ts';
+import { isEn, LOCALE, t } from '../i18n.ts';
 import './record.css';
 
 type Leftover = keyof typeof leftoverLabel;
@@ -19,24 +20,26 @@ type EditKey = ReadingField | 'mortality' | 'behavior' | 'aeration' | 'leftover'
 
 // Accept both "27,5" and "27.5": farmers' phones often default to a comma keypad.
 export const parseNum = (s: string) => (s.trim() === '' ? undefined : Number(s.replace(',', '.')));
-const showNum = (n: number) => String(n).replace('.', ',');
+const showNum = (n: number) => (isEn ? String(n) : String(n).replace('.', ','));
 
 /** Durations in words: "48 detik", "2 menit", "2 menit 10 detik" (never "2:10"). */
 export function fmtDur(sec: number) {
   const s = Math.max(0, Math.round(sec));
-  if (s < 60) return `${s} detik`;
+  const sec_ = (n: number) => t(`${n} detik`, `${n} ${n === 1 ? 'second' : 'seconds'}`);
+  const min_ = (n: number) => t(`${n} menit`, `${n} ${n === 1 ? 'minute' : 'minutes'}`);
+  if (s < 60) return sec_(s);
   const m = Math.floor(s / 60);
   const r = s % 60;
-  return r ? `${m} menit ${r} detik` : `${m} menit`;
+  return r ? `${min_(m)} ${sec_(r)}` : min_(m);
 }
 
-const kindWord: Record<CaptureKind, string> = { photo: 'foto', voice: 'suara', video: 'video' };
+const kindWord: Record<CaptureKind, string> = { photo: t('foto', 'photo'), voice: t('suara', 'voice'), video: 'video' };
 const READINGS: { key: ReadingField; label: string; placeholder: string; mode: 'decimal' | 'numeric' }[] = [
-  { key: 'temperature', label: 'Suhu °C', placeholder: 'contoh: 28,5', mode: 'decimal' },
-  { key: 'ph', label: 'pH', placeholder: 'contoh: 7,2', mode: 'decimal' },
-  { key: 'tds', label: 'TDS ppm', placeholder: 'contoh: 150', mode: 'numeric' },
+  { key: 'temperature', label: t('Suhu °C', 'Temperature °C'), placeholder: t('contoh: 28,5', 'example: 28.5'), mode: 'decimal' },
+  { key: 'ph', label: 'pH', placeholder: t('contoh: 7,2', 'example: 7.2'), mode: 'decimal' },
+  { key: 'tds', label: 'TDS ppm', placeholder: t('contoh: 150', 'example: 150'), mode: 'numeric' },
 ];
-const METER: Record<ReadingField, string> = { temperature: 'Termometer', ph: 'pH meter', tds: 'TDS meter' };
+const METER: Record<ReadingField, string> = { temperature: t('Termometer', 'Thermometer'), ph: 'pH meter', tds: 'TDS meter' };
 
 // ---------- shared by Catat, Catat satu kolam and Cek hasil suara ----------
 
@@ -72,12 +75,12 @@ export const recordedToday = (p: PondSummary, today: string, timeZone: string) =
 const URGENCY: Record<PondSummary['level'], number> = { critical: 0, warning: 1, info: 2, ok: 3 };
 /** Not yet recorded today first (longest ago first), then the rest by urgency. */
 export function sortForRecording(ponds: PondSummary[], today: string, timeZone: string) {
-  const t = (p: PondSummary) => (p.lastLogAt ? Date.parse(p.lastLogAt) : 0);
+  const lastAt = (p: PondSummary) => (p.lastLogAt ? Date.parse(p.lastLogAt) : 0);
   return [...ponds].sort((a, b) => {
     const da = recordedToday(a, today, timeZone);
     const db = recordedToday(b, today, timeZone);
     if (da !== db) return da ? 1 : -1;
-    return da ? URGENCY[a.level] - URGENCY[b.level] : t(a) - t(b);
+    return da ? URGENCY[a.level] - URGENCY[b.level] : lastAt(a) - lastAt(b);
   });
 }
 
@@ -148,12 +151,12 @@ export function useMic() {
       markAsked();
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach((t) => t.stop());
+        stream.getTracks().forEach((track) => track.stop());
         setPanel(null);
         setGranted(true);
       } catch (e) {
         setPanel(isDenied(e) ? 'denied' : null);
-        if (!isDenied(e)) setError('Mikrofon tidak ditemukan di HP ini. Ketik sendiri dulu.');
+        if (!isDenied(e)) setError(t('Mikrofon tidak ditemukan di HP ini. Ketik sendiri dulu.', 'No microphone found on this phone. Type it in for now.'));
       }
     },
     denied: () => setPanel('denied'),
@@ -163,9 +166,9 @@ export function useMic() {
 
 export function MicAsk({ onAllow, onType }: { onAllow: () => void; onType: () => void }) {
   const why: [GlyphName, string][] = [
-    ['mic', 'Untuk mendengar nama kolam dan angka yang disebut'],
-    ['shield', 'Suara hanya dipakai untuk membaca kondisi kolam, tidak untuk yang lain'],
-    ['tap', 'Mikrofon menyala hanya saat Bicara diketuk'],
+    ['mic', t('Untuk mendengar nama kolam dan angka yang disebut', 'To hear the pond names and numbers you say')],
+    ['shield', t('Suara hanya dipakai untuk membaca kondisi kolam, tidak untuk yang lain', 'Your voice is only used to read pond conditions, nothing else')],
+    ['tap', t('Mikrofon menyala hanya saat Bicara diketuk', 'The microphone is on only when you tap Speak')],
   ];
   return (
     <section class="card">
@@ -173,7 +176,7 @@ export function MicAsk({ onAllow, onType }: { onAllow: () => void; onType: () =>
         <span class="rp-round-icon">
           <Icon name="mic" size={32} />
         </span>
-        <h2>Mencatat dengan suara butuh mikrofon</h2>
+        <h2>{t('Mencatat dengan suara butuh mikrofon', 'Recording by voice needs the microphone')}</h2>
       </div>
       <ul class="rp-why">
         {why.map(([icon, text]) => (
@@ -187,14 +190,15 @@ export function MicAsk({ onAllow, onType }: { onAllow: () => void; onType: () =>
       </ul>
       <p class="note info" style={{ color: 'var(--navy)' }}>
         <span>
-          Sesudah ini HP akan bertanya. Pilih <strong style={{ whiteSpace: 'nowrap' }}>Saat aplikasi digunakan</strong>.
+          {t('Sesudah ini HP akan bertanya. Pilih', 'Next, your phone will ask. Choose')}{' '}
+          <strong style={{ whiteSpace: 'nowrap' }}>{t('Saat aplikasi digunakan', 'While using the app')}</strong>.
         </span>
       </p>
       <button type="button" class="btn primary" onClick={onAllow}>
-        <Icon name="mic" /> Izinkan mikrofon
+        <Icon name="mic" /> {t('Izinkan mikrofon', 'Allow microphone')}
       </button>
       <button type="button" class="btn secondary" onClick={onType}>
-        <Icon name="pencil" /> Ketik sendiri
+        <Icon name="pencil" /> {t('Ketik sendiri', 'Type it in')}
       </button>
     </section>
   );
@@ -216,24 +220,30 @@ function SettingsRow({ label, on, value, bad, app, radio }: { label: string; on?
           </span>
         )}
       </span>
-      {on && <span class="rp-set-tap">ketuk</span>}
+      {on && <span class="rp-set-tap">{t('ketuk', 'tap')}</span>}
     </div>
   );
 }
 
 export function MicDenied({ onRetry, onType }: { onRetry: () => void; onType: () => void }) {
   const steps = [
-    { title: 'Buka Setelan › Aplikasi › Synteel', rows: [<SettingsRow key="k" label="Kalkulator" app="K" />, <SettingsRow key="s" label="Synteel" app="S" on />] },
     {
-      title: 'Pilih Izin › Mikrofon',
-      rows: [<SettingsRow key="c" label="Kamera" value="Diizinkan" />, <SettingsRow key="m" label="Mikrofon" value="Tidak diizinkan" bad on />],
+      title: t('Buka Setelan › Aplikasi › Synteel', 'Open Settings › Apps › Synteel'),
+      rows: [<SettingsRow key="k" label={t('Kalkulator', 'Calculator')} app={t('K', 'C')} />, <SettingsRow key="s" label="Synteel" app="S" on />],
     },
     {
-      title: 'Pilih Izinkan',
+      title: t('Pilih Izin › Mikrofon', 'Choose Permissions › Microphone'),
       rows: [
-        <SettingsRow key="a" label="Izinkan hanya saat aplikasi digunakan" radio on />,
-        <SettingsRow key="t" label="Tanyakan setiap saat" radio />,
-        <SettingsRow key="n" label="Jangan izinkan" radio />,
+        <SettingsRow key="c" label={t('Kamera', 'Camera')} value={t('Diizinkan', 'Allowed')} />,
+        <SettingsRow key="m" label={t('Mikrofon', 'Microphone')} value={t('Tidak diizinkan', 'Not allowed')} bad on />,
+      ],
+    },
+    {
+      title: t('Pilih Izinkan', 'Choose Allow'),
+      rows: [
+        <SettingsRow key="a" label={t('Izinkan hanya saat aplikasi digunakan', 'Allow only while using the app')} radio on />,
+        <SettingsRow key="t" label={t('Tanyakan setiap saat', 'Ask every time')} radio />,
+        <SettingsRow key="n" label={t('Jangan izinkan', 'Don’t allow')} radio />,
       ],
     },
   ];
@@ -244,9 +254,11 @@ export function MicDenied({ onRetry, onType }: { onRetry: () => void; onType: ()
           <span class="icon-box rp-warn-box">
             <Icon name="mic" />
           </span>
-          <h2 class="grow">HP belum mengizinkan Synteel memakai mikrofon</h2>
+          <h2 class="grow">{t('HP belum mengizinkan Synteel memakai mikrofon', 'Synteel is not allowed to use the microphone')}</h2>
         </div>
-        <span class="label ink2">Tanpa mikrofon, catatan suara tidak bisa didengar. Sekitar 1 menit di setelan HP.</span>
+        <span class="label ink2">
+          {t('Tanpa mikrofon, catatan suara tidak bisa didengar. Sekitar 1 menit di setelan HP.', 'Without the microphone, voice notes cannot be heard. About 1 minute in phone settings.')}
+        </span>
       </div>
       <ol class="rp-steps">
         {steps.map((s, i) => (
@@ -263,12 +275,12 @@ export function MicDenied({ onRetry, onType }: { onRetry: () => void; onType: ()
           </li>
         ))}
       </ol>
-      <p class="meta">Nama menu bisa sedikit beda di tiap merek HP.</p>
+      <p class="meta">{t('Nama menu bisa sedikit beda di tiap merek HP.', 'Menu names can differ a little on each phone brand.')}</p>
       <button type="button" class="btn primary" onClick={onRetry}>
-        <Glyph name="retry" /> Sudah diizinkan, coba lagi
+        <Glyph name="retry" /> {t('Sudah diizinkan, coba lagi', 'Allowed now, try again')}
       </button>
       <button type="button" class="btn secondary" onClick={onType}>
-        <Icon name="pencil" /> Ketik sendiri
+        <Icon name="pencil" /> {t('Ketik sendiri', 'Type it in')}
       </button>
     </section>
   );
@@ -277,7 +289,7 @@ export function MicDenied({ onRetry, onType }: { onRetry: () => void; onType: ()
 export const MicGranted = () => (
   <div class="note ok" role="status" style={{ alignItems: 'center' }}>
     <Icon name="check" />
-    <span style={{ fontSize: '1rem' }}>Mikrofon diizinkan. Ketuk Bicara untuk mulai.</span>
+    <span style={{ fontSize: '1rem' }}>{t('Mikrofon diizinkan. Ketuk Bicara untuk mulai.', 'Microphone allowed. Tap Speak to start.')}</span>
   </div>
 );
 
@@ -288,7 +300,7 @@ export function useTick(on: boolean) {
   const [, setT] = useState(0);
   useEffect(() => {
     if (!on) return;
-    const timer = setInterval(() => setT((t) => t + 1), 500);
+    const timer = setInterval(() => setT((n) => n + 1), 500);
     return () => clearInterval(timer);
   }, [on]);
 }
@@ -314,25 +326,30 @@ export function UploadCard({ what, p, thumb, onOther }: { what: string; p: Progr
         </span>
         <span class="grow stack-xs">
           <span class="strong num">
-            Mengirim {what} · {pct}%
+            {t(`Mengirim ${what}`, `Sending ${what}`)} · {pct}%
           </span>
-          <span class="label ink2">Sinyal lemah, jadi lebih lama dari biasa.</span>
+          <span class="label ink2">{t('Sinyal lemah, jadi lebih lama dari biasa.', 'Weak signal, so it takes longer than usual.')}</span>
         </span>
       </div>
-      <div class="rp-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={`${what} terkirim`}>
+      <div class="rp-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={t(`${what} terkirim`, `${what} sent`)}>
         <span style={{ width: `${pct}%` }} />
       </div>
       <div class="row between label muted num">
-        <span>Sinyal lemah, agak lama</span>
-        {left !== null && <span style={{ whiteSpace: 'nowrap' }}>{left < 60 ? 'kurang dari 1 menit lagi' : `perkiraan ${Math.round(left / 60)} menit lagi`}</span>}
+        <span>{t('Sinyal lemah, agak lama', 'Weak signal, a bit slow')}</span>
+        {left !== null && <span style={{ whiteSpace: 'nowrap' }}>{left < 60 ? t('kurang dari 1 menit lagi', 'less than 1 minute left') : t(`perkiraan ${Math.round(left / 60)} menit lagi`, `about ${Math.round(left / 60)} minutes left`)}</span>}
       </div>
       <p class="note ok">
         <Icon name="check" size={20} />
-        <span>Boleh tutup aplikasi, {what} tetap terkirim. Hasilnya muncul untuk dicek setelah terbaca.</span>
+        <span>
+          {t(
+            `Boleh tutup aplikasi, ${what} tetap terkirim. Hasilnya muncul untuk dicek setelah terbaca.`,
+            `You can close the app and the ${what} still gets sent. The results show up to check once read.`,
+          )}
+        </span>
       </p>
       {onOther && (
         <button type="button" class="btn primary" onClick={onOther}>
-          Catat kolam lain
+          {t('Catat kolam lain', 'Record another pond')}
         </button>
       )}
     </section>
@@ -477,7 +494,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
     setProblems(draft.problems);
     setSource(kind);
     setRedo(false);
-    if (Object.keys(got).length === 0) setNotice('AI tidak menemukan angka atau keterangan. Coba lagi, atau ketik sendiri.');
+    if (Object.keys(got).length === 0) setNotice(t('AI tidak menemukan angka atau keterangan. Coba lagi, atau ketik sendiri.', 'The AI found no numbers or details. Try again, or type it in.'));
   }
 
   /** Kept on the phone first, so closing the app mid-upload loses nothing. */
@@ -485,10 +502,10 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
     const full: Job = { ...job, pondId, pondName: pond?.name ?? '', id: newId(), createdAt: Date.now(), status: 'pending' };
     setError('');
     setNotice('');
-    setWorking(`AI membaca ${kindWord[job.kind]}…`);
+    setWorking(t(`AI membaca ${kindWord[job.kind]}…`, `AI is reading the ${job.kind === 'voice' ? 'voice recording' : kindWord[job.kind]}…`));
     await queue.put(full).catch(() => {});
     try {
-      const done = await sendCapture(full, (p) => mounted.current && setUpload({ what: job.kind === 'video' ? 'video' : job.kind === 'photo' ? 'foto' : 'rekaman', p, thumb }));
+      const done = await sendCapture(full, (p) => mounted.current && setUpload({ what: job.kind === 'video' ? 'video' : job.kind === 'photo' ? t('foto', 'photo') : t('rekaman', 'recording'), p, thumb }));
       if (!mounted.current) {
         // The farmer moved on: the result waits in "Rekaman di HP".
         await queue.put(done).catch(() => {});
@@ -496,14 +513,14 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
       }
       await queue.remove(full.id).catch(() => {});
       if (done.status === 'ready') applyDraft(done.draft!, done.kind);
-      else setError(done.error ?? 'Gagal membaca');
+      else setError(done.error ?? t('Gagal membaca', 'Could not read it'));
     } catch (err) {
       if (!(err instanceof Retryable)) {
         setError((err as Error).message);
         await queue.remove(full.id).catch(() => {});
         return;
       }
-      setNotice(`${err.message}. Rekaman disimpan di HP dan dibaca otomatis nanti.`);
+      setNotice(t(`${err.message}. Rekaman disimpan di HP dan dibaca otomatis nanti.`, `${err.message}. The recording is kept on the phone and read automatically later.`));
     } finally {
       if (mounted.current) {
         setWorking('');
@@ -515,7 +532,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
 
   async function onPhoto(file: File | undefined) {
     if (!file || !pond) return;
-    setWorking('Memeriksa foto…');
+    setWorking(CHECKING_PHOTO);
     setPhotoCheck(null);
     try {
       const image = await prepareImage(file);
@@ -524,13 +541,13 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
     } catch (err) {
       setError((err as Error).message);
     } finally {
-      setWorking((w) => (w === 'Memeriksa foto…' ? '' : w));
+      setWorking((w) => (w === CHECKING_PHOTO ? '' : w));
     }
   }
 
   async function onVideo(file: File | undefined) {
     if (!file || !pond) return;
-    setWorking('Mengambil gambar dan suara dari video…');
+    setWorking(t('Mengambil gambar dan suara dari video…', 'Taking pictures and sound from the video…'));
     setDarkVideo(null);
     try {
       const { frames, audio, seconds } = await prepareVideo(file);
@@ -563,7 +580,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
       });
     } catch (e) {
       if (isDenied(e)) mic.denied();
-      else setError('Mikrofon tidak bisa dipakai di HP ini. Ketik sendiri dulu.');
+      else setError(t('Mikrofon tidak bisa dipakai di HP ini. Ketik sendiri dulu.', 'The microphone does not work on this phone. Type it in for now.'));
     }
   }
 
@@ -583,7 +600,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
     setError('');
     const values = Object.fromEntries(READINGS.map((r) => [r.key, parseNum(readings[r.key])]));
     if (Object.values(values).some((v) => v !== undefined && Number.isNaN(v))) {
-      setError('Angka pengukuran tidak valid');
+      setError(t('Angka pengukuran tidak valid', 'A reading is not a valid number'));
       return;
     }
     const data: LogData = {
@@ -617,7 +634,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
       case 'tds':
         return readings.tds ? `${readings.tds} ppm` : null;
       case 'mortality':
-        return mortality ? `${mortality} ekor` : null;
+        return mortality ? t(`${mortality} ekor`, `${mortality} ${mortality === 1 ? 'eel' : 'eels'}`) : null;
       case 'behavior':
         return behavior.length ? behavior.map((b) => behaviorLabel[b]).join(', ') : null;
       case 'aeration':
@@ -632,15 +649,15 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
   };
 
   const LABELS: Record<EditKey, string> = {
-    temperature: 'Suhu air',
+    temperature: t('Suhu air', 'Water temperature'),
     ph: 'pH',
     tds: 'TDS',
-    mortality: 'Sidat mati',
-    behavior: 'Perilaku sidat',
+    mortality: t('Sidat mati', 'Dead eels'),
+    behavior: t('Perilaku sidat', 'Eel behavior'),
     aeration: 'Aerator',
-    leftover: 'Sisa pakan',
-    color: 'Warna air',
-    smell: 'Bau air',
+    leftover: t('Sisa pakan', 'Leftover feed'),
+    color: t('Warna air', 'Water color'),
+    smell: t('Bau air', 'Water smell'),
   };
 
   const readingInput = (key: ReadingField, extra?: { autoFocus?: boolean }) => {
@@ -668,7 +685,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
         return (
           <div class="row">
             {readingInput(key)}
-            <button type="button" class="rp-cam" aria-label={`Foto alat ukur ${r.label}`} onClick={() => takePhoto(key)} disabled={!!working || !!recording}>
+            <button type="button" class="rp-cam" aria-label={t(`Foto alat ukur ${r.label}`, `Meter photo ${r.label}`)} onClick={() => takePhoto(key)} disabled={!!working || !!recording}>
               <Icon name="camera" />
             </button>
           </div>
@@ -692,9 +709,9 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
   if (!pond)
     return (
       <div class="screen">
-        <p class="muted">Kolam tidak ditemukan.</p>
+        <p class="muted">{t('Kolam tidak ditemukan.', 'Pond not found.')}</p>
         <button class="btn secondary" onClick={() => go({ name: 'record' })}>
-          Kembali ke daftar kolam
+          {t('Kembali ke daftar kolam', 'Back to the pond list')}
         </button>
       </div>
     );
@@ -704,19 +721,19 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
       <div class="screen">
         <div class="note ok">
           <Icon name="check" />
-          <span style={{ fontSize: '1rem' }}>Catatan {result.name} tersimpan.</span>
+          <span style={{ fontSize: '1rem' }}>{t(`Catatan ${result.name} tersimpan.`, `${result.name} record saved.`)}</span>
         </div>
         <div class="row between">
           <h1>{result.name}</h1>
           <StatusPill level={result.level} />
         </div>
         {result.findings.length === 0 ? (
-          <p class="ink2">Tidak ada peringatan. Kolam aman berdasarkan catatan ini.</p>
+          <p class="ink2">{t('Tidak ada peringatan. Kolam aman berdasarkan catatan ini.', 'No warnings. The pond is safe based on this record.')}</p>
         ) : (
           result.findings.map((f) => <FindingCard key={f.id} finding={f} />)
         )}
         <button class="btn primary" onClick={() => setResult(null)}>
-          Catat lagi
+          {t('Catat lagi', 'Record another')}
         </button>
       </div>
     );
@@ -729,20 +746,20 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
   const blocked = !!working || !!recording;
   const typeInstead = () => (mic.close(), setManual(true));
   const folded = reviewing && !manual && !redo && !recording;
-  const glare = photoCheck?.image.issues.some((i) => i.includes('silau'));
+  const glare = photoCheck?.image.issues.some((i) => i.includes('silau') || i.includes('glare'));
   const target = photoCheck?.field ? pond.limits[photoCheck.field]?.target : null;
 
   return (
     <form class="screen" onSubmit={submit}>
       <header class="row">
-        <button type="button" class="icon-btn" aria-label="Kembali ke daftar kolam" onClick={() => go({ name: 'record' })}>
+        <button type="button" class="icon-btn" aria-label={t('Kembali ke daftar kolam', 'Back to the pond list')} onClick={() => go({ name: 'record' })}>
           <Icon name="back" />
         </button>
-        <h1 class="grow">Catat kondisi</h1>
+        <h1 class="grow">{t('Catat kondisi', 'Record conditions')}</h1>
       </header>
 
       {/* The pond being recorded: its own card, so the pond picture never reads as part of the back button. */}
-      <section class="card" aria-label="Kolam yang dicatat" style={{ padding: '16px 20px 4px', gap: 12 }}>
+      <section class="card" aria-label={t('Kolam yang dicatat', 'Pond being recorded')} style={{ padding: '16px 20px 4px', gap: 12 }}>
         <div class="row">
           <PondThumb kind={pond.kind} size={56} />
           <div class="grow stack-xs" style={{ gap: 2 }}>
@@ -751,11 +768,13 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
               <StatusPill level={pond.level} />
             </div>
             <span class="label ink2">
-              {pond.batch && pond.program ? `${phaseLabel[pond.batch.phase]} · minggu ${Math.max(1, pond.program.week)}` : 'Belum ada batch'}
+              {pond.batch && pond.program ? `${phaseLabel[pond.batch.phase]} · ${t('minggu', 'week')} ${Math.max(1, pond.program.week)}` : t('Belum ada batch', 'No batch yet')}
               {pond.program?.estimatedAlive != null && (
                 <>
                   {' · '}
-                  <span style={{ whiteSpace: 'nowrap' }}>sekitar {pond.program.estimatedAlive.toLocaleString('id-ID')} ekor</span>
+                  <span style={{ whiteSpace: 'nowrap' }}>
+                    {t(`sekitar ${pond.program.estimatedAlive.toLocaleString(LOCALE)} ekor`, `about ${pond.program.estimatedAlive.toLocaleString(LOCALE)} eels`)}
+                  </span>
                 </>
               )}
             </span>
@@ -767,20 +786,20 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
           style={{ minHeight: 48, borderTop: '1px solid var(--line)', fontWeight: 800 }}
           onClick={() => go({ name: 'pond', id: pond.id })}
         >
-          Lihat detail kolam <Icon name="next" size={18} stroke={2.5} />
+          {t('Lihat detail kolam', 'View pond details')} <Icon name="next" size={18} stroke={2.5} />
         </button>
       </section>
 
       {aiMode === 'mock' && (
         <p class="note info">
           <Icon name="info" />
-          <span>Mode contoh: hasil foto dan suara adalah contoh, bukan bacaan AI sungguhan.</span>
+          <span>{t('Mode contoh: hasil foto dan suara adalah contoh, bukan bacaan AI sungguhan.', 'Sample mode: photo and voice results are samples, not real AI reads.')}</span>
         </p>
       )}
       {aiMode === 'off' && (
         <p class="note info">
           <Icon name="info" />
-          <span>AI belum aktif. Rekaman disimpan di HP dan dibaca setelah AI aktif. Ketik sendiri tetap bisa.</span>
+          <span>{t('AI belum aktif. Rekaman disimpan di HP dan dibaca setelah AI aktif. Ketik sendiri tetap bisa.', 'The AI is not on yet. Recordings are kept on the phone and read once it is on. You can still type it in.')}</span>
         </p>
       )}
       {mic.granted && !recording && <MicGranted />}
@@ -790,9 +809,9 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
         <button type="button" class="go-row" style={{ color: 'var(--ink)', paddingLeft: 16 }} onClick={() => setRedo(true)}>
           <Icon name="mic" />
           <span class="grow" style={{ display: 'flex', flexDirection: 'column' }}>
-            <span class="strong">Rekam ulang</span>
+            <span class="strong">{t('Rekam ulang', 'Record again')}</span>
             <span class="label ink2" style={{ fontWeight: 400 }}>
-              Bicara, foto alat ukur atau video
+              {t('Bicara, foto alat ukur atau video', 'Speak, photo a meter, or video')}
             </span>
           </span>
           <Icon name="down" size={20} />
@@ -809,9 +828,11 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
             <Icon name="mic" size={32} />
           </span>
           <span class="stack-xs">
-            <span class="title">{recording ? `Selesai · ${fmtDur(elapsed)}` : 'Bicara'}</span>
+            <span class="title">{recording ? `${t('Selesai', 'Done')} · ${fmtDur(elapsed)}` : t('Bicara', 'Speak')}</span>
             <span class="label" style={{ color: '#E4EAF5' }}>
-              {recording ? `Merekam ${pond.name}. Ketuk untuk selesai, paling lama 60 detik.` : 'Sebutkan suhu, pH, TDS, sidat mati, sisa pakan dan aerator.'}
+              {recording
+                ? t(`Merekam ${pond.name}. Ketuk untuk selesai, paling lama 60 detik.`, `Recording ${pond.name}. Tap to finish, 60 seconds at most.`)
+                : t('Sebutkan suhu, pH, TDS, sidat mati, sisa pakan dan aerator.', 'Say the temperature, pH, TDS, dead eels, leftover feed and aerator.')}
             </span>
           </span>
         </button>
@@ -824,8 +845,8 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
             <Icon name="camera" />
           </span>
           <span class="stack-xs">
-            <span class="strong">Foto alat ukur</span>
-            <span class="meta">pH, TDS, termometer</span>
+            <span class="strong">{t('Foto alat ukur', 'Meter photo')}</span>
+            <span class="meta">{t('pH, TDS, termometer', 'pH, TDS, thermometer')}</span>
           </span>
         </button>
         <button type="button" class="capture-tile" onClick={() => videoInput.current?.click()} disabled={blocked}>
@@ -833,8 +854,8 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
             <Icon name="video" />
           </span>
           <span class="stack-xs">
-            <span class="strong">Video harian</span>
-            <span class="meta">Keliling kolam sambil cerita</span>
+            <span class="strong">{t('Video harian', 'Daily video')}</span>
+            <span class="meta">{t('Keliling kolam sambil cerita', 'Walk around the pond and talk')}</span>
           </span>
         </button>
       </div>
@@ -844,7 +865,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
       {!folded && (
         <div class="note info">
           <Icon name="wifi" />
-          <span>Tidak ada sinyal? Rekaman disimpan di HP dan dibaca otomatis saat ada sinyal.</span>
+          <span>{t('Tidak ada sinyal? Rekaman disimpan di HP dan dibaca otomatis saat ada sinyal.', 'No signal? The recording is kept on the phone and read automatically when there is signal.')}</span>
         </div>
       )}
 
@@ -904,11 +925,13 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
                 {readingInput(photoCheck.field, { autoFocus: true })}
                 <span class="field-hint">
                   {target && target.min !== undefined && target.max !== undefined ? `Target ${showNum(target.min)}–${showNum(target.max)}. ` : ''}
-                  {photoCheck.field === 'tds' ? 'contoh: 150.' : `Pakai koma, contoh: ${photoCheck.field === 'ph' ? '7,4' : '28,5'}.`}
+                  {photoCheck.field === 'tds'
+                    ? t('contoh: 150.', 'for example: 150.')
+                    : t(`Pakai koma, contoh: ${photoCheck.field === 'ph' ? '7,4' : '28,5'}.`, `Use a decimal point, for example: ${photoCheck.field === 'ph' ? '7.4' : '28.5'}.`)}
                 </span>
               </label>
               <button class="btn primary" disabled={busy || !readings[photoCheck.field]}>
-                <Icon name="check" size={20} stroke={2.4} /> Simpan catatan
+                <Icon name="check" size={20} stroke={2.4} /> {t('Simpan catatan', 'Save record')}
               </button>
             </>
           )}
@@ -930,18 +953,25 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
 
       {(ready.length > 0 || waiting.length > 0) && (
         <section class="card" style={{ gap: 8 }}>
-          <h2>Rekaman di HP</h2>
+          <h2>{t('Rekaman di HP', 'Recordings on the phone')}</h2>
           {ready.map((j) => (
             <div class="row between" key={j.id}>
               <span>
                 {kindWord[j.kind][0].toUpperCase() + kindWord[j.kind].slice(1)} · {fmtClock(j.createdAt, true)}
               </span>
               <button type="button" class="btn secondary" style={{ minHeight: 44 }} onClick={() => useJob(j)}>
-                Pakai
+                {t('Pakai', 'Use')}
               </button>
             </div>
           ))}
-          {waiting.length > 0 && <p class="meta">{waiting.length} rekaman menunggu sinyal atau AI aktif.</p>}
+          {waiting.length > 0 && (
+            <p class="meta">
+              {t(
+                `${waiting.length} rekaman menunggu sinyal atau AI aktif.`,
+                `${waiting.length} ${waiting.length === 1 ? 'recording' : 'recordings'} waiting for signal or for the AI to be on.`,
+              )}
+            </p>
+          )}
         </section>
       )}
 
@@ -949,10 +979,10 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
         <section class="card">
           <div class="row top between">
             <div class="stack-xs">
-              <h2>Cek sebelum simpan</h2>
+              <h2>{t('Cek sebelum simpan', 'Check before saving')}</h2>
               <span class="meta">{pond.name}</span>
             </div>
-            <span class="pill blue">dari {kindWord[source as CaptureKind]}</span>
+            <span class="pill blue">{t('dari', 'from')} {kindWord[source as CaptureKind]}</span>
           </div>
           {transcript && <p class="quote">“{transcript}”</p>}
           {problems.map((p) => (
@@ -961,7 +991,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
               <span>{p}</span>
             </p>
           ))}
-          <span class="label ink2">Ada yang salah? Ketuk barisnya.</span>
+          <span class="label ink2">{t('Ada yang salah? Ketuk barisnya.', 'Something wrong? Tap the row.')}</span>
           <div class="stack-sm">
             {draftKeys.map((k) =>
               editing === k ? (
@@ -969,7 +999,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
                   <span class="strong">{LABELS[k]}</span>
                   {editor(k)}
                   <button type="button" class="btn blue" onClick={() => setEditing(null)}>
-                    Selesai
+                    {t('Selesai', 'Done')}
                   </button>
                 </div>
               ) : (
@@ -977,7 +1007,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
                   type="button"
                   class="draft-row"
                   key={k}
-                  aria-label={`Ubah ${LABELS[k]}`}
+                  aria-label={t(`Ubah ${LABELS[k]}`, `Edit ${LABELS[k]}`)}
                   onClick={() => setEditing(k)}
                   style={{ border: '2px solid var(--line-2)', borderRadius: 16, background: 'var(--surface)', padding: '0 16px', color: 'var(--ink)' }}
                 >
@@ -986,7 +1016,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
                     {doubtful.includes(k) && (
                       <span class="pill blue" style={{ gap: 6, color: 'var(--ink)' }}>
                         <Icon name="info" size={16} />
-                        cek lagi
+                        {t('cek lagi', 'check again')}
                       </span>
                     )}
                     <span class="strong num">{showValue(k) ?? '–'}</span>
@@ -999,7 +1029,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
             )}
           </div>
           <button type="button" class="btn secondary" onClick={() => (setManual(true), setEditing(null))}>
-            <Icon name="pencil" size={20} /> Ketik sendiri
+            <Icon name="pencil" size={20} /> {t('Ketik sendiri', 'Type it in')}
           </button>
         </section>
       )}
@@ -1012,8 +1042,8 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
                 <Icon name="pencil" />
               </span>
               <span class="stack-xs">
-                <span class="strong">Ketik sendiri</span>
-                <span class="meta">Isi angka dan keadaan kolam satu per satu</span>
+                <span class="strong">{t('Ketik sendiri', 'Type it in')}</span>
+                <span class="meta">{t('Isi angka dan keadaan kolam satu per satu', 'Enter the numbers and pond conditions one by one')}</span>
               </span>
             </span>
             <Icon name="down" />
@@ -1023,13 +1053,13 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
               <div class="field" key={k}>
                 <span class="field-label">
                   {LABELS[k]}
-                  {k === 'tds' ? ' (ppm)' : k === 'temperature' ? ' (°C)' : k === 'mortality' ? ' (ekor)' : ''}
+                  {k === 'tds' ? ' (ppm)' : k === 'temperature' ? ' (°C)' : k === 'mortality' ? t(' (ekor)', '') : ''}
                 </span>
                 {editor(k)}
               </div>
             ))}
-            <Field label="Catatan">
-              <textarea rows={2} value={note} onInput={(e) => setNote(e.currentTarget.value)} placeholder="contoh: habis hujan deras" />
+            <Field label={t('Catatan', 'Note')}>
+              <textarea rows={2} value={note} onInput={(e) => setNote(e.currentTarget.value)} placeholder={t('contoh: habis hujan deras', 'example: after heavy rain')} />
             </Field>
           </div>
         </details>
@@ -1039,13 +1069,15 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
         <ActionBar>
           {error && <p class="error">{error}</p>}
           <button class="btn primary" disabled={busy || !!working}>
-            <Icon name="check" size={20} stroke={2.4} /> Simpan catatan
+            <Icon name="check" size={20} stroke={2.4} /> {t('Simpan catatan', 'Save record')}
           </button>
         </ActionBar>
       )}
     </form>
   );
 }
+
+const CHECKING_PHOTO = t('Memeriksa foto…', 'Checking the photo…');
 
 /** A meter photo the AI would likely misread: glare or blur (Gangguan 10). */
 function PhotoTrouble(props: {
@@ -1062,33 +1094,37 @@ function PhotoTrouble(props: {
   return (
     <section class="card">
       <div class="row between">
-        <h2>Foto alat ukur</h2>
+        <h2>{t('Foto alat ukur', 'Meter photo')}</h2>
         {props.field && <span class="pill blue">{METER[props.field]}</span>}
       </div>
       <div class="row top">
-        <span class="rp-shot">{url && <img src={url} alt="Foto alat ukur" />}</span>
+        <span class="rp-shot">{url && <img src={url} alt={t('Foto alat ukur', 'Meter photo')} />}</span>
         <span class="grow stack-xs">
-          <span class="strong">Angka di layar alat belum terbaca ({props.glare ? 'silau' : 'buram'})</span>
-          <span class="label ink2">{props.glare ? 'Ada pantulan cahaya di layar alat.' : 'Foto tampak buram, angka tidak tajam.'}</span>
+          <span class="strong">
+            {props.glare ? t('Angka di layar alat belum terbaca (silau)', 'Meter screen not readable (glare)') : t('Angka di layar alat belum terbaca (buram)', 'Meter screen not readable (blurry)')}
+          </span>
+          <span class="label ink2">{props.glare ? t('Ada pantulan cahaya di layar alat.', 'Light is reflecting on the meter screen.') : t('Foto tampak buram, angka tidak tajam.', 'The photo looks blurry; the numbers are not sharp.')}</span>
         </span>
       </div>
       <p class="note info">
         <Glyph name="device" size={20} />
-        <span>{props.glare ? 'Miringkan HP sedikit dan jauhi lampu, sampai pantulan putih hilang dari layar alat.' : 'Pegang HP diam sebentar dan dekatkan sampai angka di layar alat tajam.'}</span>
+        <span>{props.glare
+            ? t('Miringkan HP sedikit dan jauhi lampu, sampai pantulan putih hilang dari layar alat.', 'Tilt the phone a little and move away from the lamp until the white glare leaves the screen.')
+            : t('Pegang HP diam sebentar dan dekatkan sampai angka di layar alat tajam.', 'Hold the phone still for a moment and move closer until the numbers on the meter are sharp.')}</span>
       </p>
       <button type="button" class="btn primary" onClick={props.onRetake}>
-        <Icon name="camera" /> Foto ulang
+        <Icon name="camera" /> {t('Foto ulang', 'Photograph again')}
       </button>
       {props.typing ? (
         props.children
       ) : (
         <button type="button" class="btn secondary" onClick={props.onType}>
-          <Icon name="pencil" /> Ketik angkanya
+          <Icon name="pencil" /> {t('Ketik angkanya', 'Type the number')}
         </button>
       )}
       {!props.typing && (
         <button type="button" class="rp-text-btn" onClick={props.onSendAnyway}>
-          Tetap kirim foto ini
+          {t('Tetap kirim foto ini', 'Send this photo anyway')}
         </button>
       )}
     </section>
@@ -1098,11 +1134,11 @@ function PhotoTrouble(props: {
 /** A video too dark to see the eels: the narration is still read (Gangguan 11). */
 function DarkVideo(props: { seconds: number; at: number; frame?: Blob; heard: boolean; busy: boolean; onCheck: () => void; onRetake: () => void }) {
   const url = useBlobUrl(props.frame);
-  const len = `rekaman ${fmtDur(props.seconds)}`;
+  const len = t(`rekaman ${fmtDur(props.seconds)}`, `recording, ${fmtDur(props.seconds)}`);
   return (
     <section class="card">
       <div class="row between">
-        <h2>Video harian</h2>
+        <h2>{t('Video harian', 'Daily video')}</h2>
         <span class="pill blue num">
           {len} · {fmtClock(props.at)}
         </span>
@@ -1110,21 +1146,25 @@ function DarkVideo(props: { seconds: number; at: number; frame?: Blob; heard: bo
       <div class="row top">
         <span class="rp-shot dark">{url && <img src={url} alt="" />}</span>
         <span class="grow stack-xs">
-          <span class="strong">Video terlalu gelap untuk melihat sidat</span>
-          <span class="label ink2">{props.busy ? 'Suara tetap dibaca…' : props.heard ? 'Suara tetap dibaca.' : 'Suara juga belum terbaca.'}</span>
+          <span class="strong">{t('Video terlalu gelap untuk melihat sidat', 'Video too dark to see the eels')}</span>
+          <span class="label ink2">{props.busy
+            ? t('Suara tetap dibaca…', 'The voice is still being read…')
+            : props.heard
+              ? t('Suara tetap dibaca.', 'The voice was still read.')
+              : t('Suara juga belum terbaca.', 'The voice could not be read either.')}</span>
         </span>
       </div>
       <p class="note info">
         <Glyph name="torch" size={20} />
-        <span>Malam hari, nyalakan senter HP saat merekam supaya sidat terlihat.</span>
+        <span>{t('Malam hari, nyalakan senter HP saat merekam supaya sidat terlihat.', 'At night, turn on the phone flashlight while recording so the eels show.')}</span>
       </p>
       {!props.busy && props.heard && (
         <button type="button" class="btn primary" onClick={props.onCheck}>
-          Cek hasil dari suara <Icon name="arrow" />
+          {t('Cek hasil dari suara', 'Check the voice results')} <Icon name="arrow" />
         </button>
       )}
       <button type="button" class="btn secondary" onClick={props.onRetake}>
-        <Icon name="video" /> Rekam ulang dengan senter
+        <Icon name="video" /> {t('Rekam ulang dengan senter', 'Record again with the flashlight')}
       </button>
     </section>
   );

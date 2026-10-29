@@ -2,6 +2,7 @@ import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { api, type QuotaState, type Role } from '../api.ts';
 import type { Go } from '../app.tsx';
+import { t } from '../i18n.ts';
 import { fmtClock } from '../labels.ts';
 import { Icon, initialOf, roleLabel, Soon, Tick, type IconName } from '../ui.tsx';
 import './quota.css';
@@ -10,32 +11,37 @@ import './quota.css';
 export function QuotaBar({ q, tall }: { q: QuotaState; tall?: boolean }) {
   const pct = q.cap > 0 ? Math.round((q.left / q.cap) * 100) : 0;
   return (
-    <span role="img" aria-label={`${q.left} dari ${q.cap} bacaan tersisa`} class={`progress quota-bar${tall ? ' tall' : ''}`}>
+    <span role="img" aria-label={t(`${q.left} dari ${q.cap} bacaan tersisa`, `${q.left} of ${q.cap} ${q.cap === 1 ? 'read' : 'reads'} left`)} class={`progress quota-bar${tall ? ' tall' : ''}`}>
       <span style={{ width: `${pct}%` }} />
     </span>
   );
 }
 
 const USES: { label: string; icon: IconName }[] = [
-  { label: 'Bicara', icon: 'mic' },
-  { label: 'Foto alat ukur', icon: 'camera' },
-  { label: 'Video harian', icon: 'video' },
+  { label: t('Bicara', 'Speak'), icon: 'mic' },
+  { label: t('Foto alat ukur', 'Meter photo'), icon: 'camera' },
+  { label: t('Video harian', 'Daily video'), icon: 'video' },
 ];
 
 // Prices are not decided yet: the packs are shown without them and cannot be bought.
 const PACKS = [
-  { name: '+50 bacaan', sub: 'Untuk hari sibuk' },
-  { name: '+200 bacaan', sub: 'Untuk beberapa minggu' },
-  { name: 'Langganan bulanan', sub: '150 bacaan per hari' },
+  { name: t('+50 bacaan', '+50 reads'), sub: t('Untuk hari sibuk', 'For busy days') },
+  { name: t('+200 bacaan', '+200 reads'), sub: t('Untuk beberapa minggu', 'For a few weeks') },
+  { name: t('Langganan bulanan', 'Monthly plan'), sub: t('150 bacaan per hari', '150 reads a day') },
 ];
 
 function Hero({ q }: { q: QuotaState }) {
   if (q.unlimited) {
     return (
       <section class="card">
-        <span class="label semi ink2">Sisa hari ini</span>
-        <h2>Tidak ada batas harian</h2>
-        <span class="ink2">Saat ini tambak ini belum punya batas bacaan AI per hari. Dipakai hari ini: {q.used} bacaan.</span>
+        <span class="label semi ink2">{t('Sisa hari ini', 'Left today')}</span>
+        <h2>{t('Tidak ada batas harian', 'No daily limit')}</h2>
+        <span class="ink2">
+          {t(
+            `Saat ini tambak ini belum punya batas bacaan AI per hari. Dipakai hari ini: ${q.used} bacaan.`,
+            `This farm has no daily limit on AI reads right now. Used today: ${q.used} ${q.used === 1 ? 'read' : 'reads'}.`,
+          )}
+        </span>
       </section>
     );
   }
@@ -43,16 +49,19 @@ function Hero({ q }: { q: QuotaState }) {
   const reset = fmtClock(Date.parse(q.resetsAt));
   return (
     <section class={`card quota-hero${out ? ' out' : ''}`} style={{ gap: 12 }}>
-      <span class="label semi sub">Sisa hari ini</span>
+      <span class="label semi sub">{t('Sisa hari ini', 'Left today')}</span>
       <span class="row" style={{ alignItems: 'baseline', gap: 8 }}>
         <span class="big">{q.left}</span>
-        <span class="sub">dari {q.cap} bacaan</span>
+        <span class="sub">{t(`dari ${q.cap} bacaan`, `of ${q.cap} ${q.cap === 1 ? 'read' : 'reads'}`)}</span>
       </span>
       <QuotaBar q={q} tall />
       <span class="label sub">
         {out
-          ? `Habis. Terisi lagi besok jam ${reset}. Rekaman yang dibuat sekarang tetap disimpan dan dibaca setelah jatah ada.`
-          : `Terisi penuh lagi tiap jam ${reset}.`}
+          ? t(
+              `Habis. Terisi lagi besok jam ${reset}. Rekaman yang dibuat sekarang tetap disimpan dan dibaca setelah jatah ada.`,
+              `Used up. Refills tomorrow at ${reset}. Recordings made now are still saved, and read once reads are back.`,
+            )
+          : t(`Terisi penuh lagi tiap jam ${reset}.`, `Refills in full every day at ${reset}.`)}
       </span>
     </section>
   );
@@ -62,11 +71,11 @@ function Hero({ q }: { q: QuotaState }) {
 export function MediaDone({ on, label, short }: { on: boolean; label: string; short?: boolean }) {
   return on ? (
     <span class="word ok">
-      <Tick /> {short ? label : `${label} sudah`}
+      <Tick /> {short ? label : t(`${label} sudah`, `${label} done`)}
     </span>
   ) : (
     <span class="word" style={{ color: 'var(--ink-2)' }}>
-      {label} belum
+      {t(`${label} belum`, `${label} not yet`)}
     </span>
   );
 }
@@ -79,7 +88,7 @@ function EarnRow({ title, children, bonus, earned, onClick }: { title: string; c
         {children}
       </span>
       <span class={`pill ${earned ? 'ok' : 'blue'}`} style={{ fontWeight: 800, gap: 4 }}>
-        {earned && <Tick />}+{bonus} bacaan
+        {earned && <Tick />}+{bonus} {t('bacaan', 'reads')}
       </span>
     </button>
   );
@@ -98,26 +107,33 @@ export function Quota({ role, go }: { role: Role | null; go: Go }) {
 
   const pv = q?.earn.photoVideo;
   const streak = q?.earn.streak;
-  const ask = q && `Jatah baca AI di Synteel hari ini ${q.left === 0 ? 'habis' : `tinggal ${q.left}`}. Mohon ditambah di Synteel › Profil › Jatah baca AI.`;
+  const ask =
+    q &&
+    t(
+      `Jatah baca AI di Synteel hari ini ${q.left === 0 ? 'habis' : `tinggal ${q.left}`}. Mohon ditambah di Synteel › Profil › Jatah baca AI.`,
+      `Today's AI reads in Synteel are ${q.left === 0 ? 'used up' : `down to ${q.left}`}. Please add more in Synteel › Profile › Daily AI reads.`,
+    );
 
   return (
     <div class="screen">
       <header class="row">
-        <button class="icon-btn" aria-label="Kembali ke Profil" onClick={() => go({ name: 'profile' })}>
+        <button class="icon-btn" aria-label={t('Kembali ke Profil', 'Back to Profile')} onClick={() => go({ name: 'profile' })}>
           <Icon name="back" />
         </button>
         <div class="stack-xs">
-          <h1 style={{ lineHeight: 1.1 }}>Jatah baca AI</h1>
-          <span class="meta">Satu jatah untuk semua anggota tambak</span>
+          <h1 style={{ lineHeight: 1.1 }}>{t('Jatah baca AI', 'Daily AI reads')}</h1>
+          <span class="meta">{t('Satu jatah untuk semua anggota tambak', 'One allowance for all farm members')}</span>
         </div>
       </header>
 
-      {!q && !error && <p class="muted">Memuat…</p>}
+      {!q && !error && <p class="muted">{t('Memuat…', 'Loading…')}</p>}
       {error && (
         <div class="stack-sm">
-          <p class="error">Jatah belum bisa dimuat: {error}</p>
+          <p class="error">
+            {t('Jatah belum bisa dimuat', 'Reads could not be loaded')}: {error}
+          </p>
           <button class="btn secondary" onClick={load}>
-            Coba lagi
+            {t('Coba lagi', 'Try again')}
           </button>
         </div>
       )}
@@ -127,7 +143,7 @@ export function Quota({ role, go }: { role: Role | null; go: Go }) {
           <Hero q={q} />
 
           <section class="stack">
-            <h2>Satu rekaman = satu bacaan</h2>
+            <h2>{t('Satu rekaman = satu bacaan', 'One recording = one read')}</h2>
             <div class="grid3">
               {USES.map((u) => (
                 <div key={u.label} class="card" style={{ padding: '12px 8px', borderRadius: 16, gap: 4, alignItems: 'center', textAlign: 'center' }}>
@@ -143,25 +159,29 @@ export function Quota({ role, go }: { role: Role | null; go: Go }) {
             <div class="note ok">
               <Icon name="check" size={20} stroke={2.5} />
               <span>
-                <b style={{ fontWeight: 800 }}>Tidak memakai jatah:</b> laporan darurat dan hitung sidat mati, ketik sendiri, ringkasan malam, Waspada, dan bicara di Hubungi bantuan.
+                <b style={{ fontWeight: 800 }}>{t('Tidak memakai jatah:', 'Does not use reads:')}</b>{' '}
+                {t(
+                  'laporan darurat dan hitung sidat mati, ketik sendiri, ringkasan malam, Waspada, dan bicara di Hubungi bantuan.',
+                  'emergency reports and dead-eel counts, Type it in, Night summary, Watch, and speaking in Contact support.',
+                )}
               </span>
             </div>
           </section>
 
           <section class="stack">
-            <h2>Tambah gratis</h2>
+            <h2>{t('Tambah gratis', 'Get more for free')}</h2>
             <div class="card list">
-              <EarnRow title="1 foto + 1 video kolam hari ini" bonus={pv.bonus} earned={pv.earned} onClick={() => go({ name: 'record' })}>
+              <EarnRow title={t('1 foto + 1 video kolam hari ini', '1 pond photo + 1 pond video today')} bonus={pv.bonus} earned={pv.earned} onClick={() => go({ name: 'record' })}>
                 <span class="row label" style={{ gap: 12 }}>
-                  <MediaDone on={pv.photo} label="Foto" short />
+                  <MediaDone on={pv.photo} label={t('Foto', 'Photo')} short />
                   <MediaDone on={pv.video} label="Video" short />
                 </span>
               </EarnRow>
-              <EarnRow title="Mencatat 7 hari beruntun" bonus={streak.bonus} onClick={() => go({ name: 'rewards' })}>
+              <EarnRow title={t('Mencatat 7 hari beruntun', 'Record 7 days in a row')} bonus={streak.bonus} onClick={() => go({ name: 'rewards' })}>
                 <span class="label ink2 num">
-                  Sekarang {streak.days} hari beruntun
+                  {t(`Sekarang ${streak.days} hari beruntun`, `Now ${streak.days} ${streak.days === 1 ? 'day' : 'days'} in a row`)}
                   <br />
-                  Berikutnya di hari ke-{streak.nextAt}
+                  {t(`Berikutnya di hari ke-${streak.nextAt}`, `Next at day ${streak.nextAt}`)}
                 </span>
               </EarnRow>
             </div>
@@ -170,11 +190,11 @@ export function Quota({ role, go }: { role: Role | null; go: Go }) {
           {owner && (
             <section class="card" style={{ gap: 12 }}>
               <div class="row between">
-                <h2>Beli jatah tambahan</h2>
+                <h2>{t('Beli jatah tambahan', 'Buy extra reads')}</h2>
                 <Soon />
               </div>
-              <span class="label ink2">Harga paket diumumkan nanti.</span>
-              <ul class="packs" aria-label="Paket yang disiapkan">
+              <span class="label ink2">{t('Harga paket diumumkan nanti.', 'Pack prices will be announced later.')}</span>
+              <ul class="packs" aria-label={t('Paket yang disiapkan', 'Packs in the works')}>
                 {PACKS.map((p) => (
                   <li key={p.name}>
                     <span class="semi">{p.name}</span>
@@ -182,13 +202,13 @@ export function Quota({ role, go }: { role: Role | null; go: Go }) {
                   </li>
                 ))}
               </ul>
-              <span class="label ink2">Jatah tambahan dipakai setelah jatah harian habis dan berlaku 30 hari.</span>
+              <span class="label ink2">{t('Jatah tambahan dipakai setelah jatah harian habis dan berlaku 30 hari.', 'Extra reads are used after the daily reads run out, and last 30 days.')}</span>
             </section>
           )}
 
           {owner && q.members.length > 0 && (
             <section class="stack">
-              <h2>Dipakai hari ini</h2>
+              <h2>{t('Dipakai hari ini', 'Used today')}</h2>
               <div class="card list">
                 {q.members.map((m) => (
                   <div key={m.userId} class="list-row" style={{ minHeight: 64, padding: '12px 0' }}>
@@ -199,7 +219,7 @@ export function Quota({ role, go }: { role: Role | null; go: Go }) {
                       <span class="semi">{m.name}</span>
                       <span class="meta">{roleLabel[m.role]}</span>
                     </span>
-                    <span class="strong num">{m.used} bacaan</span>
+                    <span class="strong num">{t(`${m.used} bacaan`, `${m.used} ${m.used === 1 ? 'read' : 'reads'}`)}</span>
                   </div>
                 ))}
               </div>
@@ -208,10 +228,10 @@ export function Quota({ role, go }: { role: Role | null; go: Go }) {
 
           {!owner && (
             <section class="card">
-              <h2>Butuh jatah lebih?</h2>
-              <p class="ink2">Hanya pemilik tambak yang bisa membeli jatah tambahan.</p>
+              <h2>{t('Butuh jatah lebih?', 'Need more reads?')}</h2>
+              <p class="ink2">{t('Hanya pemilik tambak yang bisa membeli jatah tambahan.', 'Only the farm owner can buy extra reads.')}</p>
               <a class="btn primary" href={`https://wa.me/?text=${encodeURIComponent(ask ?? '')}`} target="_blank" rel="noopener">
-                <Icon name="chat" size={20} /> Minta pemilik lewat WhatsApp
+                <Icon name="chat" size={20} /> {t('Minta pemilik lewat WhatsApp', 'Ask the owner on WhatsApp')}
               </a>
             </section>
           )}

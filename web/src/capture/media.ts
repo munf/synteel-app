@@ -1,6 +1,8 @@
 // On-phone media preparation: everything here runs before anything is uploaded, so
 // a farmer on weak signal sends small files and gets told about a bad photo at once.
 
+import { t } from '../i18n.ts';
+
 export interface PreparedImage {
   blob: Blob;
   issues: string[]; // e.g. "buram", "silau": shown before sending, never blocking
@@ -26,7 +28,7 @@ async function loadBitmap(file: Blob): Promise<ImageBitmap | HTMLImageElement> {
 }
 
 function toBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
-  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Gagal memproses gambar'))), 'image/jpeg', quality));
+  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error(t('Gagal memproses gambar', 'Could not process the image')))), 'image/jpeg', quality));
 }
 
 function draw(source: CanvasImageSource, w: number, h: number, maxSide: number) {
@@ -66,8 +68,8 @@ export function photoIssues(source: CanvasImageSource, w: number, h: number): st
   }
   const variance = sumSq / n - (sum / n) ** 2;
   const issues: string[] = [];
-  if (variance < 40) issues.push('Foto tampak buram');
-  if (blown / grey.length > 0.06) issues.push('Ada bagian yang silau');
+  if (variance < 40) issues.push(t('Foto tampak buram', 'The photo looks blurry'));
+  if (blown / grey.length > 0.06) issues.push(t('Ada bagian yang silau', 'Part of the photo has glare'));
   return issues;
 }
 
@@ -83,15 +85,15 @@ export async function prepareImage(file: Blob, maxSide = 1280): Promise<Prepared
 
 const MAX_VIDEO_S = 120;
 
-function seek(video: HTMLVideoElement, t: number) {
+function seek(video: HTMLVideoElement, at: number) {
   return new Promise<void>((resolve, reject) => {
     const done = () => {
       video.removeEventListener('seeked', done);
       resolve();
     };
     video.addEventListener('seeked', done);
-    video.addEventListener('error', () => reject(new Error('Video tidak bisa dibaca')), { once: true });
-    video.currentTime = t;
+    video.addEventListener('error', () => reject(new Error(t('Video tidak bisa dibaca', 'The video cannot be read'))), { once: true });
+    video.currentTime = at;
   });
 }
 
@@ -148,7 +150,7 @@ export async function prepareVideo(file: Blob, frameCount = 12): Promise<{ frame
   try {
     await new Promise<void>((resolve, reject) => {
       video.onloadeddata = () => resolve();
-      video.onerror = () => reject(new Error('Video tidak bisa dibaca'));
+      video.onerror = () => reject(new Error(t('Video tidak bisa dibaca', 'The video cannot be read')));
     });
     const seconds = Math.min(video.duration || 0, MAX_VIDEO_S);
     const frames: Blob[] = [];

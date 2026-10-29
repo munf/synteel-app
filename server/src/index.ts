@@ -5,7 +5,8 @@ import { createApi } from './api.ts';
 import { captureStore } from './captures.ts';
 import { openDb, repo } from './db.ts';
 import { env } from './env.ts';
-import { knowledge } from './knowledge.ts';
+import { emergenciesEn, knowledge } from './knowledge.ts';
+import { parseLang } from './i18n.ts';
 import { mailer } from './mail.ts';
 import { MONITOR_INTERVAL_MS, startMonitor } from './monitor.ts';
 import type { Nowcast } from './nowcast.ts';
@@ -14,7 +15,10 @@ const app = new Hono().basePath('/api');
 
 app.get('/health', (c) => c.json({ ok: true, modelApiKeyConfigured: env.aiChat.some((p) => p.apiKey !== '') }));
 
-app.get('/knowledge', (c) => c.json(knowledge));
+// The emergency steps follow the app's language (x-lang); the rest is reference data.
+app.get('/knowledge', (c) =>
+  c.json(parseLang(c.req.header('x-lang')) === 'en' ? { ...knowledge, emergencies: { ...knowledge.emergencies, ...emergenciesEn } } : knowledge),
+);
 
 const ai = withDailyCap(createAi({ chat: env.aiChat, transcriber: env.aiTranscriber, mock: env.aiMock }), env.aiDailyCap);
 const chain = env.aiChat.filter((p) => p.apiKey).map((p) => p.name).join(' → ');

@@ -4,6 +4,7 @@
 // without the model: pond names are matched again locally, repeated mentions are merged, and
 // numbers that cannot be right are fixed (only when the fix is certain) or flagged.
 // Nothing here is saved: each pond's draft is checked by the farmer first.
+import { currentLang, tx } from './i18n.ts';
 import type { AutoFix, ReadingField, RoundDraft, RoundIssue, RoundResult } from './contract.ts';
 import type { Behavior, LogData } from './domain.ts';
 
@@ -27,7 +28,7 @@ const FIELD_SCHEMA = {
   water_color: { enum: ['clear', 'green', 'brown', 'cloudy', null] },
   water_smell: { enum: ['normal', 'foul', null] },
   aeration: { enum: ['on', 'weak', 'off', null] },
-  note: { type: ['string', 'null'], description: 'Hal penting lain, singkat, bahasa Indonesia' },
+  note: { type: ['string', 'null'], description: 'Hal penting lain, singkat, dalam bahasa yang diminta instruksi' },
 };
 const FIELD_KEYS = Object.keys(FIELD_SCHEMA);
 
@@ -64,7 +65,7 @@ export const ROUND_SCHEMA = {
 export function roundInstructions(ponds: RoundPond[]): string {
   const list = ponds.map((p) => `${p.id}: ${p.name}${p.nicknames.length ? `; dipanggil juga ${p.nicknames.map((n) => `"${n}"`).join(', ')}` : ''}`);
   return [
-    'Kamu membantu petani sidat di Indonesia mencatat keliling kolam. Petani berjalan dan bicara (bahasa Indonesia atau Jawa) tentang banyak kolam dalam satu rekaman. Pecah transkrip per kolam, urut sesuai ucapan.',
+    'Kamu membantu petani sidat di Indonesia mencatat keliling kolam. Petani berjalan dan bicara (bahasa Indonesia, Jawa, atau Inggris) tentang banyak kolam dalam satu rekaman. Pecah transkrip per kolam, urut sesuai ucapan.',
     'Daftar kolam (id: nama):',
     ...list,
     'Aturan:',
@@ -76,7 +77,9 @@ export function roundInstructions(ponds: RoundPond[]): string {
     '- Angka Jawa: siji 1, loro 2, telu 3, papat 4, lima 5, enem 6, pitu 7, wolu 8, sanga 9, sepuluh 10, selikur 21, rolikur 22, telulikur 23, patlikur 24, selawe 25, nemlikur 26, pitulikur 27, wolulikur 28, sangalikur atau "selikur sanga" 29, telung puluh 30.',
     '- "koma" adalah desimal: "pitu koma papat" = 7.4, "dua delapan koma lima" = 28.5. Angka disebut per digit tanpa koma ditulis gabung: "pitu papat" = 74.',
     '- suhune = suhu; banyune rada ijo = air agak hijau (green); ana sing mati loro = mortality 2; pakane isih akeh = sisa pakan banyak (much); pakane entek = habis (none).',
+    '- Bahasa Inggris: "Pond B" = Kolam B; "point" adalah desimal ("seven point four" = 7.4); "two dead" = mortality 2; "lots of feed left" = much; "feed all eaten" = none; "water a bit green" = green.',
     '- Ini pencatatan, bukan diagnosis. Jangan menambah saran.',
+    currentLang() === 'en' ? '- Write note and unclear_text in plain English.' : '- Tulis note dan unclear_text dalam bahasa Indonesia.',
   ].join('\n');
 }
 
@@ -86,6 +89,7 @@ export function roundInstructions(ponds: RoundPond[]): string {
 const FILLER = new Set([
   'kolam', 'kolame', 'bak', 'bake', 'tambak', 'empang', 'blumbang', 'nomor', 'nomer', 'no', 'sing', 'yang',
   'lagi', 'maneh', 'meneh', 'ini', 'itu', 'iki', 'kuwi', // "Kolam B maneh" = Kolam B again
+  'pond', 'tank', 'number', 'the', 'again', 'this', // English: "pond B again"
 ]);
 // Letters as they are spoken ("kolam be" = Kolam B).
 const LETTERS: Record<string, string> = {
@@ -97,6 +101,7 @@ const NUMBERS: Record<string, string> = {
   satu: '1', siji: '1', setunggal: '1', dua: '2', loro: '2', kalih: '2', tiga: '3', telu: '3', empat: '4', papat: '4', sekawan: '4',
   lima: '5', gangsal: '5', enam: '6', enem: '6', tujuh: '7', pitu: '7', delapan: '8', wolu: '8', sembilan: '9', sanga: '9',
   sepuluh: '10', sedasa: '10', sebelas: '11', sewelas: '11', rolas: '12',
+  one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9', ten: '10', eleven: '11', twelve: '12',
 };
 
 function tokens(name: string): string[] {
@@ -153,12 +158,17 @@ type Readings = Partial<Record<ReadingField, number>>;
 const READING_FIELDS: ReadingField[] = ['temperature', 'ph', 'tds'];
 const PLAUSIBLE: Record<ReadingField, [number, number]> = { temperature: [15, 38], ph: [4, 10], tds: [20, 2000] };
 const UNIT: Record<ReadingField, string> = { temperature: ' °C', ph: '', tds: ' ppm' };
-const NORM: Record<ReadingField, string> = { temperature: 'Suhu air biasanya 15–38 °C', ph: 'pH air biasanya 6–9', tds: 'TDS air biasanya 20–2000 ppm' };
+const NORM = (field: ReadingField) =>
+  ({
+    temperature: tx('Suhu air biasanya 15–38 °C', 'Water temperature is usually 15–38 °C'),
+    ph: tx('pH air biasanya 6–9', 'Water pH is usually 6–9'),
+    tds: tx('TDS air biasanya 20–2000 ppm', 'Water TDS is usually 20–2000 ppm'),
+  })[field];
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
 const within = (v: number, [min, max]: [number, number]) => v >= min && v <= max;
-/** Indonesian number: 7.4 → "7,4". */
-const say = (v: number) => String(round2(v)).replace('.', ',');
+/** 7.4 → "7,4" (Indonesian) or "7.4" (English). */
+const say = (v: number) => (currentLang() === 'en' ? String(round2(v)) : String(round2(v)).replace('.', ','));
 
 interface Checked {
   value?: number;
@@ -175,16 +185,16 @@ export function checkReading(field: ReadingField, v: number): Checked {
     return { value, autoFix: { field, heard: say(v), value } };
   }
   let suggestion: number | null = null;
-  let note = NORM[field];
+  let note = NORM(field);
   if (field === 'temperature') {
     // "selikur sanga" heard only as "sanga": the tens got lost.
-    if (within(v + 20, [25, 35])) [suggestion, note] = [v + 20, `${note}. Mungkin awal angkanya tidak terdengar.`];
+    if (within(v + 20, [25, 35])) [suggestion, note] = [v + 20, `${note}. ${tx('Mungkin awal angkanya tidak terdengar.', 'Maybe the start of the number was not heard.')}`];
     else if (within(v / 10, [20, 35])) suggestion = round2(v / 10);
   } else if (field === 'ph') {
     if (v > 14 && within(v / 100, range)) suggestion = round2(v / 100);
     else if (v < range[0] && v > 0 && within(v * 10, range)) suggestion = round2(v * 10);
   } else if (v > 0 && v < range[0] && within(v * 1000, range)) {
-    [suggestion, note] = [round2(v * 1000), `${note}. Mungkin satuannya beda.`];
+    [suggestion, note] = [round2(v * 1000), `${note}. ${tx('Mungkin satuannya beda.', 'Maybe the unit is different.')}`];
   }
   return { issue: { kind: 'implausible', field, heard: `${say(v)}${UNIT[field]}`, suggestion, note } };
 }
@@ -323,5 +333,5 @@ export function mockRound(ponds: RoundPond[]): RoundResult {
       { ...empty, pond_as_heard: 'kolam pojok', pond_id: null, quote: quoteC, water_color: 'green' },
     ],
   };
-  return guardRound(raw, ponds, `Mode contoh: ${quoteA} ${quoteB} ${quoteC}`, { model: 'mock', mode: 'mock' });
+  return guardRound(raw, ponds, `${tx('Mode contoh', 'Sample mode')}: ${quoteA} ${quoteB} ${quoteC}`, { model: 'mock', mode: 'mock' });
 }

@@ -1,5 +1,6 @@
 // Captures wait on the phone (IndexedDB) until there is signal. Ponds often have none.
 import { API, type Draft } from '../api.ts';
+import { lang, t } from '../i18n.ts';
 
 export type CaptureKind = 'photo' | 'voice' | 'video';
 
@@ -55,12 +56,12 @@ export async function process(job: Job): Promise<Job> {
   if (job.audio) form.append('audio', job.audio, job.audio.type.includes('wav') ? 'audio.wav' : 'audio.webm');
   let res: Response;
   try {
-    res = await fetch(`${API}/ponds/${job.pondId}/capture`, { method: 'POST', body: form });
+    res = await fetch(`${API}/ponds/${job.pondId}/capture`, { method: 'POST', body: form, headers: { 'x-lang': lang } });
   } catch {
-    throw new Retryable('Belum ada sinyal');
+    throw new Retryable(t('Belum ada sinyal', 'No signal yet'));
   }
   const body = await res.json().catch(() => ({}));
-  if (res.status >= 500 || res.status === 408) throw new Retryable(body.error ?? `Server sibuk (${res.status})`);
+  if (res.status >= 500 || res.status === 408) throw new Retryable(body.error ?? t(`Server sibuk (${res.status})`, `Server busy (${res.status})`));
   if (!res.ok) return { ...job, status: 'failed', error: body.error ?? `Gagal (${res.status})` };
   return { ...job, status: 'ready', draft: body.draft };
 }

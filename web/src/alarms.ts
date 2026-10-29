@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { api, type Briefing, type NowcastState, type PondSummary } from './api.ts';
 import type { Go } from './app.tsx';
+import { t } from './i18n.ts';
 import { fmtClock } from './labels.ts';
 import { getPrefs } from './prefs.ts';
 
@@ -32,18 +33,25 @@ export interface NightCheck extends ArmedCheck {
 
 const HOUR = 3600_000;
 
-// The rules' routine checks, in the few words the schedule shows.
+// The rules' routine checks, in the few words the schedule shows. The server words them in the
+// chosen language, so both languages are listed.
 const ROUTINE_SHORT: Record<string, string> = {
   'Ukur suhu, pH, TDS dan amati sidat': 'Ukur suhu, pH, TDS',
   'Lihat perilaku sidat dan aerator': 'Lihat sidat dan aerator',
   'Ukur suhu, pH, TDS dan buang sisa pakan': 'Ukur suhu, pH, TDS, buang sisa pakan',
   'Pastikan aerator nyala sebelum tidur': 'Pastikan aerator nyala',
+  'Measure temperature, pH, TDS and watch the eels': 'Measure temperature, pH, TDS',
+  'Look at how the eels behave and at the aerator': 'Look at the eels and aerator',
+  'Measure temperature, pH, TDS and remove leftover feed': 'Measure temperature, pH, TDS, remove leftover feed',
+  'Make sure the aerator is on before bed': 'Make sure the aerator is on',
 };
 
 /** "Risiko tinggi: sidat terlihat naik …" is a reason, not something to do: turn it into the action. */
 export function shortAction(reason: string): string {
-  if (!/^risiko/i.test(reason)) return ROUTINE_SHORT[reason] ?? reason;
-  return /naik ke permukaan|berkumpul/i.test(reason) ? 'Lihat sidat di permukaan' : 'Cek aerator dan sidat';
+  if (!/^(risiko|risk)/i.test(reason)) return ROUTINE_SHORT[reason] ?? reason;
+  return /naik ke permukaan|berkumpul|rising to the surface|crowding/i.test(reason)
+    ? t('Lihat sidat di permukaan', 'Look at the eels at the surface')
+    : t('Cek aerator dan sidat', 'Check aerator and eels');
 }
 
 /** Tonight's checks: the briefing's when there is one (rules + agent), otherwise the rules' own. */
@@ -58,7 +66,7 @@ export function tonightChecks(briefing: Briefing | null, nowcast: NowcastState, 
       return {
         ...c,
         key: `${c.pondId}-${c.t}`,
-        pondName: ponds.find((p) => p.id === c.pondId)?.name ?? 'Kolam',
+        pondName: ponds.find((p) => p.id === c.pondId)?.name ?? t('Kolam', 'Pond'),
         action: shortAction(c.reason),
         peak: nc ? { t: nc.peak.t, level: nc.peak.level } : null,
       };
@@ -224,7 +232,7 @@ export async function askNotifyPermission(): Promise<NotificationPermission> {
 function notify(c: ArmedCheck) {
   if (!canNotify() || Notification.permission !== 'granted') return;
   try {
-    const n = new Notification(`Alarm cek ${fmtClock(c.t)} · ${c.pondName}`, {
+    const n = new Notification(t(`Alarm cek ${fmtClock(c.t)} · ${c.pondName}`, `Check alarm ${fmtClock(c.t)} · ${c.pondName}`), {
       body: c.action,
       tag: 'synteel-alarm',
       requireInteraction: true,
@@ -313,9 +321,9 @@ export const GLYPH = {
 /** An icon for what a check asks for: measure, aerator, leftover feed, or look at the eels. */
 export function actionIcon(action: string): string {
   const a = action.toLowerCase();
-  if (/ukur/.test(a)) return /suhu/.test(a) ? GLYPH.thermo : GLYPH.drop;
-  if (/aerator|aerasi|udara/.test(a)) return GLYPH.fan;
-  if (/pakan/.test(a)) return GLYPH.trash;
-  if (/hujan/.test(a)) return GLYPH.rain;
+  if (/ukur|measure/.test(a)) return /suhu|temperature/.test(a) ? GLYPH.thermo : GLYPH.drop;
+  if (/aerator|aerasi|udara|\bair\b/.test(a)) return GLYPH.fan;
+  if (/pakan|feed/.test(a)) return GLYPH.trash;
+  if (/hujan|rain/.test(a)) return GLYPH.rain;
   return GLYPH.eye;
 }

@@ -4,6 +4,7 @@ import type { Go } from '../app.tsx';
 import { actionIcon, alarmClosed, armedChecks, findArmed, GLYPH, loadDone, markDone, snoozeAlarm, startTone, stopTone, unsnoozeAlarm } from '../alarms.ts';
 import { fmtClock, levelLabel } from '../labels.ts';
 import { setForcedNight } from '../prefs.ts';
+import { isEn, LOCALE, t } from '../i18n.ts';
 import { Icon } from '../ui.tsx';
 import { Glyph } from './watch.tsx';
 import './watch.css';
@@ -16,7 +17,13 @@ const SHAPE = {
   critical: { d: 'M5.13 1.5a1 1 0 0 1 1.74 0l4.5 8a1 1 0 0 1-.87 1.5H1.5a1 1 0 0 1-.87-1.5z', fill: '#F04438' },
 } as const;
 
-const longDate = (t: number) => new Date(t).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Jakarta' });
+const longDate = (at: number) => {
+  const opts = { timeZone: 'Asia/Jakarta' } as const;
+  const d = new Date(at);
+  // English as on the canvas: "Wednesday, 28 October".
+  if (isEn) return `${d.toLocaleDateString(LOCALE, { ...opts, weekday: 'long' })}, ${d.toLocaleDateString(LOCALE, { ...opts, day: 'numeric', month: 'long' })}`;
+  return d.toLocaleDateString(LOCALE, { ...opts, weekday: 'long', day: 'numeric', month: 'long' });
+};
 
 /**
  * The night-check alarm, full screen over everything (the menu included): rings until it is
@@ -26,10 +33,10 @@ export function Alarm({ ponds, at, pondId, onSaved, go }: { ponds: PondSummary[]
   const key = `${pondId}-${at}`;
   const check = findArmed(at, pondId);
   const pond = ponds.find((p) => p.id === pondId);
-  const pondName = pond?.name ?? check?.pondName ?? 'Kolam';
-  const action = check?.action ?? 'Lihat sidat dan aerator';
+  const pondName = pond?.name ?? check?.pondName ?? t('Kolam', 'Pond');
+  const action = check?.action ?? t('Lihat sidat dan aerator', 'Look at the eels and aerator');
   // A check that is about looking at the eels asks the question the farmer answers next.
-  const actionText = actionIcon(action) === GLYPH.eye ? 'Cek: sidat naik ke permukaan?' : action;
+  const actionText = actionIcon(action) === GLYPH.eye ? t('Cek: sidat naik ke permukaan?', 'Check: eels at the surface?') : action;
 
   const [step, setStep] = useState<Step>('ring');
   // Where "Kembali" returns to from the question: the ringing or the snoozed screen.
@@ -78,7 +85,7 @@ export function Alarm({ ponds, at, pondId, onSaved, go }: { ponds: PondSummary[]
     setBusy(true);
     setError('');
     try {
-      await api.addLog(pondId, { behavior: ['normal'], note: `Cek malam ${fmtClock(at)}: normal` });
+      await api.addLog(pondId, { behavior: ['normal'], note: t(`Cek malam ${fmtClock(at)}: normal`, `Night check ${fmtClock(at)}: normal`) });
       markDone([key]);
       onSaved();
       setDoneAt(Date.now());
@@ -120,7 +127,7 @@ export function Alarm({ ponds, at, pondId, onSaved, go }: { ponds: PondSummary[]
             <path d={SHAPE[peak.level].d} fill={SHAPE[peak.level].fill} />
           </svg>
           <span>
-            {levelLabel[peak.level]} · puncak rawan jam {fmtClock(peak.t)}
+            {levelLabel[peak.level]} · {t(`puncak rawan jam ${fmtClock(peak.t)}`, `riskiest at ${fmtClock(peak.t)}`)}
           </span>
         </div>
       )}
@@ -128,11 +135,11 @@ export function Alarm({ ponds, at, pondId, onSaved, go }: { ponds: PondSummary[]
   );
 
   return (
-    <div class="alarm" role="alertdialog" aria-modal="true" aria-label={`Alarm cek ${fmtClock(at)}, ${pondName}`}>
+    <div class="alarm" role="alertdialog" aria-modal="true" aria-label={t(`Alarm cek ${fmtClock(at)}, ${pondName}`, `Check alarm ${fmtClock(at)}, ${pondName}`)}>
       <div class="alarm-in">
         <div class="top">
           <Glyph d={GLYPH.bell} size={20} />
-          {step === 'done' ? 'CEK MALAM' : 'ALARM CEK MALAM'}
+          {step === 'done' ? t('CEK MALAM', 'NIGHT CHECK') : t('ALARM CEK MALAM', 'NIGHT CHECK ALARM')}
         </div>
 
         {step === 'ring' && (
@@ -147,13 +154,13 @@ export function Alarm({ ponds, at, pondId, onSaved, go }: { ponds: PondSummary[]
             <div class="buttons">
               <button type="button" class="b-main" onClick={answer}>
                 <Icon name="check" size={22} stroke={3} />
-                Sudah dicek
+                {t('Sudah dicek', 'Checked')}
               </button>
               <button type="button" class="b-line" onClick={snooze}>
                 <Glyph d={GLYPH.clock} />
-                Tunda 10 menit
+                {t('Tunda 10 menit', 'Snooze 10 minutes')}
               </button>
-              <p class="foot">Alarm terus berbunyi sampai dijawab.</p>
+              <p class="foot">{t('Alarm terus berbunyi sampai dijawab.', 'The alarm keeps ringing until it is answered.')}</p>
             </div>
           </>
         )}
@@ -163,7 +170,7 @@ export function Alarm({ ponds, at, pondId, onSaved, go }: { ponds: PondSummary[]
             <div class="mid">
               <div class="clock">
                 <span class="strong" style={{ color: '#FBD38D' }}>
-                  Ditunda, berbunyi lagi
+                  {t('Ditunda, berbunyi lagi', 'Snoozed, rings again at')}
                 </span>
                 <span class="huge">{fmtClock(snoozeUntil)}</span>
                 <span class="sub">{longDate(snoozeUntil)}</span>
@@ -173,10 +180,10 @@ export function Alarm({ ponds, at, pondId, onSaved, go }: { ponds: PondSummary[]
             <div class="buttons">
               <button type="button" class="b-main" onClick={answer}>
                 <Icon name="check" size={22} stroke={3} />
-                Sudah dicek sekarang
+                {t('Sudah dicek sekarang', 'Checked now')}
               </button>
               <button type="button" class="b-line" onClick={unsnooze}>
-                Batalkan tunda
+                {t('Batalkan tunda', 'Cancel snooze')}
               </button>
             </div>
           </>
@@ -189,22 +196,22 @@ export function Alarm({ ponds, at, pondId, onSaved, go }: { ponds: PondSummary[]
                 <span class="circle" style={{ background: '#17284A', color: '#FBD38D' }}>
                   <Glyph d={GLYPH.eye} size={36} />
                 </span>
-                <span class="title">Sidat {pondName} normal?</span>
-                <span class="sub">Normal: berenang di dasar, tidak naik ke permukaan.</span>
+                <span class="title">{t(`Sidat ${pondName} normal?`, `${pondName} eels normal?`)}</span>
+                <span class="sub">{t('Normal: berenang di dasar, tidak naik ke permukaan.', 'Normal: swimming at the bottom, not coming up to the surface.')}</span>
               </div>
             </div>
             <div class="buttons">
               {error && <p class="error center">{error}</p>}
               <button type="button" class="b-main" disabled={busy} onClick={normal}>
                 <Icon name="check" size={22} stroke={3} />
-                {busy ? 'Menyimpan…' : 'Ya, normal'}
+                {busy ? t('Menyimpan…', 'Saving…') : t('Ya, normal', 'Yes, normal')}
               </button>
               <button type="button" class="b-bad" onClick={problem}>
                 <Icon name="siren" size={22} />
-                Ada masalah
+                {t('Ada masalah', 'Something wrong')}
               </button>
               <button type="button" class="b-text" onClick={() => setStep(from)}>
-                Kembali
+                {t('Kembali', 'Back')}
               </button>
             </div>
           </>
@@ -217,15 +224,15 @@ export function Alarm({ ponds, at, pondId, onSaved, go }: { ponds: PondSummary[]
                 <span class="circle" style={{ background: '#1E8A5F', color: '#fff' }}>
                   <Icon name="check" size={36} stroke={3} />
                 </span>
-                <span class="title">Tercatat</span>
+                <span class="title">{t('Tercatat', 'Recorded')}</span>
                 <span class="sub num">
-                  Sidat {pondName} normal · {fmtClock(doneAt)}
+                  {t(`Sidat ${pondName} normal`, `${pondName} eels normal`)} · {fmtClock(doneAt)}
                 </span>
               </div>
               {next && (
                 <section class="card2" style={{ gap: 12 }}>
                   <span class="label strong" style={{ color: '#FBD38D', letterSpacing: '0.06em' }}>
-                    BERIKUTNYA
+                    {t('BERIKUTNYA', 'NEXT')}
                   </span>
                   <div class="row" style={{ gap: 16 }}>
                     <span class="title num" style={{ flex: 'none' }}>
@@ -235,7 +242,7 @@ export function Alarm({ ponds, at, pondId, onSaved, go }: { ponds: PondSummary[]
                       <span class="strong">{next.action}</span>
                       <span class="label" style={{ color: 'var(--on-navy-2)' }}>
                         {next.pondName}
-                        {next.peak && next.peak.level !== 'ok' && Math.abs(next.peak.t - next.t) <= 3600_000 ? ' · puncak rawan' : ''}
+                        {next.peak && next.peak.level !== 'ok' && Math.abs(next.peak.t - next.t) <= 3600_000 ? t(' · puncak rawan', ' · peak risk') : ''}
                       </span>
                     </span>
                     {next.alarm && (
@@ -249,7 +256,7 @@ export function Alarm({ ponds, at, pondId, onSaved, go }: { ponds: PondSummary[]
             </div>
             <div class="buttons">
               <button type="button" class="b-main" onClick={() => go({ name: 'watch' })}>
-                Tutup
+                {t('Tutup', 'Close')}
               </button>
             </div>
           </>

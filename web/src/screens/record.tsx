@@ -7,6 +7,7 @@ import { fmtAgo, fmtClock, phaseLabel } from '../labels.ts';
 import { clips, joinWav, newId, onClips, retryAll, type Clip } from '../queue.ts';
 import { Icon, PondPicker, PondThumb, pondMeta, Shape, toneOf } from '../ui.tsx';
 import { fmtDur, Glyph, handToPond, isDenied, MicAsk, MicDenied, MicGranted, recordedToday, RecordPond, sortForRecording, useMic, useTick } from './record-pond.tsx';
+import { t } from '../i18n.ts';
 import './record.css';
 
 /** A round recording stays under the server's 15 MB audio limit as 16 kHz WAV (about 7,8 minutes). */
@@ -14,12 +15,12 @@ const ROUND_MAX_S = 420;
 
 type Filter = 'semua' | 'belum' | 'perhatian';
 const FILTERS: { key: Filter; short: string; label: string }[] = [
-  { key: 'semua', short: 'Semua', label: 'Semua' },
-  { key: 'belum', short: 'Belum', label: 'Belum dicatat' },
-  { key: 'perhatian', short: 'Perhatian', label: 'Perlu perhatian' },
+  { key: 'semua', short: t('Semua', 'All'), label: t('Semua', 'All') },
+  { key: 'belum', short: t('Belum', 'Not yet'), label: t('Belum dicatat', 'Not recorded today') },
+  { key: 'perhatian', short: t('Perhatian', 'Attention'), label: t('Perlu perhatian', 'Needs attention') },
 ];
 const needsAttention = (p: PondSummary) => p.level === 'warning' || p.level === 'critical';
-const captureWord: Record<Job['kind'], string> = { photo: 'Foto', voice: 'Suara', video: 'Video' };
+const captureWord: Record<Job['kind'], string> = { photo: t('Foto', 'Photo'), voice: t('Suara', 'Voice'), video: 'Video' };
 
 interface Rec {
   stop: () => Promise<Blob>;
@@ -103,7 +104,7 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
     setError('');
     setKept(null);
     setConfirmDrop(false);
-    if (!canRecordAudio()) return setError('HP ini tidak bisa merekam dari aplikasi. Ketik sendiri: ketuk kolam di daftar.');
+    if (!canRecordAudio()) return setError(t('HP ini tidak bisa merekam dari aplikasi. Ketik sendiri: ketuk kolam di daftar.', 'This phone cannot record from the app. Type it in: tap a pond in the list.'));
     if (!(await mic.ready())) return;
     try {
       const r = await startRecording(ROUND_MAX_S - (base?.seconds ?? 0));
@@ -114,7 +115,7 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
       r.finished.then((audio) => finish(audio, next));
     } catch (e) {
       if (isDenied(e)) mic.denied();
-      else setError('Mikrofon tidak bisa dipakai di HP ini. Ketik sendiri: ketuk kolam di daftar.');
+      else setError(t('Mikrofon tidak bisa dipakai di HP ini. Ketik sendiri: ketuk kolam di daftar.', 'The microphone does not work on this phone. Type it in: tap a pond in the list.'));
     }
   }
 
@@ -125,7 +126,7 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
     recRef.current = null;
     setRec(null);
     if (audio.size === 0 && !r.base) return;
-    setWorking('Menyimpan rekaman…');
+    setWorking(t('Menyimpan rekaman…', 'Saving the recording…'));
     try {
       const wav = audio.size ? await voiceToWav(audio, ROUND_MAX_S + 10) : null;
       let joined = wav;
@@ -163,8 +164,8 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
   return (
     <div class="screen">
       <section class="stack-sm">
-        <h1>Catat kondisi kolam</h1>
-        <p class="ink2">Sebut nama kolam lalu kondisinya. Boleh beberapa kolam sekaligus.</p>
+        <h1>{t('Catat kondisi kolam', 'Record pond conditions')}</h1>
+        <p class="ink2">{t('Sebut nama kolam lalu kondisinya. Boleh beberapa kolam sekaligus.', 'Say the pond name, then its conditions. Several ponds in one go is fine.')}</p>
       </section>
 
       {cut && !rec && (
@@ -174,14 +175,16 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
               <Icon name="phone" />
             </span>
             <div class="grow stack-xs">
-              <h2>Rekaman terputus setelah {fmtDur(cut.seconds)}</h2>
-              <span class="label ink2">Aplikasi tertutup atau ada telepon masuk. Suara sampai saat itu tetap tersimpan.</span>
+              <h2>{t(`Rekaman terputus setelah ${fmtDur(cut.seconds)}`, `Recording cut off after ${fmtDur(cut.seconds)}`)}</h2>
+              <span class="label ink2">
+                {t('Aplikasi tertutup atau ada telepon masuk. Suara sampai saat itu tetap tersimpan.', 'The app closed or a call came in. The sound up to that point is kept.')}
+              </span>
             </div>
           </div>
           {!confirmDrop ? (
             <>
               <button type="button" class="btn primary" onClick={() => startRec(cut)} disabled={!!working}>
-                <Icon name="mic" /> Lanjutkan rekaman
+                <Icon name="mic" /> {t('Lanjutkan rekaman', 'Continue recording')}
               </button>
               <button
                 type="button"
@@ -191,21 +194,21 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
                   go({ name: 'round', queued: cut.id });
                 }}
               >
-                Cek yang sudah terekam
+                {t('Cek yang sudah terekam', 'Check what was recorded')}
               </button>
               <button type="button" class="rp-text-btn bad" onClick={() => setConfirmDrop(true)}>
-                Buang
+                {t('Buang', 'Discard')}
               </button>
             </>
           ) : (
             <>
-              <p class="strong">Buang rekaman {fmtDur(cut.seconds)} ini? Tidak bisa dikembalikan.</p>
+              <p class="strong">{t(`Buang rekaman ${fmtDur(cut.seconds)} ini? Tidak bisa dikembalikan.`, `Discard this recording (${fmtDur(cut.seconds)})? It cannot be undone.`)}</p>
               <div class="grid2" style={{ gap: 8 }}>
                 <button type="button" class="btn danger" onClick={() => (clips.remove(cut.id), setConfirmDrop(false))}>
-                  Ya, buang
+                  {t('Ya, buang', 'Yes, discard')}
                 </button>
                 <button type="button" class="btn secondary" onClick={() => setConfirmDrop(false)}>
-                  Batal
+                  {t('Batal', 'Cancel')}
                 </button>
               </div>
             </>
@@ -228,9 +231,9 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
             <Icon name="mic" size={32} />
           </span>
           <span class="stack-xs">
-            <span class="title num">{rec ? `Selesai · ${fmtDur(elapsed)}` : 'Bicara'}</span>
+            <span class="title num">{rec ? `${t('Selesai', 'Done')} · ${fmtDur(elapsed)}` : t('Bicara', 'Speak')}</span>
             <span class="label" style={{ color: '#e4eaf5' }}>
-              {rec ? 'Ketuk kalau sudah selesai keliling' : 'Sambil keliling: “Kolam A suhu 27, pH 7,4…”'}
+              {rec ? t('Ketuk kalau sudah selesai keliling', 'Tap when you finish your round') : t('Sambil keliling: “Kolam A suhu 27, pH 7,4…”', 'As you walk: “Pond A, 27 degrees, pH 7.4…”')}
             </span>
           </span>
         </button>
@@ -247,20 +250,20 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
         (shot ? (
           <section class="card">
             <div class="stack-xs">
-              <h2>{shot.kind === 'photo' ? 'Foto' : 'Video'} ini untuk kolam mana?</h2>
-              <span class="meta">Kolam yang belum dicatat hari ini ada di atas.</span>
+              <h2>{shot.kind === 'photo' ? t('Foto ini untuk kolam mana?', 'Which pond is this photo for?') : t('Video ini untuk kolam mana?', 'Which pond is this video for?')}</h2>
+              <span class="meta">{t('Kolam yang belum dicatat hari ini ada di atas.', 'Ponds not recorded today are at the top.')}</span>
             </div>
             <PondPicker
               ponds={ponds}
               value={null}
-              placeholder="Pilih kolam"
+              placeholder={t('Pilih kolam', 'Choose a pond')}
               onChange={(id) => {
                 handToPond(shot);
                 go({ name: 'record-pond', pondId: id });
               }}
             />
             <button type="button" class="btn secondary" onClick={() => setShot(null)}>
-              Batal
+              {t('Batal', 'Cancel')}
             </button>
           </section>
         ) : (
@@ -270,8 +273,8 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
                 <Icon name="camera" />
               </span>
               <span class="stack-xs">
-                <span class="strong">Foto alat ukur</span>
-                <span class="meta">Lalu sebut atau pilih kolamnya</span>
+                <span class="strong">{t('Foto alat ukur', 'Meter photo')}</span>
+                <span class="meta">{t('Lalu sebut atau pilih kolamnya', 'Then say or pick the pond')}</span>
               </span>
             </button>
             <button type="button" class="capture-tile" onClick={() => videoInput.current?.click()} disabled={!!rec}>
@@ -279,8 +282,8 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
                 <Icon name="video" />
               </span>
               <span class="stack-xs">
-                <span class="strong">Video harian</span>
-                <span class="meta">Keliling kolam sambil cerita</span>
+                <span class="strong">{t('Video harian', 'Daily video')}</span>
+                <span class="meta">{t('Keliling kolam sambil cerita', 'Walk the ponds and talk')}</span>
               </span>
             </button>
           </div>
@@ -292,24 +295,24 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
 
       <section class="stack-sm" style={{ gap: 12 }}>
         <div class="row between" style={{ alignItems: 'baseline' }}>
-          <h2>Semua kolam</h2>
+          <h2>{t('Semua kolam', 'All ponds')}</h2>
           <span class="meta num">
-            {doneToday} dari {ponds.length} dicatat hari ini
+            {t(`${doneToday} dari ${ponds.length} dicatat hari ini`, `${doneToday} of ${ponds.length} recorded today`)}
           </span>
         </div>
-        <div class="progress" role="img" aria-label={`${doneToday} dari ${ponds.length} kolam dicatat hari ini`}>
+        <div class="progress" role="img" aria-label={t(`${doneToday} dari ${ponds.length} kolam dicatat hari ini`, `${doneToday} of ${ponds.length} ponds recorded today`)}>
           <span style={{ width: `${Math.round((doneToday / Math.max(1, ponds.length)) * 100)}%` }} />
         </div>
         <label class="rp-search">
           <Icon name="search" size={20} />
-          <input aria-label="Cari kolam" placeholder="Cari nama kolam" value={q} onInput={(e) => setQ(e.currentTarget.value)} />
+          <input aria-label={t('Cari kolam', 'Search ponds')} placeholder={t('Cari nama kolam', 'Search pond name')} value={q} onInput={(e) => setQ(e.currentTarget.value)} />
         </label>
-        <div class="rp-filters" role="group" aria-label="Saring kolam">
+        <div class="rp-filters" role="group" aria-label={t('Saring kolam', 'Filter ponds')}>
           {FILTERS.map((f) => {
             const on = filter === f.key;
             const n = ponds.filter(tests[f.key]).length;
             return (
-              <button type="button" key={f.key} class={on ? 'on' : ''} aria-pressed={on} aria-label={`${f.label}, ${n} kolam`} onClick={() => setFilter(f.key)}>
+              <button type="button" key={f.key} class={on ? 'on' : ''} aria-pressed={on} aria-label={t(`${f.label}, ${n} kolam`, `${f.label}, ${n} ${n === 1 ? 'pond' : 'ponds'}`)} onClick={() => setFilter(f.key)}>
                 {on && <Icon name="check" size={16} stroke={3} />}
                 {f.short}
                 <span class="n">{n}</span>
@@ -322,12 +325,12 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
           {shown.map((p) => (
             <PondRow key={p.id} pond={p} today={recordedToday(p, state.today, tz)} go={go} />
           ))}
-          {shown.length === 0 && <p class="ink2 center" style={{ padding: '24px 0' }}>{needle ? 'Tidak ada kolam dengan nama itu.' : 'Tidak ada kolam di sini.'}</p>}
+          {shown.length === 0 && <p class="ink2 center" style={{ padding: '24px 0' }}>{needle ? t('Tidak ada kolam dengan nama itu.', 'No pond with that name.') : t('Tidak ada kolam di sini.', 'No ponds here.')}</p>}
         </div>
 
         {state.role === 'owner' && (
           <button type="button" class="btn dashed" onClick={() => go({ name: 'add-pond' })}>
-            <Icon name="plus" /> Tambah kolam
+            <Icon name="plus" /> {t('Tambah kolam', 'Add a pond')}
           </button>
         )}
       </section>
@@ -348,7 +351,7 @@ function PondRow({ pond: p, today, go }: { pond: PondSummary; today: boolean; go
   const last = p.lastLogAt ? Date.parse(p.lastLogAt) : null;
   return (
     <div class="rp-row">
-      <button type="button" class="rp-row-main" aria-label={`Catat ${p.name}`} onClick={() => go({ name: 'record-pond', pondId: p.id })}>
+      <button type="button" class="rp-row-main" aria-label={t(`Catat ${p.name}`, `Record ${p.name}`)} onClick={() => go({ name: 'record-pond', pondId: p.id })}>
         <PondThumb kind={p.kind} size={48} />
         <span class="grow stack-xs" style={{ gap: 2 }}>
           <span class="rp-row-name">
@@ -356,24 +359,24 @@ function PondRow({ pond: p, today, go }: { pond: PondSummary; today: boolean; go
             {needsAttention(p) && (
               <span class={`word ${tone}`} style={{ gap: 6 }}>
                 <Shape tone={tone} />
-                {p.level === 'critical' ? 'Bahaya' : 'Perhatian'}
+                {p.level === 'critical' ? t('Bahaya', 'Danger') : t('Perhatian', 'Caution')}
               </span>
             )}
           </span>
-          <span class="label ink2">{p.batch && p.program ? `${phaseLabel[p.batch.phase]} · minggu ${p.program.week}` : pondMeta(p)}</span>
+          <span class="label ink2">{p.batch && p.program ? `${phaseLabel[p.batch.phase]} · ${t('minggu', 'week')} ${p.program.week}` : pondMeta(p)}</span>
           {!today && (
             <span class="label ink2" style={{ fontWeight: 400 }}>
-              Belum dicatat hari ini · {last ? `terakhir ${fmtAgo(last)}` : 'belum pernah'}
+              {t('Belum dicatat hari ini', 'Not recorded today')} · {last ? t(`terakhir ${fmtAgo(last)}`, `last ${fmtAgo(last)}`) : t('belum pernah', 'never')}
             </span>
           )}
         </span>
         {today && last ? (
           <span class="rp-done">
             <Icon name="check" size={18} stroke={3} />
-            Dicatat {fmtClock(last)}
+            {t(`Dicatat ${fmtClock(last)}`, `Recorded ${fmtClock(last)}`)}
           </span>
         ) : (
-          <span class="rp-act dark">Catat</span>
+          <span class="rp-act dark">{t('Catat', 'Record')}</span>
         )}
       </button>
     </div>
@@ -389,41 +392,45 @@ function QuotaCard({ rec, elapsed, kept, onTalk, go }: { rec: Rec | null; elapse
           <Icon name="mic" size={32} />
         </span>
         <span class="stack-xs">
-          <span class="title">Rekam suara</span>
-          <span class="meta">Disimpan dulu, dibaca besok pagi</span>
+          <span class="title">{t('Rekam suara', 'Record voice')}</span>
+          <span class="meta">{t('Disimpan dulu, dibaca besok pagi', 'Kept for now, read tomorrow morning')}</span>
         </span>
       </div>
       <div class="note info" style={{ fontSize: '1rem' }}>
         <Icon name="info" />
         <span class="stack-xs">
-          <span class="strong">Jatah baca AI hari ini habis</span>
-          <span class="label">Rekaman tetap disimpan dan dibaca otomatis besok pagi, atau begitu jatah ditambah.</span>
+          <span class="strong">{t('Jatah baca AI hari ini habis', "Today's AI reads are used up")}</span>
+          <span class="label">
+            {t('Rekaman tetap disimpan dan dibaca otomatis besok pagi, atau begitu jatah ditambah.', 'The recording is kept and read automatically tomorrow morning, or as soon as more reads are added.')}
+          </span>
           <button type="button" class="rp-link warn" onClick={() => go({ name: 'quota' })}>
-            Lihat dan tambah jatah AI <Icon name="next" size={16} />
+            {t('Lihat dan tambah jatah AI', 'View and add daily AI reads')} <Icon name="next" size={16} />
           </button>
         </span>
       </div>
       <button type="button" class={`btn ${rec ? 'danger' : 'primary'}`} onClick={onTalk}>
         <Icon name="mic" />
-        {rec ? `Selesai · ${fmtDur(elapsed)}` : kept !== null ? 'Rekam lagi' : 'Mulai rekam'}
+        {rec ? `${t('Selesai', 'Done')} · ${fmtDur(elapsed)}` : kept !== null ? t('Rekam lagi', 'Record another') : t('Mulai rekam', 'Start recording')}
       </button>
       {kept !== null && !rec && (
         <div class="note ok" role="status" style={{ alignItems: 'center' }}>
           <Icon name="check" />
-          <span>Rekaman {fmtDur(kept)} disimpan. Dibaca besok pagi, lalu muncul untuk dicek.</span>
+          <span>
+            {t(`Rekaman ${fmtDur(kept)} disimpan. Dibaca besok pagi, lalu muncul untuk dicek.`, `Recording (${fmtDur(kept)}) saved. It is read tomorrow morning, then shows up for checking.`)}
+          </span>
         </div>
       )}
       <div class="stack-sm rp-quota-foot">
         <span class="row top label ink2">
           <Icon name="pencil" size={20} />
-          Ketik sendiri tetap bisa: ketuk kolam di daftar.
+          {t('Ketik sendiri tetap bisa: ketuk kolam di daftar.', 'You can still type it in: tap a pond in the list.')}
         </span>
         <span class="row top label ink2">
           <Icon name="alert" size={20} />
           <span>
-            Laporan darurat tetap dibaca AI, tidak memakai jatah.{' '}
+            {t('Laporan darurat tetap dibaca AI, tidak memakai jatah.', 'Emergency reports are still read by the AI and use no reads.')}{' '}
             <button type="button" class="rp-link" onClick={() => go({ name: 'problem' })}>
-              Lapor masalah
+              {t('Lapor masalah', 'Report a problem')}
             </button>
           </span>
         </span>
@@ -432,14 +439,17 @@ function QuotaCard({ rec, elapsed, kept, onTalk, go }: { rec: Rec | null; elapse
   );
 }
 
+const READ = t('Sudah dibaca', 'Read');
+const FAILED = t('Gagal dibaca', 'Could not read');
+
 /** Recordings kept on the phone: waiting for signal, or read and ready to check. */
 function Waiting({ clips: list, jobs, ponds, go }: { clips: Clip[]; jobs: Job[]; ponds: PondSummary[]; go: Go }) {
   const rows = [
     ...list.map((c) => ({
       id: c.id,
       at: c.createdAt,
-      title: `Rekaman ${fmtDur(c.seconds)}`,
-      state: c.status === 'ready' ? 'Sudah dibaca' : c.status === 'failed' ? 'Gagal dibaca' : c.reason === 'quota' ? 'Menunggu jatah' : 'Menunggu',
+      title: t(`Rekaman ${fmtDur(c.seconds)}`, `Recording, ${fmtDur(c.seconds)}`),
+      state: c.status === 'ready' ? READ : c.status === 'failed' ? FAILED : c.reason === 'quota' ? t('Menunggu jatah', 'Waiting for reads') : t('Menunggu', 'Waiting'),
       ready: c.status !== 'waiting',
       open: () => go({ name: 'round', queued: c.id }),
     })),
@@ -447,7 +457,7 @@ function Waiting({ clips: list, jobs, ponds, go }: { clips: Clip[]; jobs: Job[];
       id: j.id,
       at: j.createdAt,
       title: `${captureWord[j.kind]} ${ponds.find((p) => p.id === j.pondId)?.name ?? j.pondName}`,
-      state: j.status === 'ready' ? 'Sudah dibaca' : j.status === 'failed' ? 'Gagal dibaca' : 'Menunggu',
+      state: j.status === 'ready' ? READ : j.status === 'failed' ? FAILED : t('Menunggu', 'Waiting'),
       ready: j.status !== 'pending',
       open: () => go({ name: 'record-pond', pondId: j.pondId }),
     })),
@@ -460,9 +470,19 @@ function Waiting({ clips: list, jobs, ponds, go }: { clips: Clip[]; jobs: Job[];
       <div class="row">
         <span class={`icon-box ${ready.length ? 'ok' : 'rp-warn-box'}`}>{ready.length ? <Icon name="check" /> : <Icon name="nowifi" />}</span>
         <div class="grow stack-xs" style={{ gap: 2 }}>
-          <h2>{ready.length ? `${ready.length} rekaman siap dicek` : `${rows.length} rekaman menunggu sinyal`}</h2>
+          <h2>
+            {ready.length
+              ? t(`${ready.length} rekaman siap dicek`, `${ready.length} ${ready.length === 1 ? 'recording' : 'recordings'} ready to check`)
+              : t(`${rows.length} rekaman menunggu sinyal`, `${rows.length} ${rows.length === 1 ? 'recording' : 'recordings'} waiting for signal`)}
+          </h2>
           <span class="meta">
-            {ready.length ? 'Sinyal kembali, AI sudah memilah per kolam' : why === 'ai' ? 'AI belum aktif saat direkam' : why === 'quota' ? 'Jatah baca AI hari ini habis' : 'Tidak ada sinyal saat direkam'}
+            {ready.length
+              ? t('Sinyal kembali, AI sudah memilah per kolam', 'Signal is back; the AI sorted them by pond')
+              : why === 'ai'
+                ? t('AI belum aktif saat direkam', 'The AI was not on when this was recorded')
+                : why === 'quota'
+                  ? t('Jatah baca AI hari ini habis', "Today's AI reads are used up")
+                  : t('Tidak ada sinyal saat direkam', 'No signal while recording')}
           </span>
         </div>
       </div>
@@ -472,10 +492,10 @@ function Waiting({ clips: list, jobs, ponds, go }: { clips: Clip[]; jobs: Job[];
             <Glyph name="wave" />
             <span class="grow" style={{ display: 'flex', flexDirection: 'column' }}>
               <span class="strong num">{r.title}</span>
-              <span class="meta num">direkam {fmtClock(r.at)}</span>
+              <span class="meta num">{t(`direkam ${fmtClock(r.at)}`, `recorded ${fmtClock(r.at)}`)}</span>
             </span>
-            <span class={r.ready ? `word ${r.state === 'Gagal dibaca' ? 'bad' : 'ok'}` : 'word ink2'} style={{ gap: 6 }}>
-              {r.state === 'Sudah dibaca' && <Icon name="check" size={16} stroke={2.6} />}
+            <span class={r.ready ? `word ${r.state === FAILED ? 'bad' : 'ok'}` : 'word ink2'} style={{ gap: 6 }}>
+              {r.state === READ && <Icon name="check" size={16} stroke={2.6} />}
               {r.state}
             </span>
           </button>
@@ -483,10 +503,12 @@ function Waiting({ clips: list, jobs, ponds, go }: { clips: Clip[]; jobs: Job[];
       </div>
       {ready.length ? (
         <button type="button" class="btn primary" onClick={ready[0].open}>
-          Cek hasilnya
+          {t('Cek hasilnya', 'Check the result')}
         </button>
       ) : (
-        <p class="label ink2">Dibaca AI otomatis begitu ada sinyal. Rekaman aman tersimpan di HP, aplikasi boleh ditutup.</p>
+        <p class="label ink2">
+          {t('Dibaca AI otomatis begitu ada sinyal. Rekaman aman tersimpan di HP, aplikasi boleh ditutup.', 'The AI reads them as soon as there is signal. The recordings are kept safe on the phone; you can close the app.')}
+        </p>
       )}
     </section>
   );

@@ -13,6 +13,7 @@
 //
 // Chat follows the OpenAI-compatible API on both providers; request shapes verified live
 // on 2026-10-28.
+import { currentLang, tx } from './i18n.ts';
 import type { RoundResult } from './contract.ts';
 import { READING_LIMITS, type Behavior, type LogData, type Phase, type ReadingKey } from './domain.ts';
 import { guardRound, mockRound, ROUND_SCHEMA, roundInstructions, type RoundPond } from './round.ts';
@@ -76,9 +77,9 @@ const SCHEMA = {
     water_color: { enum: ['clear', 'green', 'brown', 'cloudy', null] },
     water_smell: { enum: ['normal', 'foul', null] },
     aeration: { enum: ['on', 'weak', 'off', null] },
-    note: { type: ['string', 'null'], description: 'Hal penting lain, singkat, bahasa Indonesia' },
+    note: { type: ['string', 'null'], description: 'Hal penting lain, singkat, dalam bahasa yang diminta instruksi' },
     low_confidence: { type: 'array', items: { enum: ['temperature', 'ph', 'tds', 'mortality', 'behavior', 'leftover', 'color', 'smell', 'aeration'] } },
-    problems: { type: 'array', items: { type: 'string' }, description: 'Kendala membaca, mis. "layar silau", bahasa Indonesia' },
+    problems: { type: 'array', items: { type: 'string' }, description: 'Kendala membaca, contoh "layar silau", dalam bahasa yang diminta instruksi' },
   },
 } as const;
 
@@ -96,10 +97,11 @@ function instructions(input: CaptureInput): string {
     `Kolam: ${input.pondName}${input.phase ? `, fase ${input.phase === 'glass_eel' ? 'glass eel' : 'elver'}` : ''}.`,
     'Aturan:',
     '- Jangan menebak. Isi null bila tidak terbaca atau tidak disebut.',
-    '- Angka diucapkan atau ditulis dengan koma desimal ("dua delapan koma lima" = 28.5). Petani bisa mencampur bahasa Jawa.',
+    '- Angka diucapkan atau ditulis dengan koma desimal ("dua delapan koma lima" = 28.5). Petani bisa mencampur bahasa Jawa, atau bicara bahasa Inggris ("twenty eight point five" = 28.5).',
     '- Layar 7-segmen: perhatikan titik desimal. Bila ragu (silau, buram, angka terpotong), masukkan nama kolom ke low_confidence.',
     '- TDS dalam ppm. Bila layar menunjukkan "x10" atau satuan ppt, konversi ke ppm dan catat di note.',
     '- Ini pencatatan, bukan diagnosis. Jangan menambah saran.',
+    currentLang() === 'en' ? '- Write note and problems in plain English.' : '- Tulis note dan problems dalam bahasa Indonesia.',
   ].join('\n');
 }
 
@@ -118,7 +120,7 @@ export function toDraft(raw: Record<string, any>, mode: Draft['mode'], transcrip
     if (typeof v !== 'number' || !Number.isFinite(v)) continue;
     const [min, max] = READING_LIMITS[key];
     if (v < min || v > max) {
-      problems.push(`Nilai ${key} ${v} tidak masuk akal, diabaikan`);
+      problems.push(tx(`Nilai ${key} ${v} tidak masuk akal, diabaikan`, `The ${key} value ${v} makes no sense, ignored`));
       continue;
     }
     readings[key] = v;
@@ -200,7 +202,7 @@ async function chatJson(p: ChatProvider, system: string, content: unknown, name:
   try {
     return JSON.parse(body.choices?.[0]?.message?.content);
   } catch {
-    throw new AiFailed('Jawaban AI tidak bisa dibaca');
+    throw new AiFailed('AI answer is not valid JSON');
   }
 }
 
@@ -232,20 +234,20 @@ function liveAi(chat: ChatProvider[], transcriber?: Transcriber): Ai {
   return {
     mode: 'meta',
     async transcribe(audio) {
-      if (!transcriber) throw new AiUnavailable('Suara belum bisa diubah jadi teks. Ketik saja dulu.');
+      if (!transcriber) throw new AiUnavailable(tx('Suara belum bisa diubah jadi teks. Ketik saja dulu.', 'Speech cannot be turned into text yet. Type it in for now.'));
       return transcribe(transcriber, audio);
     },
     async draft(input) {
       if (input.kind === 'voice' && !transcriber) {
         // 503 keeps the note queued on the phone until speech-to-text is available.
-        throw new AiUnavailable('Catatan suara belum bisa dibaca AI. Rekaman disimpan di HP; pakai foto atau isi manual dulu.');
+        throw new AiUnavailable(tx('Catatan suara belum bisa dibaca AI. Rekaman disimpan di HP; pakai foto atau isi manual dulu.', 'The AI cannot read voice notes yet. The recording is kept on the phone; use a photo or type it in for now.'));
       }
       const transcript = input.audio && transcriber ? await transcribe(transcriber, input.audio) : undefined;
       if (input.kind === 'voice' && !transcript) throw new AiFailed('Transkrip kosong');
       return firstAnswer(chat, async (provider) => {
         const draft = toDraft(await structure(provider, input, transcript), 'meta', transcript);
         draft.model = `${provider.name}/${provider.model}`;
-        if (input.kind === 'video' && input.audio && !transcriber) draft.problems.push('Narasi video belum bisa didengar AI, hanya gambar yang dibaca.');
+        if (input.kind === 'video' && input.audio && !transcriber) draft.problems.push(tx('Narasi video belum bisa didengar AI, hanya gambar yang dibaca.', 'The AI cannot hear the video narration yet; only the pictures were read.'));
         return draft;
       });
     },
@@ -254,7 +256,7 @@ function liveAi(chat: ChatProvider[], transcriber?: Transcriber): Ai {
       if (transcript === undefined || transcript === '') {
         if (!input.audio) return guardRound({}, input.ponds, '', { model: 'none', mode: 'meta' });
         // 503 keeps the recording queued on the phone until speech-to-text is available.
-        if (!transcriber) throw new AiUnavailable('Rekaman keliling belum bisa dibaca AI. Rekaman disimpan di HP; isi manual dulu.');
+        if (!transcriber) throw new AiUnavailable(tx('Rekaman keliling belum bisa dibaca AI. Rekaman disimpan di HP; isi manual dulu.', 'The AI cannot read round recordings yet. The recording is kept on the phone; type it in for now.'));
         transcript = await transcribe(transcriber, input.audio);
       }
       // Nothing heard is an answer too: the farmer sees "Suara belum terbaca", not an error.
@@ -278,18 +280,24 @@ function mockAi(): Ai {
   return {
     mode: 'mock',
     async transcribe() {
-      return 'Mode contoh: suara di Kolam B tidak terbaca sejak kemarin.';
+      return tx('Mode contoh: suara di Kolam B tidak terbaca sejak kemarin.', 'Sample mode: the voice in Pond B has not been readable since yesterday.');
     },
     async draft(input) {
-      const problems = ['Mode contoh: AI belum aktif, angka ini bukan hasil membaca.'];
+      const problems = [tx('Mode contoh: AI belum aktif, angka ini bukan hasil membaca.', 'Sample mode: the AI is not on yet; these numbers were not read.')];
       if (input.kind === 'photo') {
         const raw = input.field ? examples[input.field] : { temperature: 28.6, ph: 7.2, tds: 162 };
         return toDraft({ ...raw, problems }, 'mock');
       }
       const transcript =
         input.kind === 'voice'
-          ? `${input.pondName}, suhu dua delapan koma enam, pH tujuh koma dua, TDS seratus enam puluh dua. Mati satu. Pakan sisa sedikit, aerator nyala.`
-          : `Ini ${input.pondName} sore ini. Suhu dua delapan koma empat, pH tujuh koma satu. Airnya agak hijau, sidat normal, pakan habis.`;
+          ? tx(
+              `${input.pondName}, suhu dua delapan koma enam, pH tujuh koma dua, TDS seratus enam puluh dua. Mati satu. Pakan sisa sedikit, aerator nyala.`,
+              `${input.pondName}, temperature twenty-eight point six, pH seven point two, TDS one hundred sixty-two. One dead. A little feed left, aerator on.`,
+            )
+          : tx(
+              `Ini ${input.pondName} sore ini. Suhu dua delapan koma empat, pH tujuh koma satu. Airnya agak hijau, sidat normal, pakan habis.`,
+              `This is ${input.pondName} this afternoon. Temperature twenty-eight point four, pH seven point one. The water is a bit green, eels normal, feed all eaten.`,
+            );
       const raw =
         input.kind === 'voice'
           ? { temperature: 28.6, ph: 7.2, tds: 162, mortality: 1, feeding_leftover: 'little', aeration: 'on' }
@@ -311,7 +319,7 @@ export function withDailyCap(ai: Ai, cap: number, now = () => new Date()): Ai {
   const take = () => {
     const today = now().toISOString().slice(0, 10);
     if (today !== day) [day, used] = [today, 0];
-    if (used >= cap) throw new AiUnavailable('Kuota AI demo hari ini habis. Rekaman disimpan di HP; isi manual tetap bisa.');
+    if (used >= cap) throw new AiUnavailable(tx('Kuota AI demo hari ini habis. Rekaman disimpan di HP; isi manual tetap bisa.', 'AI demo quota for today is used up. The recording is kept on the phone; typing it in still works.'));
     used++;
   };
   return {
@@ -334,7 +342,7 @@ export function createAi(opts: { chat: ChatProvider[]; transcriber?: Transcriber
   const chat = opts.chat.filter((p) => p.apiKey);
   if (chat.length) return liveAi(chat, opts.transcriber?.apiKey ? opts.transcriber : undefined);
   const off = async (): Promise<never> => {
-    throw new AiUnavailable('AI belum aktif. Isi manual dulu, atau coba lagi nanti.');
+    throw new AiUnavailable(tx('AI belum aktif. Isi manual dulu, atau coba lagi nanti.', 'The AI is not on yet. Type it in for now, or try again later.'));
   };
   return { mode: 'off', draft: off, round: off, transcribe: off };
 }
