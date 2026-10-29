@@ -1,0 +1,18 @@
+/* Dead-eel case card (case.tsx). Status is a shape and a word; no coloured side lines. */
+.case-escalate { background: var(--bad-soft); border-radius: 16px; padding: 16px; color: var(--bad); }
+.case-escalate .label { color: var(--ink-2); }
+.case-days { display: flex; flex-direction: column; background: var(--bg); border-radius: 16px; padding: 4px 16px; }
+.case-day { display: grid; grid-template-columns: minmax(0, 7.5rem) 1fr auto; align-items: center; gap: 12px; min-height: 44px; border-bottom: 1px solid var(--rule); }
+.case-day:last-child { border-bottom: 0; }
+.case-day-name { font-size: 0.875rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.case-bar { height: 12px; border-radius: 12px; background: var(--rule); overflow: hidden; display: flex; }
+.case-bar span { background: var(--bad-dot); border-radius: 12px; }
+.case-day-n { font-size: 0.875rem; text-align: right; white-space: nowrap; }
+.case-watch, .case-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: 0.875rem; }
+.case-check { display: flex; align-items: baseline; gap: 12px; min-height: 44px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 0.875rem; }
+.case-check:last-child { border-bottom: 0; }
+.case-check .soon { flex: none; }
+.case-links { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.case-links .link-row + .link-row { border-top: 1px solid var(--line); }
+.case-card .chips .chip svg { flex: none; }
+.case-q { font-size: 1rem; }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { StepList, useSteps } from '../steps.tsx';
+import { CaseCard, ClosedCases, useCases } from './case.tsx';
 import { api, ApiError, type Limits, type Log, type NowcastState, type PondProfile, type PondSummary, type Role } from '../api.ts';
 import type { Go } from '../app.tsx';
 import { aerationLabel, fmtAgo, fmtNum, fmtTemp, fmtTime, phaseLabel, readingWord, settingLabel, sourceLabel, summarizeLog } from '../labels.ts';
@@ -404,6 +405,7 @@ export function PondDetail({
   const [error, setError] = useState('');
   const [tech, setTech] = useState(prefs.techOpen);
   const { done, toggle } = useSteps(id);
+  const cases = useCases(id, data?.logs.length);
 
   useEffect(() => {
     api.pond(id).then(setData, (e) => setError(e.message));
@@ -479,6 +481,12 @@ export function PondDetail({
         </div>
         <StatusPill level={pond.level} />
       </header>
+
+      {cases.list
+        .filter((c) => c.status === 'open')
+        .map((c) => (
+          <CaseCard key={c.id} c={c} go={go} onChanged={(next) => (cases.replace(next), api.pond(id).then(setData, () => {}))} onPond />
+        ))}
 
       <div class="segmented" role="tablist" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
         <button role="tab" aria-selected={!tech} class={!tech ? 'on' : ''} onClick={() => setTech(false)}>
@@ -707,6 +715,8 @@ export function PondDetail({
           </section>
         </>
       )}
+
+      <ClosedCases list={cases.list.filter((c) => c.status === 'closed')} />
 
       <DeviceCard pond={pond} logs={logs} ponds={ponds} role={role} go={go} onChanged={onChanged} />
 

@@ -105,7 +105,7 @@ export function sendPendingReports(): Promise<number> {
     for (const r of queue) {
       if (!ponds.some((p) => p.id === r.pondId && p.name === r.pondName)) continue;
       try {
-        await api.addLog(r.pondId, { ...r.data, loggedAt: new Date(r.at).toISOString() } as LogData);
+        await api.addLog(r.pondId, { ...r.data, loggedAt: new Date(r.at).toISOString() } as LogData, 'manual', r.data.mortality ? { report: 'dead' } : {});
         sent++;
       } catch (err) {
         if (noSignal(err)) break;
@@ -629,7 +629,8 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
       saveRechecks([...loadRechecks().filter((r) => r.pondId !== pond.id), { pondId: pond.id, pondName: pond.name, at, dueAt: at + 3600_000, dead: deadNow }]);
     };
     try {
-      const { pond } = await api.addLog(chosen.id, data);
+      // A dead-eel report opens (or adds to) the pond's case, which the case agent then follows.
+      const { pond } = await api.addLog(chosen.id, data, 'manual', deadNow > 0 ? { report: 'dead' } : {});
       onSaved();
       show(pond, false);
     } catch (err) {

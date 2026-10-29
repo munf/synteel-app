@@ -1,5 +1,6 @@
 import type { Briefing, BriefingCheck } from '../../server/src/agent.ts';
 import type { CountResult } from '../../server/src/sam.ts';
+import type { CaseCheck, CaseQuestion, CaseRun, CaseView } from '../../server/src/cases.ts';
 import type { Aeration, Batch, Behavior, Farm, Finding, Level, Log, LogData, Phase, Pond, Setting } from '../../server/src/domain.ts';
 import type { Nowcast, NowcastPoint, RiskFactor, RiskLevel, SuggestedCheck } from '../../server/src/nowcast.ts';
 import type { Limits } from '../../server/src/rules.ts';
@@ -12,6 +13,7 @@ export type { Aeration, Batch, Behavior, Farm, Finding, Level, Log, LogData, Pha
 export type { Limits, Nowcast, NowcastPoint, RiskFactor, RiskLevel, SuggestedCheck };
 export type { Draft, DraftField, LogSource };
 export type { Briefing, BriefingCheck, CountResult };
+export type { CaseCheck, CaseQuestion, CaseRun, CaseView };
 export type { AutoFix, HistoryLog, LogEdit, QuotaState, ReadingField, RoundDraft, RoundIssue, RoundResult, SupportRequest, SupportTopic };
 
 export type ReadingKey = keyof NonNullable<LogData['readings']>;
@@ -203,8 +205,9 @@ export const api = {
   pond: (id: number) => call<{ pond: PondSummary; logs: Log[] }>('GET', `/ponds/${id}`),
   startBatch: (pondId: number, batch: { phase: Phase; stockedAt: string; initialCount?: number }) =>
     call<{ pond: PondSummary }>('POST', `/ponds/${pondId}/batches`, batch),
-  addLog: (pondId: number, data: LogData, source: LogSource = 'manual') =>
-    call<{ log: Log; pond: PondSummary }>('POST', `/ponds/${pondId}/logs`, { ...data, source }),
+  /** `link`: a dead-eel report from Masalah opens or adds to the pond's case; `recheck` answers its re-check. */
+  addLog: (pondId: number, data: LogData, source: LogSource = 'manual', link: { report?: 'dead'; recheck?: 'better' | 'worse' } = {}) =>
+    call<{ log: Log; pond: PondSummary }>('POST', `/ponds/${pondId}/logs`, { ...data, source, ...link }),
   aiMode: () => call<{ mode: 'meta' | 'mock' | 'off' }>('GET', '/ai'),
   briefing: () => call<{ briefing: Briefing | null }>('GET', '/briefing'),
   makeBriefing: () => call<{ briefing: Briefing }>('POST', '/briefing'),
@@ -213,6 +216,11 @@ export const api = {
     form.append('image', image, 'basin.jpg');
     return upload<{ result: CountResult; mock?: boolean }>(`/ponds/${pondId}/count`, form);
   },
+  // Dead-eel cases: open ones for Beranda; with a pond also its closed ones.
+  cases: (pondId?: number) => call<{ cases: CaseView[] }>('GET', `/cases${pondId ? `?pond=${pondId}` : ''}`),
+  answerCase: (id: number, answers: { q: string; a: string }[]) => call<{ case: CaseView }>('POST', `/cases/${id}/answers`, { answers }),
+  noDeadToday: (id: number) => call<{ case: CaseView }>('POST', `/cases/${id}/nodead`),
+  closeCase: (id: number) => call<{ case: CaseView }>('POST', `/cases/${id}/close`),
   knowledge: () => call<{ emergencies: { emergencies: Emergency[] } }>('GET', '/knowledge'),
 
   // Voice round: one recording that names many ponds → one draft per pond. Nothing is saved here.

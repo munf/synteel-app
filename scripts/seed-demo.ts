@@ -49,6 +49,7 @@ const ponds = [
   { pond: r.addPond({ name: 'Kolam C', kind: 'beton', volumeL: 3600, areaM2: 12, setting: 'outdoor', shaded: true, aeration: 'full', depthCm: 30 }), phase: 'elver' as const, stocked: 60, count: 650 },
 ];
 
+const caseLogs: { id: number; pondId: number; loggedAt: string; data: LogData }[] = [];
 for (const { pond, phase, stocked, count } of ponds) {
   // Outdoor water temperature: the nowcast model run through the real weather, with the
   // concrete pond about 3 °C warmer than air plus sun alone would make it.
@@ -87,9 +88,24 @@ for (const { pond, phase, stocked, count } of ponds) {
         data.feeding = { leftover: 'much' };
         if (d === 0 && hour === 17) data.behavior = ['surfacing'];
       }
-      r.addLog({ pondId: pond.id, batchId: batch.id, loggedAt: at.toISOString(), source: 'manual', data }, demo.id);
+      // ...and eels start dying: 3 found yesterday evening (a report from Masalah), 6 this morning.
+      if (pond.name === 'Kolam B' && d <= 1 && hour === 17) data.mortality = d === 1 ? 3 : undefined;
+      if (pond.name === 'Kolam B' && d === 0 && hour === 7) data.mortality = 6;
+      const log = r.addLog({ pondId: pond.id, batchId: batch.id, loggedAt: at.toISOString(), source: 'manual', data }, demo.id);
+      if (pond.name === 'Kolam B' && ((d === 1 && hour === 17) || (d === 0 && hour === 7))) caseLogs.push(log);
     }
   }
+}
+
+// The dead-eel case those reports opened: rising today, re-check answered "not better" yesterday.
+// The server writes its first update (rules, the agent, or the labelled sample in mock mode) on start.
+const [opening, morning] = caseLogs;
+if (opening && morning) {
+  const c = r.openCaseFor(opening.pondId, opening.loggedAt);
+  r.addCaseEvent(c.id, 'open', opening.loggedAt, demo.id, { dead: opening.data.mortality, logId: opening.id, recheck: true });
+  const recheckAt = new Date(Date.parse(opening.loggedAt) + 65 * 60_000).toISOString();
+  r.addCaseEvent(c.id, 'recheck', recheckAt, demo.id, { better: false, more: 0 });
+  r.addCaseEvent(c.id, 'report', morning.loggedAt, demo.id, { dead: morning.data.mortality, logId: morning.id, recheck: false });
 }
 
 console.log(`Seeded ${ponds.length} ponds with two weeks of logs into ${dbPath}`);

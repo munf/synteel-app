@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { batchWeek, DAY_MS, LOG_SOURCES, localDate, READING_LIMITS, type Aeration, type Behavior, type Level, type Log, type LogData, type Phase, type Pond, type Setting } from './domain.ts';
-import type { FarmRepo, LogRecord, Repo, Role } from './db.ts';
+import type { CaseRow, FarmRepo, LogRecord, Repo, Role } from './db.ts';
 import type { HistoryLog, QuotaState, SupportTopic } from './contract.ts';
 import type { SendMail } from './mail.ts';
 import { attemptLimiter, AuthError, checkPin, hashPin, hashToken, inviteCode, newToken, normalizePhone, tempPin, verifyPin } from './auth.ts';
@@ -11,6 +11,7 @@ import { currentLang, parseLang, tx, withLang } from './i18n.ts';
 import { AiFailed, AiUnavailable, type Ai, type CaptureKind, type ChatProvider } from './ai.ts';
 import { rulesBriefing, runBriefing, type Briefing, type BriefingInput } from './agent.ts';
 import { countDeadEels, type SamProvider } from './sam.ts';
+import { caseView, MAX_AGENT_RUNS_PER_DAY, RECHECK_AFTER, RECHECK_GRACE, mockCaseRun, rulesCaseRun, runCaseAgent, type CaseEvent, type CaseInput, type CaseRun, type CaseTrigger, type CaseView } from './cases.ts';
 import type { SaveCapture } from './captures.ts';
 import { computeNowcast } from './nowcast.ts';
 import { assessPond, classifyReading, limitsFor, overallLevel, type Limits, type Threshold } from './rules.ts';
@@ -487,6 +488,117 @@ export function createApi(
     return briefing;
   }
 
+  // ---------- dead-eel cases (cases.ts) ----------
+
+  /** What the rules and the case agent look at, read fresh from the pond records. */
+  async function caseInput(r: FarmRepo, c: CaseRow, trigger: CaseTrigger): Promise<CaseInput> {
+    const now = clock();
+    const pond = r.getPond(c.pondId);
+    if (!pond) throw new NotFound(tx('Kolam tidak ditemukan', 'Pond not found'));
+    const s = pondSummary(r, pond);
+    // Only the case's own pond: the forecast for the others is not needed.
+    let weather: Awaited<ReturnType<typeof getWeather>>['hours'] = [];
+    const farm = r.getFarm();
+    if (farm?.lat != null && farm.lon != null) weather = (await getWeather(farm.lat, farm.lon, now.getTime()).catch(() => ({ hours: [] }))).hours;
+    const { batch, logs, program } = pondState(r, pond, now);
+    const nowcast = computeNowcast({ pond, phase: batch?.phase, density: program?.density ?? undefined, logs, weather, thresholds, now: now.getTime(), timezone: timezone(r) });
+    const openedAt = Date.parse(c.openedAt);
+    return {
+      caseId: c.id,
+      pondId: pond.id,
+      pondName: pond.name,
+      phase: s.batch?.phase ?? null,
+      week: s.program?.week ?? null,
+      openedAt,
+      now: now.getTime(),
+      timezone: timezone(r),
+      logs: r.logsSince(pond.id, new Date(Math.min(openedAt, now.getTime()) - DAY_MS).toISOString()),
+      events: r.caseEvents(c.id) as CaseEvent[],
+      findings: s.findings.map((f) => ({ title: f.title, level: f.level })),
+      latest: s.latest as CaseInput['latest'],
+      nowcast,
+      weather: weather.filter((h) => h.t >= now.getTime() - 3600_000 && h.t <= now.getTime() + 24 * 3600_000).map(({ t, airTemp, rain, cloud }) => ({ t, airTemp, rain, cloud })),
+      history: (days) => pondHistory(r, pond.id, days),
+      trigger,
+    };
+  }
+
+  // Agent runs happen in the background so a report is saved at once; the phone polls while `running`.
+  // One run per case at a time; anything that arrives meanwhile asks for one more run afterwards.
+  const caseJobs = new Map<number, Promise<void>>();
+  const caseAgain = new Map<number, CaseTrigger>();
+
+  async function runCaseOnce(r: FarmRepo, caseId: number, trigger: CaseTrigger) {
+    const c = r.getCase(caseId);
+    if (!c || c.status !== 'open') return;
+    const input = await caseInput(r, c, trigger);
+    const today = localDate(clock(), timezone(r));
+    const agentRunsToday = input.events.filter((e) => e.kind === 'run' && e.data?.source === 'agent' && localDate(new Date(e.at), timezone(r)) === today).length;
+    let run: CaseRun;
+    if (ai?.mode === 'mock') run = mockCaseRun(input);
+    else if (ai?.mode === 'meta' && agentRunsToday < MAX_AGENT_RUNS_PER_DAY) run = await runCaseAgent(input, agentProviders);
+    else run = rulesCaseRun(input);
+    // The case may have been closed while the model was thinking.
+    if (r.getCase(caseId)?.status === 'open') r.addCaseEvent(caseId, 'run', clock().toISOString(), null, run);
+  }
+
+  function kickCase(r: FarmRepo, caseId: number, trigger: CaseTrigger) {
+    if (caseJobs.has(caseId)) {
+      caseAgain.set(caseId, trigger);
+      return;
+    }
+    const job = (async () => {
+      let next: CaseTrigger | undefined = trigger;
+      while (next) {
+        caseAgain.delete(caseId);
+        await runCaseOnce(r, caseId, next).catch((err) => console.error(`case ${caseId}:`, err));
+        next = caseAgain.get(caseId);
+      }
+    })().finally(() => caseJobs.delete(caseId));
+    caseJobs.set(caseId, job);
+  }
+
+  /** The farm owner to send the case to: an owner other than the person looking, with the number for wa.me. */
+  function caseOwner(farmId: number, userId: number) {
+    const owners = store.members(farmId).filter((m) => m.role === 'owner');
+    const other = owners.find((m) => m.id !== userId);
+    return other ? { name: other.name, phone: other.phone } : owners[0] ? { name: owners[0].name, phone: null } : null;
+  }
+
+  async function viewCase(r: FarmRepo, c: CaseRow, userId: number): Promise<CaseView> {
+    const input = await caseInput(r, c, 'open');
+    const saved = (input.events.filter((e) => e.kind === 'run').at(-1)?.data as CaseRun | undefined) ?? null;
+    return caseView(input, c, saved, caseOwner(r.farmId, userId), caseJobs.has(c.id) || caseAgain.has(c.id));
+  }
+
+  /** After a log is saved: a dead-eel report opens or adds to the pond's case; the re-check answers it. */
+  function caseAfterLog(r: FarmRepo, log: Log, userId: number, flags: { report: boolean; recheck?: 'better' | 'worse' }) {
+    const dead = log.data.mortality ?? 0;
+    let c = r.openCase(log.pondId);
+    if (!c) {
+      if (!flags.report || dead <= 0) return;
+      try {
+        c = r.openCaseFor(log.pondId, log.loggedAt);
+      } catch {
+        // Two reports at the same moment: the other one opened it.
+        c = r.openCase(log.pondId);
+        if (!c) return;
+        r.addCaseEvent(c.id, 'report', log.loggedAt, userId, { dead, logId: log.id, recheck: true });
+        return kickCase(r, c.id, 'report');
+      }
+      r.addCaseEvent(c.id, 'open', log.loggedAt, userId, { dead, logId: log.id, recheck: true });
+      return kickCase(r, c.id, 'open');
+    }
+    if (flags.recheck) {
+      r.addCaseEvent(c.id, 'recheck', log.loggedAt, userId, { better: flags.recheck === 'better', more: dead, logId: log.id });
+      return kickCase(r, c.id, 'recheck');
+    }
+    if (dead > 0) {
+      r.addCaseEvent(c.id, 'report', log.loggedAt, userId, { dead, logId: log.id, recheck: flags.report });
+      return kickCase(r, c.id, 'report');
+    }
+  }
+
   // ---------- sessions ----------
 
   const clientIp = (c: Context) => c.req.header('cf-connecting-ip') ?? c.req.header('x-forwarded-for')?.split(',')[0].trim() ?? 'local';
@@ -909,6 +1021,61 @@ export function createApi(
     return c.json({ briefing: await makeBriefing(r) }, 201);
   });
 
+  // ---------- dead-eel cases ----------
+
+  // Open cases of the farm (Beranda); with ?pond= also that pond's closed ones (pond page).
+  api.get('/cases', async (c) => {
+    const r = needFarm(c);
+    const pondId = c.req.query('pond') ? Number(c.req.query('pond')) : undefined;
+    const rows = r.listCases(pondId);
+    return c.json({ cases: await Promise.all(rows.map((row) => viewCase(r, row, c.get('userId')))) });
+  });
+
+  const needCase = (c: Context<Env>) => {
+    const r = needFarm(c);
+    const row = r.getCase(Number(c.req.param('id')));
+    if (!row) throw new NotFound(tx('Kasus tidak ditemukan', 'Case not found'));
+    return { r, row };
+  };
+
+  // The farmer's answers to the agent's questions (tapped, typed, or said and turned into text).
+  api.post('/cases/:id/answers', async (c) => {
+    const { r, row } = needCase(c);
+    if (row.status !== 'open') throw new BadRequest(tx('Kasus sudah ditutup', 'The case is closed'));
+    const body = await c.req.json();
+    const answers = (Array.isArray(body.answers) ? body.answers : [])
+      .map((x: any) => ({ q: String(x?.q ?? '').trim().slice(0, 120), a: String(x?.a ?? '').trim().slice(0, 300) }))
+      .filter((x: { q: string; a: string }) => x.q && x.a)
+      .slice(0, 2);
+    if (!answers.length) throw new BadRequest(tx('Jawaban masih kosong', 'No answer yet'));
+    r.addCaseEvent(row.id, 'answer', clock().toISOString(), c.get('userId'), { answers });
+    kickCase(r, row.id, 'answer');
+    return c.json({ case: await viewCase(r, row, c.get('userId')) });
+  });
+
+  // "Hari ini tidak ada yang mati": a record for today, so the day counts towards closing.
+  api.post('/cases/:id/nodead', async (c) => {
+    const { r, row } = needCase(c);
+    if (row.status !== 'open') throw new BadRequest(tx('Kasus sudah ditutup', 'The case is closed'));
+    const at = clock().toISOString();
+    const log = r.addLog({ pondId: row.pondId, batchId: r.activeBatch(row.pondId)?.id ?? null, loggedAt: at, source: 'manual', data: { note: tx('Kasus sidat mati: hari ini tidak ada yang mati', 'Dead eel case: none dead today') } }, c.get('userId'));
+    r.addCaseEvent(row.id, 'nodead', at, c.get('userId'), { logId: log.id });
+    kickCase(r, row.id, 'nodead');
+    return c.json({ case: await viewCase(r, row, c.get('userId')) });
+  });
+
+  // Closing is the farmer's choice, offered after 2 recorded days without deaths; the owner may close any time.
+  api.post('/cases/:id/close', async (c) => {
+    const { r, row } = needCase(c);
+    if (row.status !== 'open') return c.json({ case: await viewCase(r, row, c.get('userId')) });
+    const view = await viewCase(r, row, c.get('userId'));
+    if (!view.closeSuggested && c.get('role') !== 'owner') throw new BadRequest(tx('Kasus bisa ditutup sesudah 2 hari tanpa sidat mati.', 'The case can be closed after 2 days without dead eels.'));
+    const at = clock().toISOString();
+    r.closeCase(row.id, at, c.get('userId'));
+    r.addCaseEvent(row.id, 'close', at, c.get('userId'), {});
+    return c.json({ case: await viewCase(r, r.getCase(row.id)!, c.get('userId')) });
+  });
+
   // ---------- members ----------
 
   api.get('/farm/members', (c) => {
@@ -1110,6 +1277,8 @@ export function createApi(
       },
       c.get('userId'),
     );
+    // A dead-eel report from Masalah (`report: 'dead'`) or the re-check answer (`recheck`) feeds the pond's case.
+    caseAfterLog(r, log, c.get('userId'), { report: body.report === 'dead', recheck: oneOf(body.recheck, ['better', 'worse'] as const, 'cek ulang') });
     return c.json({ log, pond: pondSummary(r, pond) }, 201);
   });
 
@@ -1269,6 +1438,33 @@ export function createApi(
     nowcastFarm: (farmId: number) => nowcastAll(store.farm(farmId)),
     /** Linked Synteel devices: write the logs that are due. Called every minute. */
     sendDeviceLogs,
+    /**
+     * Every few minutes: a case whose re-check went unanswered gets one agent run for it, and a case
+     * with no update yet (opened by a script) gets its first.
+     */
+    caseRechecks() {
+      for (const id of store.farmIds()) {
+        const r = store.farm(id);
+        for (const row of r.listCases()) {
+          if (caseJobs.has(row.id)) continue;
+          const events = r.caseEvents(row.id);
+          const runs = events.filter((e) => e.kind === 'run');
+          if (!runs.length) {
+            kickCase(r, row.id, 'open');
+            continue;
+          }
+          const report = events.filter((e) => (e.kind === 'open' || e.kind === 'report') && e.data?.recheck).at(-1);
+          if (!report || events.some((e) => e.kind === 'recheck' && e.at >= report.at)) continue;
+          const missedAt = Date.parse(report.at) + RECHECK_AFTER + RECHECK_GRACE;
+          const now = clock().getTime();
+          if (now > missedAt && now - Date.parse(report.at) < DAY_MS && !runs.some((e) => e.data?.trigger === 'recheck_missed' && Date.parse(e.at) >= missedAt)) kickCase(r, row.id, 'recheck_missed');
+        }
+      }
+    },
+    /** Waits for the case agent runs in flight (tests). */
+    async settleCases() {
+      while (caseJobs.size) await Promise.all([...caseJobs.values()]);
+    },
     /** The evening run: a briefing for every farm with ponds that has none yet today, from `hour` local time. */
     async briefFarms(hour = 17) {
       for (const id of store.farmIds()) {

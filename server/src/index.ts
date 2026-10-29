@@ -23,7 +23,7 @@ app.get('/knowledge', (c) =>
 const ai = withDailyCap(createAi({ chat: env.aiChat, transcriber: env.aiTranscriber, mock: env.aiMock }), env.aiDailyCap);
 const chain = env.aiChat.filter((p) => p.apiKey).map((p) => p.name).join(' → ');
 console.log(`AI mode: ${ai.mode}${ai.mode === 'meta' ? ` (${chain}${env.aiTranscriber.apiKey ? ', voice: meta' : ', no voice'}${env.aiDailyCap ? `, cap ${env.aiDailyCap}/day` : ''})` : ''}`);
-if (ai.mode === 'meta') console.log(`Briefing agent: ${env.agentChat.filter((p) => p.apiKey).map((p) => p.name).join(' → ')}`);
+if (ai.mode === 'meta') console.log(`Briefing and case agent: ${env.agentChat.filter((p) => p.apiKey).map((p) => p.name).join(' → ')}`);
 const store = repo(openDb());
 const api = createApi(store, { ai, saveCapture: captureStore(), cookieName: env.cookieName, demoPhone: env.demoPhone, farmAiCap: env.farmAiCap, agentProviders: env.agentChat.filter((p) => p.apiKey), sam: env.aiTranscriber.apiKey ? { apiKey: env.aiTranscriber.apiKey, base: env.aiTranscriber.base } : null, mail: mailer(env.smtp) });
 console.log(`Support mail: ${env.smtp ? `${env.smtp.host}:${env.smtp.port}` : 'not configured (tickets only stored)'}`);
@@ -46,6 +46,17 @@ setInterval(() => {
     console.error('device logs:', err);
   }
 }, 60_000);
+
+// Dead-eel cases: a re-check that went unanswered gets an agent run (and cases opened by a script their first).
+const caseRechecks = () => {
+  try {
+    api.caseRechecks();
+  } catch (err) {
+    console.error('cases:', err);
+  }
+};
+setTimeout(caseRechecks, 5_000);
+setInterval(caseRechecks, 5 * 60_000);
 
 // Evening briefing: check every 10 minutes; each farm gets one from 17.00 local time.
 setInterval(() => api.briefFarms().catch((err) => console.error('briefings:', err)), 10 * 60_000);

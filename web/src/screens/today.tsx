@@ -5,6 +5,7 @@ import { fmtAgo, fmtClock, fmtNum, fmtTemp, greeting, phaseLabel, readingWord } 
 import { EmptyState, Icon, initialOf, PondThumb, pondMeta, Shape, SimChip, StatusPill, type IconName } from '../ui.tsx';
 import { alarmReason, sensorCritical, silenceSensorAlarm, useSensorRinging } from '../sensor-alarm.ts';
 import { DueRechecks, useRechecks } from './recheck.tsx';
+import { CaseCard, useCases } from './case.tsx';
 import { LOCALE, t } from '../i18n.ts';
 import './today.css';
 
@@ -404,6 +405,8 @@ export function Today({
   const focusPond = need[0] ?? ponds[0];
   const focus = nowcast?.ponds.find((n) => n.pondId === focusPond?.id);
   const rechecks = useRechecks();
+  // Open dead-eel cases, reloaded with the farm.
+  const cases = useCases(undefined, state);
   const soon = rechecks.soon[0];
   const alive = ponds.reduce((s, p) => s + (p.program?.estimatedAlive ?? 0), 0);
   const groups = (['critical', 'warning', 'ok', 'none'] as const).filter((k) => counts[k] > 0);
@@ -434,6 +437,10 @@ export function Today({
       <SensorAlarms ponds={ponds} go={go} now={now} />
 
       <DueRechecks due={rechecks.due} update={rechecks.update} go={go} />
+
+      {cases.list.map((c) => (
+        <CaseCard key={c.id} c={c} go={go} onChanged={cases.replace} />
+      ))}
 
       {soon && rechecks.due.length === 0 && (
         <div class="note info" style={{ alignItems: 'center' }}>

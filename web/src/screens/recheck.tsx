@@ -18,7 +18,7 @@ function Due({ r, go, onDone }: { r: Recheck; go: Go; onDone: (next?: Recheck) =
   const better = async () => {
     setBusy(true);
     try {
-      await api.addLog(r.pondId, { behavior: ['normal'], note: t('Cek ulang: membaik', 'Re-check: better') });
+      await api.addLog(r.pondId, { behavior: ['normal'], note: t('Cek ulang: membaik', 'Re-check: better') }, 'manual', { recheck: 'better' });
       onDone();
     } catch (err) {
       setError((err as Error).message);
@@ -30,7 +30,7 @@ function Due({ r, go, onDone }: { r: Recheck; go: Go; onDone: (next?: Recheck) =
   const notBetter = async () => {
     setBusy(true);
     try {
-      await api.addLog(r.pondId, { mortality: more || undefined, behavior: ['surfacing'], note: t('Cek ulang: belum membaik', 'Re-check: not better yet') });
+      await api.addLog(r.pondId, { mortality: more || undefined, behavior: ['surfacing'], note: t('Cek ulang: belum membaik', 'Re-check: not better yet') }, 'manual', { recheck: 'worse' });
       setSent(
         [
           t(`Cek ulang ${r.pondName}, ${fmtClock(Date.now())}: belum membaik.`, `Re-check ${r.pondName}, ${fmtClock(Date.now())}: not better yet.`),

@@ -110,6 +110,30 @@ export function openDb(path = process.env.SYNTEEL_DB ?? defaultPath) {
       primary key (farm_id, user_id, local_date)
     );
 
+    -- Dead-eel cases (cases.ts): at most one open case per pond; closed ones stay as history.
+    create table if not exists cases (
+      id integer primary key,
+      farm_id integer not null references farms(id),
+      pond_id integer not null references ponds(id),
+      status text not null check (status in ('open', 'closed')),
+      opened_at text not null,
+      closed_at text,
+      closed_by integer references users(id)
+    );
+    create unique index if not exists cases_one_open on cases (pond_id) where status = 'open';
+    create index if not exists cases_farm on cases (farm_id, status);
+
+    -- What happened in a case: reports, answers, re-checks, agent runs, closing.
+    create table if not exists case_events (
+      id integer primary key,
+      case_id integer not null references cases(id),
+      at text not null,
+      kind text not null,
+      user_id integer references users(id),
+      data text not null
+    );
+    create index if not exists case_events_case on case_events (case_id, id);
+
     -- "Hubungi bantuan": kept even when the e-mail to the team fails.
     create table if not exists support_tickets (
       id integer primary key,
@@ -212,6 +236,24 @@ const toFarm = (r: Row): Farm => ({
   lat: r.lat as number | null,
   lon: r.lon as number | null,
   timezone: r.timezone as string,
+});
+
+export interface CaseRow {
+  id: number;
+  pondId: number;
+  status: 'open' | 'closed';
+  openedAt: string;
+  closedAt: string | null;
+  closedBy: number | null;
+}
+
+const toCase = (r: Row): CaseRow => ({
+  id: r.id as number,
+  pondId: r.pond_id as number,
+  status: r.status as CaseRow['status'],
+  openedAt: r.opened_at as string,
+  closedAt: r.closed_at as string | null,
+  closedBy: r.closed_by as number | null,
 });
 
 /** Everything one farm sees. Every query is scoped to the farm, so one farm can never read another's ponds. */
@@ -347,6 +389,52 @@ export function farmRepo(db: Db, farmId: number) {
 
     briefingsOn(localDate: string): number {
       return (db.prepare('select count(*) as n from briefings where farm_id = ? and local_date = ?').get(farmId, localDate) as Row).n as number;
+    },
+
+    // ---------- dead-eel cases ----------
+    /** The open case of a pond (of this farm), or null. */
+    openCase(pondId: number): CaseRow | null {
+      const r = db.prepare("select * from cases where pond_id = ? and farm_id = ? and status = 'open'").get(pondId, farmId) as Row | undefined;
+      return r ? toCase(r) : null;
+    },
+
+    getCase(id: number): CaseRow | null {
+      const r = db.prepare('select * from cases where id = ? and farm_id = ?').get(id, farmId) as Row | undefined;
+      return r ? toCase(r) : null;
+    },
+
+    /** Open cases on live ponds, and (with a pond) that pond's closed ones too, newest first. */
+    listCases(pondId?: number, closedLimit = 5): CaseRow[] {
+      const open = (
+        db.prepare("select c.* from cases c join ponds p on p.id = c.pond_id where c.farm_id = ? and c.status = 'open' and p.archived = 0 and (? is null or c.pond_id = ?) order by c.opened_at desc").all(farmId, pondId ?? null, pondId ?? null) as Row[]
+      ).map(toCase);
+      if (pondId === undefined) return open;
+      const closed = (db.prepare("select * from cases where farm_id = ? and pond_id = ? and status = 'closed' order by closed_at desc limit ?").all(farmId, pondId, closedLimit) as Row[]).map(toCase);
+      return [...open, ...closed];
+    },
+
+    openCaseFor(pondId: number, openedAt: string): CaseRow {
+      const { lastInsertRowid } = db.prepare("insert into cases (farm_id, pond_id, status, opened_at) values (?, ?, 'open', ?)").run(farmId, pondId, openedAt);
+      return { id: Number(lastInsertRowid), pondId, status: 'open', openedAt, closedAt: null, closedBy: null };
+    },
+
+    closeCase(id: number, at: string, userId: number) {
+      db.prepare("update cases set status = 'closed', closed_at = ?, closed_by = ? where id = ? and farm_id = ?").run(at, userId, id, farmId);
+    },
+
+    // The case calls below take a case id the caller already checked with getCase / openCase.
+    addCaseEvent(caseId: number, kind: string, at: string, userId: number | null, data: unknown) {
+      db.prepare('insert into case_events (case_id, at, kind, user_id, data) values (?, ?, ?, ?, ?)').run(caseId, at, kind, userId, JSON.stringify(data));
+    },
+
+    caseEvents(caseId: number): { id: number; at: string; kind: string; userId: number | null; data: any }[] {
+      return (db.prepare('select * from case_events where case_id = ? order by id').all(caseId) as Row[]).map((r) => ({
+        id: r.id as number,
+        at: r.at as string,
+        kind: r.kind as string,
+        userId: r.user_id as number | null,
+        data: JSON.parse(r.data as string),
+      }));
     },
 
     totalMortality(batchId: number): number {

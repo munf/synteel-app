@@ -35,10 +35,10 @@ export function deviceInfo(ua = navigator.userAgent): string {
 export const userCode = (id: number) => `SE-${String(id).padStart(6, '0')}`;
 
 /**
- * Say the message instead of typing it: the recording is turned into text in the box, which the
+ * Say the message instead of typing it (also used for answers in a dead-eel case): the recording is turned into text in the box, which the
  * farmer can read and fix before sending. Only text is sent to the team, never the audio.
  */
-function SpeakToText({ onText }: { onText: (text: string) => void }) {
+export function SpeakToText({ onText, hint }: { onText: (text: string) => void; hint?: string }) {
   const [rec, setRec] = useState<{ stop: () => Promise<Blob> } | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
@@ -89,7 +89,7 @@ function SpeakToText({ onText }: { onText: (text: string) => void }) {
           {t('Sudah jadi teks di atas. Periksa dulu sebelum kirim.', 'It is now text above. Check it before sending.')}
         </p>
       ) : (
-        <span class="label ink2">{note || t('Yang terkirim hanya teksnya. Tidak memakai jatah baca AI.', 'Only the text is sent. It does not use your daily AI reads.')}</span>
+        <span class="label ink2">{note || hint || t('Yang terkirim hanya teksnya. Tidak memakai jatah baca AI.', 'Only the text is sent. It does not use your daily AI reads.')}</span>
       )}
     </div>
   );

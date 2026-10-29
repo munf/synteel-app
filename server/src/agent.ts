@@ -3,11 +3,11 @@
 // briefing plus extra checks. Deterministic code then guards the proposal:
 //   - every check the rules made is kept: the agent can add checks, never remove or move one;
 //   - checks must name a real pond and fall within the next 18 hours;
-//   - nothing about medicines or doses gets through (decision support, not treatment).
+//   - nothing about medicines, doses or a diagnosis gets through (decision support, not treatment).
 // When the model is unavailable the briefing is written from the rules alone.
 import { currentLang, tx, type Lang } from './i18n.ts';
-import { AiFailed, call, Retry, type ChatProvider } from './ai.ts';
-import { knowledge } from './knowledge.ts';
+import type { ChatProvider } from './ai.ts';
+import { clock, fn, overstated, searchGuidance, toolLoop, unsafeText, wordingRules } from './agentloop.ts';
 import type { Nowcast } from './nowcast.ts';
 
 const HOUR = 3600_000;
@@ -58,14 +58,6 @@ export interface Briefing {
   lang?: Lang;
 }
 
-// Medicines and doses are out of scope for the app; anything that sounds like treatment is dropped.
-const TREATMENT = /\b(obat|antibiotik|dosis|formalin|metilen|methylene|malachite|kalium permanganat|\bpk\b|oxytetra|garam\s+\d|mg\/l\s+(obat|garam)|ppm\s+(obat|garam))/i;
-
-const clock = (t: number, tz: string) => {
-  const hm = new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: tz });
-  return currentLang() === 'en' ? hm : hm.replace(':', '.');
-};
-
 /** "21:30" or "21.30" → the next such moment after `now` (in the farm's time zone, UTC+7 for WIB). */
 export function nextTime(hhmm: string, now: number, tzOffsetH = 7): number | null {
   const m = /^(\d{1,2})[:.](\d{2})$/.exec(hhmm.trim());
@@ -102,27 +94,6 @@ export function rulesBriefing(input: BriefingInput, steps: Briefing['steps'] = [
 }
 
 // ---------- tools ----------
-
-function searchGuidance(query: string) {
-  const words = query.toLowerCase().split(/\W+/).filter((w) => w.length > 2);
-  const docs: { source: string; text: string }[] = [
-    ...(knowledge.emergencies as any).emergencies.map((e: any) => ({ source: 'SOP darurat', text: `${e.trigger}: ${e.operator_actions.join('; ')}` })),
-    ...(knowledge.thresholds as any).parameters.filter((p: any) => p.operator_action).map((p: any) => ({ source: 'Ambang batas', text: `${p.name}: ${p.operator_action}` })),
-    ...(knowledge.nurseryProgram as any).stages.map((s: any) => ({ source: 'Program pembesaran', text: `Minggu ${s.weeks.join('–')} ${s.name}: pakan ${s.feed}; air ${s.water}` })),
-    ...(knowledge.sop as any).tasks.map((t: any) => ({ source: 'SOP harian', text: `${t.task}${t.note ? ` (${t.note})` : ''}` })),
-  ];
-  return docs
-    .map((d) => ({ ...d, score: words.filter((w) => d.text.toLowerCase().includes(w)).length }))
-    .filter((d) => d.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 4)
-    .map(({ source, text }) => ({ source, text }));
-}
-
-const fn = (name: string, description: string, properties: Record<string, unknown> = {}, required: string[] = []) => ({
-  type: 'function',
-  function: { name, description, parameters: { type: 'object', properties, required, additionalProperties: false } },
-});
 
 const TOOLS = [
   fn('get_ponds', 'Semua kolam: fase, minggu ke-, status, peringatan aktif, ukuran terakhir dan kapan terakhir dicatat.'),
@@ -165,6 +136,7 @@ const SYSTEM = (input: BriefingInput) =>
     '- Ini pendukung keputusan, bukan diagnosis. Jangan sebut obat, dosis, atau pengobatan.',
     '- Cek dari aturan sudah otomatis ada; jangan mengulanginya. Tambahkan cek hanya bila data memberi alasan jelas (mis. hujan deras, suhu turun, sisa pakan, kolam lama tidak diukur).',
     '- Jam cek harus dalam 18 jam ke depan. Tindakan harus bisa dilakukan petani tanpa alat khusus selain alat ukur pH, TDS, termometer.',
+    ...wordingRules(input.now, input.timezone),
     currentLang() === 'en'
       ? '- Write the summary, every action and every why in clear, natural English: short sentences, everyday farm words (aerator, water temperature, oxygen in the water, leftover feed, eels), no technical abbreviations such as DO. Pond names stay exactly as they are.'
       : '- Bahasa Indonesia sederhana untuk petani lansia, tanpa singkatan teknis (pakai "oksigen air", bukan DO).',
@@ -208,56 +180,16 @@ export async function runBriefing(input: BriefingInput, providers: ChatProvider[
   };
 
   // One provider after the other: the open-weight model first, then the Meta API, then Fireworks.
-  let steps: Briefing['steps'] = [];
-  for (const provider of providers.filter((p) => p.apiKey)) {
-    steps = [];
-    const done = await attempt(provider, steps);
-    if (done) return done;
-  }
-  return rulesBriefing(input, steps);
-
-  async function attempt(provider: ChatProvider, steps: Briefing['steps']): Promise<Briefing | null> {
-    const messages: any[] = [
-      { role: 'system', content: SYSTEM(input) },
-      { role: 'user', content: currentLang() === 'en' ? 'Susun briefing malam ini. Write the summary and every check in English.' : 'Susun briefing malam ini.' },
-    ];
-    try {
-      for (let round = 0; round < MAX_ROUNDS; round++) {
-        const body = await call(`${provider.base}/chat/completions`, provider.apiKey, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ model: provider.model, messages, tools: TOOLS, tool_choice: 'auto', max_tokens: 3000, reasoning_effort: 'low' }),
-        });
-        const msg = body.choices?.[0]?.message;
-        if (!msg) throw new AiFailed('empty answer');
-        messages.push({ role: 'assistant', content: msg.content ?? '', tool_calls: msg.tool_calls });
-        const calls: any[] = msg.tool_calls ?? [];
-        if (!calls.length) {
-          messages.push({ role: 'user', content: 'Kirim hasilnya lewat submit_briefing.' });
-          continue;
-        }
-        for (const c of calls) {
-          let args: Record<string, any> = {};
-          try {
-            args = JSON.parse(c.function?.arguments || '{}');
-          } catch {
-            // keep empty args; the tool answers with an error
-          }
-          if (c.function?.name === 'submit_briefing') {
-            steps.push({ tool: 'submit_briefing', args: {} });
-            return guard(input, args, steps, `${provider.name}/${provider.model}`);
-          }
-          steps.push({ tool: c.function?.name ?? '?', args });
-          messages.push({ role: 'tool', tool_call_id: c.id, content: JSON.stringify(run(c.function?.name, args)) });
-        }
-      }
-      console.error(`briefing agent (${provider.name}): no submit_briefing after`, MAX_ROUNDS, 'rounds');
-    } catch (err) {
-      if (!(err instanceof AiFailed || err instanceof Retry)) throw err;
-      console.error(`briefing agent (${provider.name}):`, (err as Error).message);
-    }
-    return null;
-  }
+  const { result, steps } = await toolLoop(providers, {
+    label: 'briefing agent',
+    system: SYSTEM(input),
+    user: currentLang() === 'en' ? 'Susun briefing malam ini. Write the summary and every check in English.' : 'Susun briefing malam ini.',
+    tools: TOOLS,
+    submit: 'submit_briefing',
+    maxRounds: MAX_ROUNDS,
+    session: () => ({ run, finish: (args, steps, model) => guard(input, args, steps, model) }),
+  });
+  return result ?? rulesBriefing(input, steps);
 }
 
 /** Applies the guardrails to what the model submitted. */
@@ -270,12 +202,12 @@ export function guard(input: BriefingInput, proposal: Record<string, any>, steps
     const pond = input.ponds.find((p) => p.id === Number(c?.pond_id));
     const t = typeof c?.time === 'string' ? nextTime(c.time, input.now) : null;
     const action = String(c?.action ?? '').trim().slice(0, 80);
-    if (!pond || t === null || t > end || !action || TREATMENT.test(action) || TREATMENT.test(String(c?.why ?? ''))) continue;
+    if (!pond || t === null || t > end || !action || unsafeText(action) || unsafeText(String(c?.why ?? '')) || overstated(`${action} ${c?.why ?? ''}`, input.weather)) continue;
     // A rule check at nearly the same time on the same pond already covers it.
     if (base.checks.some((r) => r.pondId === pond.id && Math.abs(r.t - t) < 30 * 60_000)) continue;
     agentChecks.push({ pondId: pond.id, t, action, alarm: Boolean(c.alarm), source: 'agent', why: String(c.why ?? '').slice(0, 140) || undefined });
   }
-  const usable = summary.length >= 20 && summary.length <= 500 && !TREATMENT.test(summary);
+  const usable = summary.length >= 20 && summary.length <= 500 && !unsafeText(summary) && !overstated(summary, input.weather);
   return {
     summary: usable ? summary : base.summary,
     checks: [...base.checks, ...agentChecks].sort((a, b) => a.t - b.t),

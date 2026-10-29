@@ -139,3 +139,14 @@ test('the open-weight provider out of credits: the next provider writes the brie
     working.close();
   }
 });
+
+test('wording: heavy rain only above 7.6 mm per hour, oxygen only as an estimate', () => {
+  const base = { checks: [] };
+  // The test weather has 4 mm in the hour: moderate, not heavy.
+  assert.equal(guard(input(), { ...base, summary: 'Kolam B rawan malam ini karena hujan deras dan sidat naik ke permukaan.' }, [], 'm').source, 'rules');
+  assert.equal(guard(input(), { ...base, summary: 'Kolam B rawan malam ini karena hujan sedang dan sidat naik ke permukaan.' }, [], 'm').source, 'agent');
+  const heavy = { ...input(), weather: [{ t: NOW + H, airTemp: 25, rain: 12, cloud: 100 }] };
+  assert.equal(guard(heavy, { ...base, summary: 'Kolam B rawan malam ini karena hujan deras dan sidat naik ke permukaan.' }, [], 'm').source, 'agent');
+  assert.equal(guard(input(), { ...base, summary: 'Oksigen air sangat rendah di Kolam B, nyalakan aerator cadangan sekarang.' }, [], 'm').source, 'rules');
+  assert.equal(guard(input(), { ...base, summary: 'Perkiraan oksigen rendah di Kolam B sekitar jam 01.00, pastikan aerator nyala.' }, [], 'm').source, 'agent');
+});
