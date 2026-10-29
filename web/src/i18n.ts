@@ -27,3 +27,12 @@ export const fmtDec = (n: number, digits = 2) => n.toLocaleString(LOCALE, { maxi
 export const parseDec = (s: string) => Number(s.trim().replace(',', '.'));
 
 if (typeof document !== 'undefined') document.documentElement.lang = lang;
+
+/** eel.synt.fun shares this origin: links to it open the site in the app's language (the site reads this key). */
+export function siteInAppLanguage() {
+  try {
+    localStorage.setItem('synteel-site-lang', lang);
+  } catch {
+    // private mode: the site opens in its default language
+  }
+}

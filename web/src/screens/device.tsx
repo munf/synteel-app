@@ -6,13 +6,14 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { api, type DeviceInfo, type Role } from '../api.ts';
 import type { Go } from '../app.tsx';
 import { Field, Icon, Notice } from '../ui.tsx';
-import { t } from '../i18n.ts';
+import { siteInAppLanguage, t } from '../i18n.ts';
 import './device.css';
 
 /** Letters and digits only, upper case: "g5 7kq2-m4" → "G57KQ2M4". */
 const bare = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
 /** "G57KQ2M4" → "G5-7KQ2-M4", dashes added as the code is typed. */
+
 export function formatCode(raw: string): string {
   const s = bare(raw).slice(0, 8);
   return [s.slice(0, 2), s.slice(2, 6), s.slice(6, 8)].filter(Boolean).join('-');
@@ -261,6 +262,25 @@ export function ConnectDevice({ initialCode, role, onLinked, go }: { initialCode
               )}
             </section>
           )}
+
+          <section class="card" style={{ gap: 0 }}>
+            <h2 class="label ink2" style={{ margin: 0, fontWeight: 600 }}>
+              {t('Belum punya alat Synteel?', 'No Synteel device yet?')}
+            </h2>
+            <a class="link-row" href="https://eel.synt.fun/#hardware" target="_blank" rel="noopener" onClick={siteInAppLanguage}>
+              <span>{t('Lihat alat Synteel', 'See Synteel devices')}</span>
+              <Icon name="next" size={20} />
+            </a>
+            <a class="link-row" href="https://eel.synt.fun/sim/" target="_blank" rel="noopener" onClick={siteInAppLanguage}>
+              <span style={{ display: 'flex', flexDirection: 'column' }}>
+                <span>{t('Coba alat simulasi', 'Try a simulated device')}</span>
+                <span class="label ink2" style={{ fontWeight: 400 }}>
+                  {t('Kodenya bisa langsung dihubungkan di sini', 'Its code can be connected right here')}
+                </span>
+              </span>
+              <Icon name="next" size={20} />
+            </a>
+          </section>
         </>
       )}
 

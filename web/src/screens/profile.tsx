@@ -4,7 +4,7 @@ import { api, type Farm, type FarmState, type Me, type QuotaState } from '../api
 import type { Go } from '../app.tsx';
 import { askNotifyPermission } from '../alarms.ts';
 import { setPrefs, usePrefs, type Prefs } from '../prefs.ts';
-import { isEn, lang, LOCALE, setLang, t, type Lang } from '../i18n.ts';
+import { isEn, lang, LOCALE, setLang, t, type Lang, siteInAppLanguage } from '../i18n.ts';
 import { Field, Icon, initialOf, roleLabel, Shape, Soon, Switch, Tick } from '../ui.tsx';
 import { ChangePin, Members } from './members.tsx';
 import { MediaDone, QuotaBar } from './quota.tsx';
@@ -184,6 +184,9 @@ function LaterList({ title, items }: { title: string; items: { label: string; su
     </section>
   );
 }
+
+// Rows in "Alat Synteel" match the switch rows above: 72px tall, divided, ink text.
+const ALAT_ROW = { color: 'var(--ink)', minHeight: 72, padding: '12px 0', gap: 12 };
 
 export function Profile({
   state,
@@ -444,6 +447,30 @@ export function Profile({
           <span class="label ink2">{t('Foto, video dan catatan untuk melatih AI. Nama dan nomor HP tidak ikut.', 'Photos, videos and records to train the AI. Name and phone number are not shared.')}</span>
         </div>
         <Switch checked={prefs.shareData} label={t('Bantu kembangkan Synteel', 'Help improve Synteel')} onChange={(v) => setPrefs({ shareData: v })} />
+      </section>
+
+      <section class="card list" aria-labelledby="alat-title">
+        <h2 id="alat-title" style={{ paddingTop: 20, paddingBottom: 4 }}>
+          {t('Alat Synteel', 'Synteel devices')}
+        </h2>
+        <button type="button" class="list-row link-row" style={ALAT_ROW} onClick={() => go({ name: 'device' })}>
+          <span class="grow stack-xs" style={{ gap: 0 }}>
+            <span class="semi">{t('Hubungkan alat', 'Connect a device')}</span>
+            <span class="label ink2" style={{ fontWeight: 400 }}>
+              {t('Ketik kode alat atau scan kode QR-nya', "Type the device code or scan its QR code")}
+            </span>
+          </span>
+          <Icon name="next" size={20} />
+        </button>
+        <a class="list-row link-row" style={ALAT_ROW} href="https://eel.synt.fun/#hardware" target="_blank" rel="noopener" onClick={siteInAppLanguage}>
+          <span class="grow stack-xs" style={{ gap: 0 }}>
+            <span class="semi">{t('Lihat alat Synteel', 'See Synteel devices')}</span>
+            <span class="label ink2" style={{ fontWeight: 400 }}>
+              {t('Sensor dan filter untuk kolam · masih prototipe, belum dijual', 'Sensors and filters for ponds · still prototypes, not for sale yet')}
+            </span>
+          </span>
+          <Icon name="next" size={20} />
+        </a>
       </section>
 
       {!me.demo && <ChangePin />}
