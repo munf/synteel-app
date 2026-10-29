@@ -474,9 +474,9 @@ const TILE = {
   padding: 12,
   display: 'flex',
   flexDirection: 'column',
-  alignItems: 'flex-start',
+  alignItems: 'center',
   justifyContent: 'center',
   gap: 4,
-  textAlign: 'left',
+  textAlign: 'center',
   color: 'var(--ink)',
 } as const;
