@@ -1073,7 +1073,7 @@ export function createApi(
     return c.json({ draft });
   });
 
-  // Dead eels laid in a white basin → a count with one outline per eel (Meta SAM 3.1).
+  // A photo of the dead eels (scoop, net or basin, from above) → a count or a range, with outlines and heads (Meta SAM 3.1).
   // Like a capture, nothing is saved: the farmer confirms or corrects the count first.
   api.post('/ponds/:id/count', async (c) => {
     const r = needFarm(c);
@@ -1083,11 +1083,11 @@ export function createApi(
     const image = form.image instanceof File ? form.image : null;
     if (!image) throw new BadRequest(tx('Foto belum ada', 'No photo yet'));
     if (image.size > MAX_IMAGE_BYTES) throw new BadRequest(tx('Foto terlalu besar', 'The photo is too large'));
-    if (ai?.mode === 'mock') return c.json({ result: { count: 0, eels: [], review: true, model: 'mock', ms: 0 }, mock: true });
+    if (ai?.mode === 'mock') return c.json({ result: { count: 0, low: 0, high: 0, eels: [], heads: [], review: true, model: 'mock', ms: 0 }, mock: true });
     if (ai?.mode !== 'meta' || !sam?.apiKey) throw new AiUnavailable(tx('Hitung otomatis belum aktif. Hitung manual dulu.', 'Automatic counting is not on yet. Count by hand for now.'));
     // Part of an emergency report: it does not use the farm's daily AI quota (the app promises that).
-    const result = await countDeadEels(image, sam);
-    await saveCapture?.({ farmId: r.farmId, pondId: pond.id, kind: 'count', at: clock().toISOString(), ms: result.ms, count: result.count, review: result.review }, [{ name: 'image-0.jpg', blob: image }]).catch((err) =>
+    const result = await countDeadEels(image, sam, r.activeBatch(pond.id)?.phase ?? 'glass_eel');
+    await saveCapture?.({ farmId: r.farmId, pondId: pond.id, kind: 'count', at: clock().toISOString(), ms: result.ms, count: result.count, low: result.low, high: result.high, review: result.review }, [{ name: 'image-0.jpg', blob: image }]).catch((err) =>
       console.error('capture not stored:', err),
     );
     return c.json({ result });

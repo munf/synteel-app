@@ -26,6 +26,12 @@ const COMMON = 4;
 
 /** "8 sidat mati terhitung" / "8 dead eels counted". */
 const deadCounted = (n: number) => t(`${n} sidat mati terhitung`, `${n} dead ${n === 1 ? 'eel' : 'eels'} counted`);
+/** One number when bodies and heads agree, else the range (reports saved before ranges have only `count`). */
+const countText = (r: CountResult) => {
+  const low = r.low ?? r.count;
+  const high = r.high ?? r.count;
+  return low === high ? deadCounted(low) : t(`Sekitar ${low}–${high} sidat mati`, `About ${low}–${high} dead eels`);
+};
 
 /** "Rabu 18.40": full day name, never "Rab". */
 const dayClock = (at: number) => `${new Date(at).toLocaleDateString(LOCALE, { weekday: 'long', timeZone: 'Asia/Jakarta' })} ${fmtClock(at)}`;
@@ -276,12 +282,15 @@ function CountedPhoto({ c }: { c: Counted }) {
   const r = Math.max(12, c.w / 45);
   return (
     <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', background: 'var(--bg)' }}>
-      <img src={c.url} alt={t('Foto sidat mati di baskom', 'Photo of dead eels in a basin')} style={{ display: 'block', width: '100%' }} />
-      <svg viewBox={`0 0 ${c.w} ${c.h}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} role="img" aria-label={t(`${c.result.count} sidat ditandai`, `${c.result.count} ${c.result.count === 1 ? 'eel' : 'eels'} marked`)}>
+      <img src={c.url} alt={t('Foto sidat mati', 'Photo of the dead eels')} style={{ display: 'block', width: '100%' }} />
+      <svg viewBox={`0 0 ${c.w} ${c.h}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} role="img" aria-label={countText(c.result)}>
         {c.result.eels.map((e, i) => (
-          <path key={`p${i}`} d={e.path} transform={`translate(${e.left} ${e.top})`} fill={COLORS[i % COLORS.length]} fill-opacity="0.25" stroke={COLORS[i % COLORS.length]} stroke-width={stroke} />
+          <path key={`p${i}`} d={e.path} transform={`translate(${e.left} ${e.top})`} fill={COLORS[i % COLORS.length]} fill-opacity={e.sure === false ? 0.1 : 0.25} stroke={COLORS[i % COLORS.length]} stroke-width={stroke} stroke-dasharray={e.sure === false ? `${stroke * 3} ${stroke * 2}` : undefined} />
         ))}
-        {c.result.eels.map((e, i) => (
+        {(c.result.heads ?? []).map((h, i) => (
+          <circle key={`h${i}`} cx={h.x} cy={h.y} r={r * 0.45} fill="#F2B544" stroke="#13203A" stroke-width={stroke * 0.8} />
+        ))}
+        {c.result.eels.filter((e) => e.sure !== false).map((e, i) => (
           <g key={`l${i}`}>
             <circle cx={e.label.x} cy={e.label.y} r={r} fill="#fff" stroke={COLORS[i % COLORS.length]} stroke-width={stroke} />
             <text x={e.label.x} y={e.label.y + r * 0.38} text-anchor="middle" font-size={r * 1.1} font-weight="800" fill="#13203A">
@@ -426,10 +435,10 @@ function Result({ report, emergencies, go, onBack, onSaved }: { report: Report; 
           <h2>{t('Dari foto', 'From the photo')}</h2>
           <CountedPhoto c={report.counted} />
           <p>
-            <strong>{deadCounted(report.counted.result.count)}</strong>
+            <strong>{countText(report.counted.result)}</strong>
             {report.dead !== report.counted.result.count && t(`, dicatat ${report.dead} setelah dicek`, `, ${report.dead} recorded after checking`)}.
           </p>
-          <span class="label ink2">{t('Dihitung AI. Sidat yang bertumpuk bisa terlewat.', 'Counted by AI. Eels that overlap can be missed.')}</span>
+          <span class="label ink2">{t('Perkiraan AI dari badan dan mata sidat. Sidat yang bertumpuk bisa terlewat.', 'AI estimate from eel bodies and eyes. Eels that overlap can be missed.')}</span>
         </section>
       )}
 
@@ -479,7 +488,7 @@ function CountFailed({ failed, onRetake, onManual }: { failed: Failed; onRetake:
     <section class="card">
       <div class="row top">
         {failed.url ? (
-          <img src={failed.url} alt={t('Foto baskom', 'Basin photo')} style={{ width: 88, height: 66, flex: 'none', borderRadius: 12, objectFit: 'cover', background: '#20252c' }} />
+          <img src={failed.url} alt={t('Foto sidat mati', 'Photo of the dead eels')} style={{ width: 88, height: 66, flex: 'none', borderRadius: 12, objectFit: 'cover', background: '#20252c' }} />
         ) : (
           <span style={{ width: 88, height: 66, flex: 'none', borderRadius: 12, background: '#20252c' }} />
         )}
@@ -488,7 +497,7 @@ function CountFailed({ failed, onRetake, onManual }: { failed: Failed; onRetake:
           <span class="label ink2">
             {failed.offline
               ? t('Foto belum terkirim karena belum ada sinyal. Isi jumlah sendiri, atau foto ulang saat ada sinyal.', 'The photo was not sent because there is no signal yet. Enter the number yourself, or photograph again when there is signal.')
-              : t('Foto terlalu gelap, atau sidat tertutup bayangan.', 'The photo is too dark, or the eels are in shadow.')}
+              : t('Sidat terlalu menumpuk, foto terlalu gelap, atau sidat tertutup bayangan.', 'The eels are piled up, the photo is too dark, or the eels are in shadow.')}
           </span>
         </span>
       </div>
@@ -513,7 +522,7 @@ function CountFailed({ failed, onRetake, onManual }: { failed: Failed; onRetake:
 }
 
 const TIPS = [
-  { d: 'M3 9h18l-2 9H5zM6 9V7h12v2', text: t('Taruh sidat di baskom putih', 'Put the eels in a white basin') },
+  { d: 'M3 9h18l-2 9H5zM6 9V7h12v2', text: t('Sebar sedikit di serok, baskom atau nampan, jangan menggumpal', 'Spread them a little in the scoop, basin or tray, not in a lump') },
   { d: 'M12 4v10M8 10l4 4 4-4M5 20h14', text: t('Foto lurus dari atas', 'Photograph straight from above') },
   { d: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4', text: t('Cari tempat cukup terang, atau nyalakan senter HP', 'Find a bright enough spot, or turn on the phone torch') },
 ];
@@ -545,7 +554,7 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
   // Elsewhere the flow follows the manual Profil switch "Tampilan malam".
   useEffect(() => () => setForcedNight(false), []);
 
-  // The basin photo → SAM 3.1 count with outlines; the stepper below starts from it.
+  // The photo → SAM 3.1 count or range with outlines and heads; the stepper below starts from it.
   const onBasinPhoto = async (file: File | undefined) => {
     if (!file || pondId === null) return;
     setCounting(true);
@@ -684,9 +693,9 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
           <input ref={photo} type="file" accept="image/*" capture="environment" hidden onChange={(e) => (onBasinPhoto(e.currentTarget.files?.[0]), (e.currentTarget.value = ''))} />
           {!failed && (
             <>
-              <span class="field-hint">{t('Taruh sidat mati di baskom putih, lalu foto dari atas supaya AI bisa menghitung.', 'Put the dead eels in a white basin, then photograph it from above so the AI can count them.')}</span>
+              <span class="field-hint">{t('Foto sidat mati dari atas, langsung di serok, baskom atau nampan. AI memperkirakan jumlahnya dari badan dan mata sidat.', 'Photograph the dead eels from above, right in the scoop, basin or tray. The AI estimates the number from the eel bodies and eyes.')}</span>
               <button type="button" class="btn secondary" disabled={pondId === null || counting} onClick={() => photo.current?.click()}>
-                <Icon name="camera" size={20} /> {counting ? t('AI sedang menghitung…', 'The AI is counting…') : counted ? t('Foto ulang', 'Photograph again') : t('Foto baskom untuk dihitung AI', 'Basin photo for an AI count')}
+                <Icon name="camera" size={20} /> {counting ? t('AI sedang menghitung…', 'The AI is counting…') : counted ? t('Foto ulang', 'Photograph again') : t('Foto untuk dihitung AI', 'Photo for an AI count')}
               </button>
               {pondId === null && <span class="field-hint">{t('Pilih kolam dulu.', 'Choose a pond first.')}</span>}
             </>
@@ -702,12 +711,15 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
               ) : (
                 <>
                   <p>
-                    <strong>{deadCounted(counted.result.count)}.</strong> {t('Jumlah di atas sudah diisi. Ubah kalau berbeda.', 'The number above is filled in. Change it if it is wrong.')}
+                    <strong>{countText(counted.result)}.</strong>{' '}
+                    {(counted.result.low ?? counted.result.count) === (counted.result.high ?? counted.result.count)
+                      ? t('Jumlah di atas sudah diisi. Ubah kalau berbeda.', 'The number above is filled in. Change it if it is wrong.')
+                      : t(`Angka tengah ${counted.result.count} sudah diisi. Cek fotonya, lalu ubah kalau berbeda.`, `The middle, ${counted.result.count}, is filled in. Check the photo, then change it if it is wrong.`)}
                   </p>
                   {counted.result.review && (
                     <p class="note info">
                       <Icon name="info" size={20} />
-                      <span>{t('Sidat bertumpuk atau kurang jelas bisa terlewat. Cek lagi hitungannya.', 'Eels that overlap or are unclear can be missed. Check the count again.')}</span>
+                      <span>{t('Garis putus-putus berarti AI ragu, titik kuning berarti kepala sidat. Sidat yang bertumpuk bisa terlewat.', 'A dashed outline means the AI is unsure; a yellow dot is an eel head. Eels that overlap can be missed.')}</span>
                     </p>
                   )}
                 </>
