@@ -39,6 +39,17 @@ Commit history in this repo starts on Oct 26, 2026.
 | SAM 3.1 | Segmenting and counting dead or surfacing eels in pond photos and video |
 | Muse Spark Open (Fireworks) | Open-weight fallback: takes over capture reading automatically when the Meta API is down or out of credits |
 
+## Evaluation
+
+Measured numbers, method and limits for each model use are in [`docs/evaluation.md`](docs/evaluation.md). Headlines:
+
+| What | Result |
+|---|---|
+| SAM 3.1 dead eel count, 14 test photos | Up to 16 eels lying apart (6 photos): every answer within 1 eel of the true count, median 1.8 s. Groups of 18 or more and piles (8 photos): no usable count; the app undercounts, says "at least N", or asks for a new photo |
+| Muse Spark reading spoken Javanese numbers | 12 of 12 fields from 3 typed rounds, e.g. "selawe koma wolu" = 25.8. Real farmer recordings not measured yet |
+| Evening briefing agent, 6 live runs (Muse Spark Open on Baseten, Muse Spark 1.3 on Meta) | 6 of 6 finished with tool calls, 7-8 steps, 9-13 s; all 12 rule checks kept in every run |
+| Offline checks | `npm run eval`: 33 of 33 cases; `npm test`: 101 tests |
+
 ## Repository layout
 
 ```

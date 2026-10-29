@@ -15,7 +15,8 @@
     "build": "npm run build -w web",
     "check:meta": "node scripts/check-meta-api.ts",
     "test": "npm test -w server",
-    "seed:demo": "node scripts/seed-demo.ts --reset"
+    "seed:demo": "node scripts/seed-demo.ts --reset",
+    "eval": "node scripts/eval.ts"
   },
   "devDependencies": {
     "@types/node": "^24.19.2"
