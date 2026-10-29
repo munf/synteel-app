@@ -469,8 +469,8 @@ export function SignIn({
 const TILE = {
   minHeight: 88,
   borderRadius: 16,
-  border: '2px solid var(--line-2)',
-  background: 'var(--surface)',
+  border: 0,
+  background: 'var(--bg)',
   padding: 12,
   display: 'flex',
   flexDirection: 'column',

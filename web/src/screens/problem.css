@@ -18,7 +18,7 @@
 .problem-bar { margin-top: auto; }
 /* "Gejala lain (n)": the less common signs, folded. */
 .more-signs {
-  min-height: 48px; border-radius: 16px; border: 2px solid var(--line-2); background: var(--surface); color: var(--ink);
+  min-height: 48px; border-radius: 16px; border: 2px solid transparent; background: var(--surface); color: var(--ink);
   padding: 0 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 1rem; font-weight: 600;
 }
 .more-signs[aria-expanded='true'] svg { transform: rotate(180deg); }

@@ -20,7 +20,7 @@
 .rp-shot-icon { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--accent); }
 .rp-bar { height: 12px; border-radius: 6px; background: var(--tint); position: relative; overflow: hidden; }
 .rp-bar > span { position: absolute; inset: 0 auto 0 0; border-radius: 6px; background: var(--accent); transition: width 0.3s; }
-.rp-search { position: relative; display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 0 16px; border: 2px solid var(--line-2); border-radius: 16px; background: var(--surface); color: var(--muted); }
+.rp-search { position: relative; display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 0 16px; border: 2px solid transparent; border-radius: 16px; background: var(--surface); color: var(--muted); }
 .rp-search:focus-within { border-color: var(--accent); }
 .rp-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font-size: 1rem; color: var(--ink); }
 .rp-search input::placeholder { color: var(--muted); }
@@ -68,7 +68,7 @@
 
 /* ---------- Cek hasil suara ---------- */
 .rs-ok { color: var(--ok); }
-.rs-card { border: 2px solid var(--line-2); gap: 12px; }
+.rs-card { gap: 12px; }
 .rs-card.done { border-color: var(--surface); }
 .rs-kind-icon { border-radius: 12px; }
 .rs-done-icon { width: 40px; height: 40px; flex: none; border-radius: 20px; background: var(--ok-bg); color: var(--ok); display: flex; align-items: center; justify-content: center; }
