@@ -678,6 +678,7 @@ export function createApi(
       scenarioAt: d.scenarioAt,
       units: spec.units.map((u) => ({ id: u.id, name: u.name() })),
       sensors: spec.sensors(),
+      readings: spec.readings,
       state: simulate(d, now),
       linked: store.devices.links(d.code).length > 0,
     };
@@ -726,7 +727,7 @@ export function createApi(
       const r = store.farm(l.farmId);
       const pond = r.getPond(l.pondId);
       if (!pond) continue;
-      r.addLog({ pondId: pond.id, batchId: r.activeBatch(pond.id)?.id ?? null, loggedAt: new Date(now).toISOString(), source: 'sensor', data: toLogData(simulate(l.device, now), l.unit) });
+      r.addLog({ pondId: pond.id, batchId: r.activeBatch(pond.id)?.id ?? null, loggedAt: new Date(now).toISOString(), source: 'sensor', data: toLogData(simulate(l.device, now), l.unit, l.device.kind) });
       store.devices.sent(l.code, l.unit, now);
       sent++;
     }

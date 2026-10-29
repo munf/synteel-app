@@ -1,5 +1,5 @@
-// Synteel devices and their simulator. A device (today the Nursery Gen5 and RDF Gen0 prototypes, as simulations
-// on eel.synt.fun/sim) has a code printed on it as text and QR. Linking the code in the app ties each of the
+// Synteel devices and their simulator. A device (today the Nursery Gen5, RDF Gen0 and Sensor Kit P1 prototypes, as
+// simulations on eel.synt.fun/sim) has a code printed on it as text and QR. Linking the code in the app ties each of the
 // device's tanks to a pond; its readings then arrive as logs with source 'sensor' and go through the same rules,
 // forecast, alarms and night summary as anything a farmer records.
 //
@@ -8,7 +8,7 @@ import type { Db } from './db.ts';
 import type { LogData } from './domain.ts';
 import { tx } from './i18n.ts';
 
-export type DeviceKind = 'gen5' | 'rdf0';
+export type DeviceKind = 'gen5' | 'rdf0' | 'p1';
 export type Scenario = 'normal' | 'power_cut' | 'blower_fail' | 'heat' | 'ammonia' | 'drum_jam';
 export const SCENARIOS: Scenario[] = ['normal', 'power_cut', 'blower_fail', 'heat', 'ammonia', 'drum_jam'];
 
@@ -25,8 +25,12 @@ interface KindSpec {
   units: UnitSpec[];
   /** What the device measures, shown before linking. */
   sensors: () => string[];
+  /** The readings it sends to the pond. */
+  readings: ReadingKey[];
   scenarios: Scenario[];
 }
+type ReadingKey = 'temperature' | 'ph' | 'tds' | 'do' | 'tan' | 'no2';
+const ALL_READINGS: ReadingKey[] = ['temperature', 'ph', 'tds', 'do', 'tan', 'no2'];
 
 export const KINDS: Record<DeviceKind, KindSpec> = {
   gen5: {
@@ -48,6 +52,7 @@ export const KINDS: Record<DeviceKind, KindSpec> = {
       tx('Listrik PLN dan UPS', 'Mains power and UPS'),
       tx('Blower dan oksigen cadangan', 'Blower and backup oxygen'),
     ],
+    readings: ALL_READINGS,
     scenarios: ['normal', 'power_cut', 'blower_fail', 'heat', 'ammonia'],
   },
   // Rotary drum filter with built-in sensors, on one round tank: one device, one pond.
@@ -68,7 +73,18 @@ export const KINDS: Record<DeviceKind, KindSpec> = {
       tx('Drum, pompa dan pompa udara', 'Drum, pump and air pump'),
       tx('Kamera tangki', 'Tank camera'),
     ],
+    readings: ALL_READINGS,
     scenarios: ['normal', 'power_cut', 'blower_fail', 'drum_jam'],
+  },
+  // A sensor kit on a pole for one ordinary pond: three probes (oxygen, pH, temperature) and a control box with a QR label.
+  p1: {
+    name: () => 'Synteel Sensor Kit P1',
+    short: 'Sensor Kit P1',
+    prefix: 'P1',
+    units: [{ id: 'pond', name: () => tx('Kolam', 'Pond') }],
+    sensors: () => [tx('Oksigen terlarut (DO)', 'Dissolved oxygen (DO)'), 'pH', tx('Suhu', 'Temperature')],
+    readings: ['do', 'ph', 'temperature'],
+    scenarios: ['normal', 'blower_fail', 'heat'],
   },
 };
 
@@ -130,6 +146,10 @@ const BASE: Record<DeviceKind, Record<string, UnitState>> = {
   rdf0: {
     tank: { do: 6.9, temperature: 27.9, ph: 7.3, tds: 190, tan: 0.16, no2: 0.09, level: 100, turbidity: 3, orp: 280, dirtyLevel: 100 },
   },
+  // Only do, temperature and ph are measured; the rest never leaves the simulation.
+  p1: {
+    pond: { do: 6.6, temperature: 28.2, ph: 7.4, tds: 0, tan: 0, no2: 0, level: 100 },
+  },
 };
 const r1 = (n: number) => Math.round(n * 10) / 10;
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -151,13 +171,14 @@ export function simulate(d: Pick<Device, 'scenario' | 'scenarioAt'> & { kind?: D
   const min = Math.max(0, (now - d.scenarioAt) / 60_000);
   const s = d.scenario;
   const rdf = kind === 'rdf0';
+  const kit = kind === 'p1';
   const state: SimState = {
     at: now,
     // The Gen5 has a UPS for its controller; the RDF Gen0 has none.
-    power: { mains: s !== 'power_cut', ups: !rdf && s === 'power_cut' },
+    power: { mains: s !== 'power_cut', ups: !rdf && !kit && s === 'power_cut' },
     blower: s !== 'power_cut' && s !== 'blower_fail',
     oxygenValve: false,
-    chiller: !rdf && s !== 'heat' && s !== 'power_cut',
+    chiller: !rdf && !kit && s !== 'heat' && s !== 'power_cut',
     units: {},
   };
   if (rdf) {
@@ -182,13 +203,13 @@ export function simulate(d: Pick<Device, 'scenario' | 'scenarioAt'> & { kind?: D
       u.orp = b.orp! + wobble(4, 8);
       u.dirtyLevel = 100 + wobble(0.5, 4);
     }
-    if (!rdf && (s === 'power_cut' || s === 'blower_fail')) {
+    if (!rdf && !kit && (s === 'power_cut' || s === 'blower_fail')) {
       const o = oxygenAfterStop(b.do, min);
       u.do = o.value;
       state.oxygenValve ||= o.valve;
       if (s === 'power_cut') u.temperature += Math.min(1.2, 0.04 * min); // no chiller either
     }
-    if (rdf && (s === 'power_cut' || s === 'blower_fail')) {
+    if ((rdf || kit) && (s === 'power_cut' || s === 'blower_fail')) {
       // No backup oxygen on the RDF: oxygen keeps falling until someone acts.
       u.do = Math.max(2.6, b.do - (s === 'power_cut' ? 0.4 : 0.32) * min);
       if (s === 'power_cut') {
@@ -214,6 +235,11 @@ export function simulate(d: Pick<Device, 'scenario' | 'scenarioAt'> & { kind?: D
       u.tan = Math.min(1.6, b.tan + 0.06 * min);
       u.no2 = Math.min(0.9, b.no2 + 0.025 * min);
     }
+    if (kit) {
+      // Only what the kit's three probes measure.
+      state.units[unit] = { do: r1(Math.max(0.5, u.do)), temperature: r1(u.temperature), ph: r1(u.ph) } as UnitState;
+      continue;
+    }
     state.units[unit] = {
       do: r1(Math.max(0.5, u.do)),
       temperature: r1(u.temperature),
@@ -228,13 +254,12 @@ export function simulate(d: Pick<Device, 'scenario' | 'scenarioAt'> & { kind?: D
   return state;
 }
 
-/** One unit's state as a pond log. */
-export function toLogData(s: SimState, unit: string): LogData {
+/** One unit's state as a pond log: only the readings this kind of device measures. */
+export function toLogData(s: SimState, unit: string, kind: DeviceKind = 'gen5'): LogData {
   const u = s.units[unit];
-  return {
-    readings: { temperature: u.temperature, ph: u.ph, tds: u.tds, do: u.do, tan: u.tan, no2: u.no2 },
-    aeration: s.blower ? 'on' : 'off',
-  };
+  const readings: NonNullable<LogData['readings']> = {};
+  for (const key of KINDS[kind].readings) if (u[key] !== undefined) readings[key] = u[key];
+  return { readings, aeration: s.blower ? 'on' : 'off' };
 }
 
 /** How often a linked device writes a log: often while something is happening, otherwise every 10 minutes. */

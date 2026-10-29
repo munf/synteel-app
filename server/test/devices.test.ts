@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createApi } from '../src/api.ts';
 import { openDb, repo } from '../src/db.ts';
-import { normalizeCode, simulate } from '../src/devices.ts';
+import { normalizeCode, simulate, toLogData } from '../src/devices.ts';
 
 test('a stopped blower: oxygen falls into Danger, the backup valve opens, oxygen recovers', () => {
   const at = Date.parse('2026-10-29T10:00:00Z');
@@ -111,4 +111,13 @@ test('an RDF Gen0 links as one simulation pond; Gen5-only events are refused for
   await call('PUT', '/farm', { name: 'T' });
   const ponds = (await call('POST', `/devices/${d.code}/link`)).json.ponds;
   assert.deepEqual(ponds.map((p: { name: string }) => p.name), ['RDF Gen0 Tank']);
+});
+
+test('Sensor Kit P1: one pond, only oxygen, pH and temperature; a stopped aerator drives oxygen into Danger', () => {
+  const at = Date.parse('2026-10-29T10:00:00Z');
+  const s = (min: number) => simulate({ kind: 'p1', scenario: 'blower_fail', scenarioAt: at }, at + min * 60_000);
+  assert.deepEqual(Object.keys(s(0).units.pond).sort(), ['do', 'ph', 'temperature']);
+  assert.ok(s(15).units.pond.do < 4);
+  assert.deepEqual(Object.keys(toLogData(s(1), 'pond', 'p1').readings!).sort(), ['do', 'ph', 'temperature']);
+  assert.equal(s(1).oxygenValve, false);
 });
