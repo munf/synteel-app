@@ -172,10 +172,6 @@ const SYSTEM = (input: BriefingInput) =>
 
 /** Runs the agent; falls back to the rules-only briefing on any failure. */
 export async function runBriefing(input: BriefingInput, providers: ChatProvider[]): Promise<Briefing> {
-  const steps: Briefing['steps'] = [];
-  const provider = providers.find((p) => p.apiKey);
-  if (!provider) return rulesBriefing(input);
-
   const run = (name: string, args: Record<string, any>): unknown => {
     const ncOf = (id: number) => input.nowcasts.find((n) => n.pondId === id);
     const end = input.now + WINDOW_H * HOUR;
@@ -211,46 +207,57 @@ export async function runBriefing(input: BriefingInput, providers: ChatProvider[
     }
   };
 
-  const messages: any[] = [
-    { role: 'system', content: SYSTEM(input) },
-    { role: 'user', content: currentLang() === 'en' ? 'Susun briefing malam ini. Write the summary and every check in English.' : 'Susun briefing malam ini.' },
-  ];
-  try {
-    for (let round = 0; round < MAX_ROUNDS; round++) {
-      const body = await call(`${provider.base}/chat/completions`, provider.apiKey, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ model: provider.model, messages, tools: TOOLS, tool_choice: 'auto', max_tokens: 3000, reasoning_effort: 'low' }),
-      });
-      const msg = body.choices?.[0]?.message;
-      if (!msg) throw new AiFailed('empty answer');
-      messages.push({ role: 'assistant', content: msg.content ?? '', tool_calls: msg.tool_calls });
-      const calls: any[] = msg.tool_calls ?? [];
-      if (!calls.length) {
-        messages.push({ role: 'user', content: 'Kirim hasilnya lewat submit_briefing.' });
-        continue;
-      }
-      for (const c of calls) {
-        let args: Record<string, any> = {};
-        try {
-          args = JSON.parse(c.function?.arguments || '{}');
-        } catch {
-          // keep empty args; the tool answers with an error
-        }
-        if (c.function?.name === 'submit_briefing') {
-          steps.push({ tool: 'submit_briefing', args: {} });
-          return guard(input, args, steps, `${provider.name}/${provider.model}`);
-        }
-        steps.push({ tool: c.function?.name ?? '?', args });
-        messages.push({ role: 'tool', tool_call_id: c.id, content: JSON.stringify(run(c.function?.name, args)) });
-      }
-    }
-    console.error('briefing agent: no submit_briefing after', MAX_ROUNDS, 'rounds');
-  } catch (err) {
-    if (!(err instanceof AiFailed || err instanceof Retry)) throw err;
-    console.error('briefing agent:', (err as Error).message);
+  // One provider after the other: the open-weight model first, then the Meta API, then Fireworks.
+  let steps: Briefing['steps'] = [];
+  for (const provider of providers.filter((p) => p.apiKey)) {
+    steps = [];
+    const done = await attempt(provider, steps);
+    if (done) return done;
   }
   return rulesBriefing(input, steps);
+
+  async function attempt(provider: ChatProvider, steps: Briefing['steps']): Promise<Briefing | null> {
+    const messages: any[] = [
+      { role: 'system', content: SYSTEM(input) },
+      { role: 'user', content: currentLang() === 'en' ? 'Susun briefing malam ini. Write the summary and every check in English.' : 'Susun briefing malam ini.' },
+    ];
+    try {
+      for (let round = 0; round < MAX_ROUNDS; round++) {
+        const body = await call(`${provider.base}/chat/completions`, provider.apiKey, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ model: provider.model, messages, tools: TOOLS, tool_choice: 'auto', max_tokens: 3000, reasoning_effort: 'low' }),
+        });
+        const msg = body.choices?.[0]?.message;
+        if (!msg) throw new AiFailed('empty answer');
+        messages.push({ role: 'assistant', content: msg.content ?? '', tool_calls: msg.tool_calls });
+        const calls: any[] = msg.tool_calls ?? [];
+        if (!calls.length) {
+          messages.push({ role: 'user', content: 'Kirim hasilnya lewat submit_briefing.' });
+          continue;
+        }
+        for (const c of calls) {
+          let args: Record<string, any> = {};
+          try {
+            args = JSON.parse(c.function?.arguments || '{}');
+          } catch {
+            // keep empty args; the tool answers with an error
+          }
+          if (c.function?.name === 'submit_briefing') {
+            steps.push({ tool: 'submit_briefing', args: {} });
+            return guard(input, args, steps, `${provider.name}/${provider.model}`);
+          }
+          steps.push({ tool: c.function?.name ?? '?', args });
+          messages.push({ role: 'tool', tool_call_id: c.id, content: JSON.stringify(run(c.function?.name, args)) });
+        }
+      }
+      console.error(`briefing agent (${provider.name}): no submit_briefing after`, MAX_ROUNDS, 'rounds');
+    } catch (err) {
+      if (!(err instanceof AiFailed || err instanceof Retry)) throw err;
+      console.error(`briefing agent (${provider.name}):`, (err as Error).message);
+    }
+    return null;
+  }
 }
 
 /** Applies the guardrails to what the model submitted. */

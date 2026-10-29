@@ -564,7 +564,9 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
     let url: string | null = null;
     try {
       // Sharper than other photos: glass eel eyes are a few pixels, and JPEG at 82% wipes out half of them.
-      const { blob } = await prepareImage(file, 1600, 0.92);
+      // 12% brighter: the see-through bodies lighten while the black eyes stay dark, so SAM finds more heads
+      // in a pile (11 → 20 on one test photo); 25% starts to lose them.
+      const { blob } = await prepareImage(file, 1600, 0.92, 1.12);
       url = URL.createObjectURL(blob);
       const img = new Image();
       img.src = url;

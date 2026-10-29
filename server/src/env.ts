@@ -24,7 +24,18 @@ const fireworks = {
   model: 'accounts/fireworks/models/muse-spark-open',
 };
 
+// The same open-weight Muse Spark Open on Baseten (partner credits): runs the evening briefing agent,
+// with the Meta API and Fireworks behind it.
+const baseten = {
+  name: 'baseten',
+  apiKey: process.env.BASETEN_API_KEY ?? '',
+  base: 'https://inference.baseten.co/v1',
+  model: 'meta-models/muse-spark-open-1026',
+};
+
 export const env = {
+  /** Evening briefing agent, tried in order. */
+  agentChat: [baseten, meta, fireworks],
   aiChat: process.env.SYNTEEL_AI_PROVIDER === 'fireworks' ? [fireworks, meta] : [meta, fireworks],
   // Speech-to-text only exists on the Meta side.
   aiTranscriber: { apiKey: metaKey, base: metaBase, model: 'muse-voice-transcribe-1.0' },

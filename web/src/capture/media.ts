@@ -31,12 +31,15 @@ function toBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error(t('Gagal memproses gambar', 'Could not process the image')))), 'image/jpeg', quality));
 }
 
-function draw(source: CanvasImageSource, w: number, h: number, maxSide: number) {
+function draw(source: CanvasImageSource, w: number, h: number, maxSide: number, brightness = 1) {
   const scale = Math.min(1, maxSide / Math.max(w, h));
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(w * scale);
   canvas.height = Math.round(h * scale);
-  canvas.getContext('2d')!.drawImage(source, 0, 0, canvas.width, canvas.height);
+  const ctx = canvas.getContext('2d')!;
+  // Browsers without canvas filters just draw the photo as it is.
+  if (brightness !== 1) ctx.filter = `brightness(${brightness})`;
+  ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
   return canvas;
 }
 
@@ -73,11 +76,11 @@ export function photoIssues(source: CanvasImageSource, w: number, h: number): st
   return issues;
 }
 
-export async function prepareImage(file: Blob, maxSide = 1280, quality = 0.82): Promise<PreparedImage> {
+export async function prepareImage(file: Blob, maxSide = 1280, quality = 0.82, brightness = 1): Promise<PreparedImage> {
   const bitmap = await loadBitmap(file);
   const w = 'naturalWidth' in bitmap ? bitmap.naturalWidth : bitmap.width;
   const h = 'naturalHeight' in bitmap ? bitmap.naturalHeight : bitmap.height;
-  const canvas = draw(bitmap, w, h, maxSide);
+  const canvas = draw(bitmap, w, h, maxSide, brightness);
   return { blob: await toBlob(canvas, quality), issues: photoIssues(bitmap, w, h) };
 }
 

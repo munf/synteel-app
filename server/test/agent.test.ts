@@ -117,3 +117,25 @@ test('with no model the briefing comes from the rules', async () => {
   assert.equal(b.source, 'rules');
   assert.equal(b.checks[0].source, 'rules');
 });
+
+test('the open-weight provider out of credits: the next provider writes the briefing', async () => {
+  const spent = createServer((_req, res) => (res.writeHead(402, { 'content-type': 'application/json' }), res.end('{"error":{"message":"credits"}}')));
+  const answer = { tool_calls: [{ id: 'a', type: 'function', function: { name: 'submit_briefing', arguments: JSON.stringify({ summary: 'Kolam B paling rawan sekitar jam 01.00 karena sidat naik ke permukaan.', checks: [] }) } }] };
+  const working = createServer((req, res) => {
+    req.resume();
+    req.on('end', () => (res.writeHead(200, { 'content-type': 'application/json' }), res.end(JSON.stringify({ choices: [{ message: { content: '', ...answer } }] }))));
+  });
+  const listen = (s: ReturnType<typeof createServer>) => new Promise<string>((resolve) => s.listen(0, '127.0.0.1', () => resolve(`http://127.0.0.1:${(s.address() as { port: number }).port}`)));
+  const [spentBase, workingBase] = [await listen(spent), await listen(working)];
+  try {
+    const b = await runBriefing(input(), [
+      { name: 'baseten', apiKey: 'k', base: spentBase, model: 'open' },
+      { name: 'meta', apiKey: 'k', base: workingBase, model: 'm' },
+    ]);
+    assert.equal(b.source, 'agent');
+    assert.equal(b.model, 'meta/m');
+  } finally {
+    spent.close();
+    working.close();
+  }
+});
