@@ -126,7 +126,7 @@ export const kindLabel: Record<string, string> = {
   terpal: t('Terpal', 'Tarp'),
   beton: t('Beton', 'Concrete'),
   fiber: t('Bak fiber', 'Fiber tub'),
-  gen5: 'Synteel Nursery Gen5',
+  gen5: 'Synteel Nursery Gen0',
 };
 
 export function PondThumb({ kind, size = 56 }: { kind: string | null; size?: number }) {

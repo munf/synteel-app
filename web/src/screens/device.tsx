@@ -1,5 +1,5 @@
 // "Hubungkan alat": the farmer types or scans the code on a Synteel device (today: a simulated Synteel Nursery
-// Gen5 from eel.synt.fun/sim). The device shows first, with what it measures and what linking will do; nothing
+// Gen0 from eel.synt.fun/sim). The device shows first, with what it measures and what linking will do; nothing
 // changes until the owner taps "Hubungkan". A simulated device gets new ponds of its own, marked "Simulasi",
 // so its numbers never mix with real ponds.
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -9,10 +9,10 @@ import { Field, Icon, Notice } from '../ui.tsx';
 import { siteInAppLanguage, t } from '../i18n.ts';
 import './device.css';
 
-/** Letters and digits only, upper case: "g5 7kq2-m4" → "G57KQ2M4". */
+/** Letters and digits only, upper case: "g5 7kq2-m4" → "N07KQ2M4". */
 const bare = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-/** "G57KQ2M4" → "G5-7KQ2-M4", dashes added as the code is typed. */
+/** "N07KQ2M4" → "N0-7KQ2-M4", dashes added as the code is typed. */
 
 export function formatCode(raw: string): string {
   const s = bare(raw).slice(0, 8);
@@ -133,7 +133,7 @@ export function ConnectDevice({ initialCode, role, onLinked, go }: { initialCode
 
   const look = async (c = code) => {
     if (!complete(c)) {
-      setError(t('Kode alat terdiri dari 8 huruf dan angka, contoh: G5-7KQ2-M4.', 'A device code has 8 letters and numbers, for example: G5-7KQ2-M4.'));
+      setError(t('Kode alat terdiri dari 8 huruf dan angka, contoh: N0-7KQ2-M4.', 'A device code has 8 letters and numbers, for example: N0-7KQ2-M4.'));
       return;
     }
     setChecking(true);
@@ -211,7 +211,7 @@ export function ConnectDevice({ initialCode, role, onLinked, go }: { initialCode
                   look();
                 }}
               >
-                <Field label={t('Kode alat', 'Device code')} hint={t('contoh: G5-7KQ2-M4', 'example: G5-7KQ2-M4')}>
+                <Field label={t('Kode alat', 'Device code')} hint={t('contoh: N0-7KQ2-M4', 'example: N0-7KQ2-M4')}>
                   <input
                     class="code-input"
                     value={code}
@@ -222,7 +222,7 @@ export function ConnectDevice({ initialCode, role, onLinked, go }: { initialCode
                     inputMode="text"
                     maxLength={10}
                     aria-invalid={error ? true : undefined}
-                    placeholder="G5-XXXX-XX"
+                    placeholder="N0-XXXX-XX"
                     onInput={(e) => {
                       const v = formatCode(e.currentTarget.value);
                       e.currentTarget.value = v;

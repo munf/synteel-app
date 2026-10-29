@@ -31,8 +31,8 @@ test('RDF Gen0: one tank; a jammed drum lets dirty water past, ammonia climbs in
 });
 
 test('codes are typed by hand: spaces, case and dashes do not matter', () => {
-  assert.equal(normalizeCode('g5 7kq2m4'), 'G5-7KQ2-M4');
-  assert.equal(normalizeCode('G5-7KQ2-M4'), 'G5-7KQ2-M4');
+  assert.equal(normalizeCode('n0 7kq2m4'), 'N0-7KQ2-M4');
+  assert.equal(normalizeCode('N0-7KQ2-M4'), 'N0-7KQ2-M4');
 });
 
 test('simulator device: create, link in the app as new simulation ponds, readings arrive as sensor logs', async () => {
@@ -55,7 +55,7 @@ test('simulator device: create, link in the app as new simulation ponds, reading
   const made = await call('POST', '/sim/devices', { kind: 'gen5' });
   assert.equal(made.status, 201);
   const code: string = made.json.device.code;
-  assert.match(code, /^G5-[A-Z2-9]{4}-[A-Z2-9]{2}$/);
+  assert.match(code, /^N0-[A-Z2-9]{4}-[A-Z2-9]{2}$/);
   assert.equal(made.json.device.units.length, 2);
 
   await call('POST', '/auth/register', { name: 'Pak Joko', phone: '0812 3456 7890', pin: '246810' });
@@ -63,16 +63,16 @@ test('simulator device: create, link in the app as new simulation ponds, reading
   const real = (await call('POST', '/ponds', { name: 'Kolam A' })).json.pond;
 
   const seen = await call('GET', `/devices/${code.toLowerCase().replace(/-/g, ' ')}`);
-  assert.equal(seen.json.device.name, 'Synteel Nursery Gen5');
+  assert.equal(seen.json.device.name, 'Synteel Nursery Gen0');
   assert.equal(seen.json.device.linkedHere, false);
 
   const linked = await call('POST', `/devices/${code}/link`);
   assert.equal(linked.status, 201);
-  assert.deepEqual(linked.json.ponds.map((p: { name: string }) => p.name), ['Gen5 Tangki 1', 'Gen5 Tangki 2']);
+  assert.deepEqual(linked.json.ponds.map((p: { name: string }) => p.name), ['Gen0 Tangki 1', 'Gen0 Tangki 2']);
   assert.ok(linked.json.ponds.every((p: { simulated: boolean; device: { code: string } }) => p.simulated && p.device.code === code));
   // The first readings are there at once, and the real pond is untouched.
   const farm = (await call('GET', '/farm')).json;
-  const sim = farm.ponds.find((p: { name: string }) => p.name === 'Gen5 Tangki 1');
+  const sim = farm.ponds.find((p: { name: string }) => p.name === 'Gen0 Tangki 1');
   assert.equal(sim.latest.do.value > 6, true);
   assert.equal(farm.ponds.find((p: { id: number }) => p.id === real.id).simulated, false);
 
@@ -92,7 +92,7 @@ test('simulator device: create, link in the app as new simulation ponds, reading
   assert.equal((await call('GET', '/farm')).json.ponds.length, 1);
 });
 
-test('an RDF Gen0 links as one simulation pond; Gen5-only events are refused for it', async () => {
+test('an RDF Gen0 links as one simulation pond; nursery-only events are refused for it', async () => {
   const store = repo(openDb(':memory:'));
   const api = createApi(store, { clock: () => new Date('2026-10-29T03:00:00Z'), getWeather: async () => ({ hours: [], fetchedAt: 0 }), geocode: async () => null });
   let cookie = '';

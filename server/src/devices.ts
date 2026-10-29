@@ -1,4 +1,4 @@
-// Synteel devices and their simulator. A device (today the Nursery Gen5, RDF Gen0 and Sensor Kit P1 prototypes, as
+// Synteel devices and their simulator. A device (today the Nursery Gen0, RDF Gen0 and Sensor Kit P1 prototypes, as
 // simulations on eel.synt.fun/sim) has a code printed on it as text and QR. Linking the code in the app ties each of the
 // device's tanks to a pond; its readings then arrive as logs with source 'sensor' and go through the same rules,
 // forecast, alarms and night summary as anything a farmer records.
@@ -18,7 +18,7 @@ interface UnitSpec {
 }
 interface KindSpec {
   name: () => string;
-  /** Start of the pond names it creates: "Gen5 Tangki 1". */
+  /** Start of the pond names it creates: "Gen0 Tangki 1". */
   short: string;
   /** First two letters of its codes. */
   prefix: string;
@@ -34,9 +34,9 @@ const ALL_READINGS: ReadingKey[] = ['temperature', 'ph', 'tds', 'do', 'tan', 'no
 
 export const KINDS: Record<DeviceKind, KindSpec> = {
   gen5: {
-    name: () => 'Synteel Nursery Gen5',
-    short: 'Gen5',
-    prefix: 'G5',
+    name: () => 'Synteel Nursery Gen0',
+    short: 'Gen0',
+    prefix: 'N0',
     units: [
       { id: 'tank1', name: () => tx('Tangki 1', 'Tank 1') },
       { id: 'tank2', name: () => tx('Tangki 2', 'Tank 2') },
@@ -127,9 +127,9 @@ export interface UnitState {
 export interface SimState {
   at: number;
   power: { mains: boolean; ups: boolean };
-  /** Gen5 blower, or the RDF's air pump. */
+  /** The nursery blower, or the RDF's air pump. */
   blower: boolean;
-  /** Backup oxygen valve: opens by itself when oxygen falls (the Gen5 automatic response; the RDF has none). */
+  /** Backup oxygen valve: opens by itself when oxygen falls (the nursery's automatic response; the RDF has none). */
   oxygenValve: boolean;
   chiller: boolean;
   /** RDF only: the drum turning, and the pump returning clean water. */
@@ -174,7 +174,7 @@ export function simulate(d: Pick<Device, 'scenario' | 'scenarioAt'> & { kind?: D
   const kit = kind === 'p1';
   const state: SimState = {
     at: now,
-    // The Gen5 has a UPS for its controller; the RDF Gen0 has none.
+    // The nursery has a UPS for its controller; the RDF Gen0 has none.
     power: { mains: s !== 'power_cut', ups: !rdf && !kit && s === 'power_cut' },
     blower: s !== 'power_cut' && s !== 'blower_fail',
     oxygenValve: false,
@@ -277,7 +277,7 @@ export function newCode(kind: DeviceKind): string {
   const pick = (n: number) => Array.from({ length: n }, () => ALPHABET[Math.floor(Math.random() * ALPHABET.length)]).join('');
   return `${KINDS[kind].prefix}-${pick(4)}-${pick(2)}`;
 }
-/** "g5 7kq2m4", "G5-7KQ2-M4" → "G5-7KQ2-M4". */
+/** "n0 7kq2m4", "N0-7KQ2-M4" → "N0-7KQ2-M4". */
 export function normalizeCode(raw: string): string {
   const s = String(raw ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   return s.length === 8 ? `${s.slice(0, 2)}-${s.slice(2, 6)}-${s.slice(6)}` : s;
