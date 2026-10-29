@@ -331,7 +331,7 @@ export function Field({ label, hint, children }: { label: ComponentChildren; hin
  * A count: − and + for small changes, the number itself can be typed (tap it), and optional
  * quick-add buttons (+5, +10…) so 60 dead eels don't take 60 taps.
  */
-export function Stepper({ value, onChange, min = 0, quick }: { value: number; onChange: (n: number) => void; min?: number; quick?: number[] }) {
+export function Stepper({ value, onChange, min = 0, quick, tapHint = true }: { value: number; onChange: (n: number) => void; min?: number; quick?: number[]; tapHint?: boolean }) {
   // The typed text while the field has focus, so an empty field doesn't snap back to the minimum mid-typing.
   const [typing, setTyping] = useState<string | null>(null);
   const set = (n: number) => onChange(Math.max(min, Math.min(99_999, n)));
@@ -366,7 +366,7 @@ export function Stepper({ value, onChange, min = 0, quick }: { value: number; on
               +{q}
             </button>
           ))}
-          <span class="label muted">{t('atau ketuk angkanya', 'or tap the number')}</span>
+          {tapHint && <span class="label muted">{t('atau ketuk angkanya', 'or tap the number')}</span>}
         </div>
       )}
     </div>

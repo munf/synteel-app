@@ -684,7 +684,7 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
       {signs.includes('dead') && (
         <div class={`field${manual ? ' count-manual' : ''}`}>
           <span class="field-label">{t('Berapa ekor mati?', 'How many died?')}</span>
-          <Stepper value={dead} onChange={setDead} min={1} quick={[5, 10, 50]} />
+          <Stepper value={dead} onChange={setDead} min={1} quick={[5, 10, 50]} tapHint={false} />
           {manual && (
             <span role="status" class="label semi" style={{ color: 'var(--accent-ink)' }}>
               {t('Isi dengan − dan +. Jumlah ini yang dipakai di laporan.', 'Set it with − and +. This number is used in the report.')}
