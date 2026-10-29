@@ -281,7 +281,7 @@ function mockAi(): Ai {
       return 'Mode contoh: suara di Kolam B tidak terbaca sejak kemarin.';
     },
     async draft(input) {
-      const problems = ['Mode contoh: AI Meta belum aktif, angka ini bukan hasil membaca.'];
+      const problems = ['Mode contoh: AI belum aktif, angka ini bukan hasil membaca.'];
       if (input.kind === 'photo') {
         const raw = input.field ? examples[input.field] : { temperature: 28.6, ph: 7.2, tds: 162 };
         return toDraft({ ...raw, problems }, 'mock');

@@ -2,14 +2,14 @@ import { useEffect, useState } from 'preact/hooks';
 import { StepList, useSteps } from '../steps.tsx';
 import { api, ApiError, type Limits, type Log, type NowcastState, type PondProfile, type PondSummary, type Role } from '../api.ts';
 import type { Go } from '../app.tsx';
-import { aerationLabel, fmtAgo, fmtNum, fmtTime, phaseLabel, readingWord, settingLabel, sourceLabel, summarizeLog } from '../labels.ts';
+import { aerationLabel, fmtAgo, fmtNum, fmtTemp, fmtTime, phaseLabel, readingWord, settingLabel, sourceLabel, summarizeLog } from '../labels.ts';
 import { usePrefs } from '../prefs.ts';
-import { Icon, kindLabel, Shape, Soon, StatusPill, tankPath, toneOf } from '../ui.tsx';
+import { ActionBar, Icon, kindLabel, Shape, Soon, StatusPill, tankPath, toneOf } from '../ui.tsx';
 import './pond.css';
 
 type Key = 'temperature' | 'ph' | 'tds';
 const METRICS: { key: Key; label: string; unit: string; scale: [number, number] }[] = [
-  { key: 'temperature', label: 'Suhu', unit: '°', scale: [22, 34] },
+  { key: 'temperature', label: 'Suhu', unit: ' °C', scale: [22, 34] },
   { key: 'ph', label: 'pH', unit: '', scale: [6, 9] },
   { key: 'tds', label: 'TDS', unit: '', scale: [0, 300] },
 ];
@@ -31,6 +31,9 @@ export const plainSource = (s: string) =>
 
 /** Program text in plain words: NO₂ is "nitrit" on the farm. */
 const plainWater = (s: string) => s.replace(/NO₂/g, 'nitrit').replace(/NO₃/g, 'nitrat').replace(/\bTAN\b/g, 'amonia');
+
+/** The kind of feed without portions: feed percentages belong in Teknis only. */
+const feedKind = (feed: string) => feed.split(',')[0].replace(/\s*\d[\d–\-,.]*\s*%.*$/, '').replace(/\s*\+\s*/g, ' dan ').trim();
 
 /** Last value per day for the past 7 days, oldest first. */
 function daily(logs: Log[], key: Key) {
@@ -79,7 +82,7 @@ function MetricCard({ pond, logs }: { pond: PondSummary; logs: Log[] }) {
       </div>
       <div class="stack-sm">
         <div class="row between">
-          <span class="big">{latest ? `${fmtNum(latest.value)}${m.unit}` : '–'}</span>
+          <span class="big">{latest ? (key === 'temperature' ? fmtTemp(latest.value) : fmtNum(latest.value)) : '–'}</span>
           {word && (
             <span class={`pill ${word.tone}`} style={{ flex: 'none' }}>
               <Shape tone={word.tone} />
@@ -110,14 +113,14 @@ function MetricCard({ pond, logs }: { pond: PondSummary; logs: Log[] }) {
   );
 }
 
-/** "12 catatan sejak Jumat · terakhir Rab 17.15" for the row that opens the full history. */
+/** "12 catatan sejak Jumat · terakhir Rabu 17.15" for the row that opens the full history. */
 function historyLine(logs: Log[]) {
   if (logs.length === 0) return 'Belum ada catatan 14 hari terakhir';
   const oldest = Date.parse(logs.at(-1)!.loggedAt);
   const since =
     Date.now() - oldest < 6 * 86400_000
       ? new Date(oldest).toLocaleDateString('id-ID', { weekday: 'long', timeZone: 'Asia/Jakarta' })
-      : new Date(oldest).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'Asia/Jakarta' });
+      : new Date(oldest).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', timeZone: 'Asia/Jakarta' });
   return `${logs.length} catatan sejak ${since} · terakhir ${fmtTime(logs[0].loggedAt)}`;
 }
 
@@ -186,7 +189,7 @@ function Nicknames({ pond, role, onSaved }: { pond: PondSummary; role?: Role | n
     <div class="stack">
       <label class="field">
         <span class="meta">{owner ? 'Nama panggilan (boleh kosong)' : 'Nama panggilan baru'}</span>
-        <input value={draft} onInput={(e) => setDraft(e.currentTarget.value)} placeholder="mis. kolam pojok" />
+        <input value={draft} onInput={(e) => setDraft(e.currentTarget.value)} placeholder="contoh: kolam pojok" />
         <span class="field-hint">{owner && names.length > 1 ? 'Pisahkan dengan koma. ' : ''}AI memakai ini saat mendengar suara.</span>
       </label>
       {error && <p class="error">{error}</p>}
@@ -236,17 +239,18 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
 
   return (
     <div class="screen">
-      <section class="cover">
-        <svg viewBox="0 0 350 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-          <g transform="translate(105 8) scale(2.5)">
-            <path d={tankPath(pond.kind)} fill="#8DB6D9" stroke="#FFFFFF" stroke-width="2.6" />
-          </g>
-        </svg>
+      <section class="cover" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {/* No photo yet: the pond type as a line glyph in a neutral tile, never a filled shape. */}
+        <span style={{ width: 120, height: 120, marginRight: 80, borderRadius: 24, background: 'var(--bg)', color: 'var(--ink-2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d={tankPath(pond.kind)} />
+          </svg>
+        </span>
         <button class="icon-btn" aria-label="Kembali ke Beranda" onClick={() => go({ name: 'today' })}>
           <Icon name="back" />
         </button>
         <span class="cover-action stack-xs" style={{ alignItems: 'flex-end' }}>
-          <span class="pill grey" style={{ background: '#fff', minHeight: 44 }}>
+          <span class="pill grey" style={{ background: 'var(--surface)', minHeight: 44 }}>
             <Icon name="camera" size={18} /> Foto kolam
           </span>
           <Soon />
@@ -298,7 +302,7 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
           </section>
         ) : (
           <section class="card tint">
-            <h2>Kolam tenang</h2>
+            <h2>Kolam aman</h2>
             <p class="ink2">Tidak ada peringatan dari catatan terakhir.</p>
           </section>
         ))}
@@ -312,14 +316,16 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
             <span class="strong">
               Minggu ke-{pond.program!.week}: {stage.name}
             </span>
-            <span class="ink2">Pakan {stage.feed.toLowerCase()}. Air: {plainWater(stage.water).toLowerCase()}.</span>
+            <span class="ink2">
+              Pakan {feedKind(stage.feed).toLowerCase()}. Air: {plainWater(stage.water).toLowerCase()}. Porsi pakan ada di Teknis.
+            </span>
           </div>
         </section>
       )}
 
       {tech && (
         <section class="card">
-          <h2>Ukuran terakhir vs target</h2>
+          <h2>Ukuran terakhir dibanding target</h2>
           {METRICS.map((m) => {
             const r = pond.latest[m.key];
             const l = pond.limits[m.key];
@@ -330,7 +336,7 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
               <div class="stack-sm" key={m.key}>
                 <div class="row between">
                   <span class="ink2">{m.label}</span>
-                  <span class="strong num">{r ? `${fmtNum(r.value)}${m.unit}` : '–'}</span>
+                  <span class="strong num">{r ? (m.key === 'temperature' ? fmtTemp(r.value) : fmtNum(r.value)) : '–'}</span>
                 </div>
                 <span class="ruler">
                   <span class="target" style={{ left: `${pct(from, m.scale)}%`, width: `${pct(to, m.scale) - pct(from, m.scale)}%` }} />
@@ -370,14 +376,9 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
       )}
 
       {!tech && (
-        <div class="stack-sm">
-          <button class="btn primary" onClick={() => go({ name: 'record', pondId: pond.id })}>
-            <Icon name="mic" /> Catat kondisi sekarang
-          </button>
-          <button class="btn secondary" onClick={() => go({ name: 'problem', pondId: pond.id })}>
-            <Icon name="alert" size={20} /> Lapor masalah di kolam ini
-          </button>
-        </div>
+        <button class="btn secondary" onClick={() => go({ name: 'problem', pondId: pond.id })}>
+          <Icon name="siren" size={20} /> Lapor masalah di kolam ini
+        </button>
       )}
 
       {tech && (
@@ -388,26 +389,26 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
                 <Icon name="thermo" />
               </span>
               <div class="stack-xs grow">
-                <span class="strong">Perkiraan vs ukur</span>
+                <span class="strong">Perkiraan dibanding ukuran</span>
                 <span class="label ink2">
                   {fit.length >= 3
-                    ? `${good} dari ${fit.length} ukuran suhu terakhir cocok (selisih 0,5° atau kurang).`
+                    ? `${good} dari ${fit.length} ukuran suhu terakhir cocok (selisih 0,5 °C atau kurang).`
                     : 'Perkiraan sedang belajar: butuh beberapa ukuran suhu lagi.'}
                 </span>
               </div>
             </div>
             {fit.length > 0 && (
               <svg viewBox="0 0 310 112" width="100%" role="img" aria-label={`Selisih perkiraan dan ukuran suhu, ${good} dari ${fit.length} di dalam zona cocok`}>
-                <rect x="0" y="36" width="310" height="40" fill="#DDF1E7" />
+                <rect x="0" y="36" width="310" height="40" style={{ fill: 'var(--ok-bg)' }} />
                 <line x1="0" y1="56" x2="310" y2="56" stroke="#6CC3A0" stroke-dasharray="4 4" />
                 {fit.map((f, i) => {
                   const x = 20 + i * (270 / Math.max(1, fit.length - 1));
                   const y = Math.max(8, Math.min(104, 56 - f.error * 40));
                   const ok = Math.abs(f.error) <= 0.5;
                   return ok ? (
-                    <circle key={f.t} cx={x} cy={y} r="7" fill="#13264A" stroke="#fff" stroke-width="2" />
+                    <circle key={f.t} cx={x} cy={y} r="7" style={{ fill: 'var(--ink)', stroke: 'var(--surface)' }} stroke-width="2" />
                   ) : (
-                    <rect key={f.t} x={x - 7} y={y - 7} width="14" height="14" fill="#E07A00" stroke="#fff" stroke-width="2" />
+                    <rect key={f.t} x={x - 7} y={y - 7} width="14" height="14" fill="#A86A00" style={{ stroke: 'var(--surface)' }} stroke-width="2" />
                   );
                 })}
               </svg>
@@ -431,9 +432,9 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
                 <span class="label ink2">{summarizeLog(l.data) || 'Cek: tidak ada catatan angka'}</span>
               </div>
             ))}
-            <button class="link-row" style={{ marginTop: 8 }} onClick={() => go({ name: 'history', pondId: pond.id })}>
-              <span>Ubah, pindahkan atau hapus catatan</span>
-              <Icon name="next" size={20} />
+            <button class="link-row label" style={{ marginTop: 8, minHeight: 44, justifyContent: 'flex-start', gap: 4, fontWeight: 800 }} onClick={() => go({ name: 'history', pondId: pond.id })}>
+              <span>Lihat semua {logs.length} catatan di Riwayat</span>
+              <Icon name="next" size={16} stroke={2.5} />
             </button>
           </section>
 
@@ -457,6 +458,14 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
           <section class="card">
             <h2>Profil kolam</h2>
             <Nicknames pond={pond} role={role} onSaved={(p) => setData({ ...data, pond: p })} />
+            {stage && (
+              <div class="stack-xs">
+                <span class="strong">
+                  Pakan minggu ke-{pond.program!.week}: {stage.name}
+                </span>
+                <span class="ink2">{stage.feed}. Panduan umum fase ini, bukan resep: sesuaikan dengan nafsu makan sidat.</span>
+              </div>
+            )}
             <p class="ink2">
               {[
                 pond.setting && settingLabel[pond.setting] + (pond.setting === 'outdoor' && pond.shaded ? ', berpeneduh' : ''),
@@ -472,6 +481,12 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
           </section>
         </>
       )}
+
+      <ActionBar>
+        <button class="btn primary" onClick={() => go({ name: 'record-pond', pondId: pond.id })}>
+          <Icon name="pencil" /> Catat kondisi sekarang
+        </button>
+      </ActionBar>
     </div>
   );
 }

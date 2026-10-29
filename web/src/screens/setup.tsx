@@ -51,7 +51,7 @@ export function LocateButton({ gps }: { gps: ReturnType<typeof useLocate> }) {
   );
 }
 
-export function FarmSetup({ onDone, onLogout }: { onDone: () => void; onLogout?: () => void }) {
+export function FarmSetup({ onDone, onLogout, newPin }: { onDone: () => void; onLogout?: () => void; /** Right after Daftar: the PIN just made, shown once. */ newPin?: string }) {
   const [name, setName] = useState('');
   const [locationName, setLocationName] = useState('');
   const gps = useLocate();
@@ -79,12 +79,26 @@ export function FarmSetup({ onDone, onLogout }: { onDone: () => void; onLogout?:
         <h1>Siapkan tambak</h1>
         <p class="ink2">Cukup sekali. Setelah ini, tambahkan kolam.</p>
       </section>
+      {newPin && (
+        <div class="note ok" role="status" style={{ alignItems: 'center' }}>
+          <Icon name="lock" />
+          <span class="stack-xs" style={{ gap: 0 }}>
+            <b class="note-title">
+              Akun dibuat. PIN baru:{' '}
+              <span class="num" style={{ letterSpacing: '0.15em', whiteSpace: 'nowrap' }}>
+                {newPin.split('').join(' ')}
+              </span>
+            </b>
+            <span>Catat di tempat aman. PIN ini dipakai setiap kali masuk.</span>
+          </span>
+        </div>
+      )}
       <section class="card">
         <Field label="Nama tambak">
-          <input value={name} onInput={(e) => setName(e.currentTarget.value)} placeholder="mis. Tambak Sidat Pak Joko" required />
+          <input value={name} onInput={(e) => setName(e.currentTarget.value)} placeholder="contoh: Tambak Sidat Mitra" required />
         </Field>
         <Field label="Lokasi" hint="Dipakai untuk cuaca per jam, supaya suhu air bisa diperkirakan.">
-          <input value={locationName} onInput={(e) => setLocationName(e.currentTarget.value)} placeholder="mis. Sleman, Yogyakarta" />
+          <input value={locationName} onInput={(e) => setLocationName(e.currentTarget.value)} placeholder="contoh: Sleman, Yogyakarta" />
         </Field>
         <LocateButton gps={gps} />
       </section>
@@ -95,7 +109,7 @@ export function FarmSetup({ onDone, onLogout }: { onDone: () => void; onLogout?:
       {onLogout && (
         <div class="stack-sm">
           <p class="meta center" style={{ textWrap: 'balance' }}>
-            Diundang ke tambak orang lain? Keluar dulu, lalu pilih “Punya kode undangan?”.
+            Diundang ke tambak orang lain? Keluar dulu, lalu pilih “Punya kode undangan”.
           </p>
           <button type="button" class="btn secondary" onClick={onLogout}>
             <Icon name="logout" size={20} /> Keluar
@@ -130,7 +144,7 @@ export function NoPonds({
       <section class="stack center" style={{ alignItems: 'center', flex: 1, justifyContent: 'center' }}>
         <svg width="200" height="150" viewBox="0 0 200 150" aria-hidden="true">
           <ellipse cx="100" cy="132" rx="80" ry="10" fill="#DCE3EC" />
-          <circle cx="100" cy="72" r="60" fill="#FFFFFF" stroke="#B7C4D9" stroke-width="3" stroke-dasharray="8 8" />
+          <circle cx="100" cy="72" r="60" style={{ fill: 'var(--surface)' }} stroke="#B7C4D9" stroke-width="3" stroke-dasharray="8 8" />
           <path d="M62 78c10-7 18-7 28 0s18 7 28 0 18-7 28 0" fill="none" stroke="#BFD8EC" stroke-width="5" stroke-linecap="round" />
           <path d="M70 96c10-7 18-7 28 0s18 7 28 0" fill="none" stroke="#BFD8EC" stroke-width="5" stroke-linecap="round" />
           <circle cx="148" cy="30" r="20" fill="#13264A" />
@@ -230,13 +244,13 @@ function Nicknames({ nicks, onChange, draft, onDraft }: { nicks: string[]; onCha
               add();
             }
           }}
-          placeholder="mis. kolam pojok"
+          placeholder="contoh: pojok"
         />
         <button type="button" class="btn secondary" style={{ color: 'var(--navy)', fontWeight: 800, padding: '0 16px' }} onClick={add}>
           <Icon name="plus" size={20} /> Tambah
         </button>
       </div>
-      <span class="field-hint">Sebutan sehari-hari, mis. kolam dekat pintu. AI memakai ini saat mendengar suara.</span>
+      <span class="field-hint">Sebutan sehari-hari, contoh: kolam dekat pintu. AI memakai ini saat mendengar suara.</span>
     </div>
   );
 }
@@ -442,7 +456,7 @@ export function AddPond({
 
       <section class="card">
         <Field label="Nama kolam">
-          <input value={name} onInput={(e) => setName(e.currentTarget.value)} placeholder="mis. Kolam A" required />
+          <input value={name} onInput={(e) => setName(e.currentTarget.value)} placeholder="contoh: Kolam A" required />
         </Field>
 
         <Nicknames nicks={nicks} onChange={setNicks} draft={nickDraft} onDraft={setNickDraft} />
@@ -452,10 +466,11 @@ export function AddPond({
           <div class="grid3">
             {TYPES.map((t) => (
               <button type="button" key={t.id} class={`type-tile${kind === t.id ? ' on' : ''}`} aria-pressed={kind === t.id} onClick={() => setKind(t.id)}>
-                <svg width="48" height="48" viewBox="0 0 56 56" aria-hidden="true">
-                  <rect width="56" height="56" rx="12" fill="#DCE6F1" />
-                  <path d={tankPath(t.id)} fill="#8DB6D9" stroke="#FFFFFF" stroke-width="3" />
-                </svg>
+                <span class="thumb sm" style={{ width: 48, height: 48, background: 'var(--bg)', color: 'var(--ink-2)' }}>
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d={tankPath(t.id)} />
+                  </svg>
+                </span>
                 {t.label}
                 {kind === t.id && (
                   <span class="corner-tick">
@@ -496,7 +511,7 @@ export function AddPond({
               {phase[0] === 'glass_eel' && ' dari 12'}
             </span>
             {phase[0] === 'glass_eel' && (
-              <span class="progress" style={{ background: '#fff' }}>
+              <span class="progress" style={{ background: 'var(--surface)' }}>
                 <span style={{ width: `${Math.min(100, (week / 12) * 100)}%` }} />
               </span>
             )}
@@ -504,7 +519,7 @@ export function AddPond({
         </div>
 
         <Field label="Kira-kira jumlah benih" hint="Boleh kosong kalau tidak tahu.">
-          <input inputMode="numeric" value={initialCount} onInput={(e) => setInitialCount(e.currentTarget.value)} placeholder="mis. 500" />
+          <input inputMode="numeric" value={initialCount} onInput={(e) => setInitialCount(e.currentTarget.value)} placeholder="contoh: 500" />
         </Field>
       </section>
 
@@ -518,7 +533,7 @@ export function AddPond({
         </summary>
         <div class="stack" style={{ marginTop: 16 }}>
           <Field label="Luas dasar kolam (m²)" hint="Panjang × lebar, untuk menghitung kepadatan.">
-            <input inputMode="decimal" value={areaM2} onInput={(e) => setAreaM2(e.currentTarget.value)} placeholder="mis. 12" />
+            <input inputMode="decimal" value={areaM2} onInput={(e) => setAreaM2(e.currentTarget.value)} placeholder="contoh: 12" />
           </Field>
           <div class="field">
             <span class="field-label">Tempat</span>
@@ -538,7 +553,7 @@ export function AddPond({
             <input inputMode="decimal" value={depthCm} onInput={(e) => setDepthCm(e.currentTarget.value)} placeholder="30" />
           </Field>
           <Field label="Volume air (liter)">
-            <input inputMode="numeric" value={volumeL} onInput={(e) => setVolumeL(e.currentTarget.value)} placeholder="mis. 870" />
+            <input inputMode="numeric" value={volumeL} onInput={(e) => setVolumeL(e.currentTarget.value)} placeholder="contoh: 870" />
           </Field>
         </div>
       </details>

@@ -59,7 +59,7 @@ export function Members({ farmName, owner, inviteOpen, onInviteOpen }: { farmNam
             const open = canManage && openId === m.id;
             const head = (
               <>
-                <span class="avatar" aria-hidden="true">
+                <span class="avatar" aria-hidden="true" style={m.role === 'worker' ? { background: 'var(--pond)', color: 'var(--ink)' } : undefined}>
                   {initialOf(m.name)}
                 </span>
                 <span class="grow stack-xs" style={{ gap: 0 }}>
@@ -67,9 +67,9 @@ export function Members({ farmName, owner, inviteOpen, onInviteOpen }: { farmNam
                     {m.name}
                     {m.me && <span class="semi muted"> (akun ini)</span>}
                   </span>
-                  <span class="meta">
+                  <span class="label ink2">
                     {roleLabel[m.role]}
-                    {m.phone && ` · ${fmtPhone(m.phone)}`}
+                    {m.phone ? ` · ${fmtPhone(m.phone)}` : m.role === 'worker' ? ` · ${ROLE_HINT.worker}`.replace(/\.$/, '') : ''}
                   </span>
                 </span>
               </>

@@ -1,0 +1,13 @@
+/* Jatah baca AI (canvas JatahAI). Running out uses the info style: amber only means Perhatian. */
+.quota-bar { display: block; background: var(--tint); }
+.quota-bar.tall { height: 12px; border-radius: 6px; }
+.quota-bar.tall > span { border-radius: 6px; }
+.quota-hero .sub { color: var(--ink-2); }
+.quota-hero.out { background: var(--tint); }
+.quota-hero.out, .quota-hero.out .sub { color: #13264a; }
+.quota-hero.out .quota-bar { background: var(--surface); }
+:root[data-theme='night'] .quota-hero.out, :root[data-theme='night'] .quota-hero.out .sub { color: #fff; }
+.earn-row { width: 100%; border: 0; background: none; padding: 16px 0; text-align: left; color: inherit; align-items: flex-start; }
+.packs { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+.packs li { min-height: 56px; padding: 8px 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; justify-content: center; }
+.sm-avatar { width: 36px; height: 36px; font-size: 0.875rem; }

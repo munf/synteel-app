@@ -4,14 +4,13 @@ import { api, type QuotaState, type Role } from '../api.ts';
 import type { Go } from '../app.tsx';
 import { fmtClock } from '../labels.ts';
 import { Icon, initialOf, roleLabel, Soon, Tick, type IconName } from '../ui.tsx';
+import './quota.css';
 
-const AMBER = { bg: 'var(--warn-bg)', fg: '#6b4100', track: '#f6ddb0' };
-
-/** The remaining-reads bar; amber once the day's reads are used up. */
-export function QuotaBar({ q }: { q: QuotaState }) {
+/** The remaining-reads bar. Running out is not a Perhatian status, so it is never amber. */
+export function QuotaBar({ q, tall }: { q: QuotaState; tall?: boolean }) {
   const pct = q.cap > 0 ? Math.round((q.left / q.cap) * 100) : 0;
   return (
-    <span role="img" aria-label={`${q.left} dari ${q.cap} tersisa`} class="progress" style={{ display: 'block', background: q.left === 0 ? AMBER.track : 'var(--tint)' }}>
+    <span role="img" aria-label={`${q.left} dari ${q.cap} bacaan tersisa`} class={`progress quota-bar${tall ? ' tall' : ''}`}>
       <span style={{ width: `${pct}%` }} />
     </span>
   );
@@ -26,7 +25,7 @@ const USES: { label: string; icon: IconName }[] = [
 // Prices are not decided yet: the packs are shown without them and cannot be bought.
 const PACKS = [
   { name: '+50 bacaan', sub: 'Untuk hari sibuk' },
-  { name: '+200 bacaan', sub: 'Paling sering dipilih' },
+  { name: '+200 bacaan', sub: 'Untuk beberapa minggu' },
   { name: 'Langganan bulanan', sub: '150 bacaan per hari' },
 ];
 
@@ -34,7 +33,7 @@ function Hero({ q }: { q: QuotaState }) {
   if (q.unlimited) {
     return (
       <section class="card">
-        <span class="label semi muted">Sisa hari ini</span>
+        <span class="label semi ink2">Sisa hari ini</span>
         <h2>Tidak ada batas harian</h2>
         <span class="ink2">Saat ini tambak ini belum punya batas bacaan AI per hari. Dipakai hari ini: {q.used} bacaan.</span>
       </section>
@@ -43,18 +42,14 @@ function Hero({ q }: { q: QuotaState }) {
   const out = q.left === 0;
   const reset = fmtClock(Date.parse(q.resetsAt));
   return (
-    <section class="card" style={out ? { background: AMBER.bg, color: AMBER.fg } : undefined}>
-      <span class="label semi" style={{ color: out ? AMBER.fg : 'var(--muted)' }}>
-        Sisa hari ini
-      </span>
+    <section class={`card quota-hero${out ? ' out' : ''}`} style={{ gap: 12 }}>
+      <span class="label semi sub">Sisa hari ini</span>
       <span class="row" style={{ alignItems: 'baseline', gap: 8 }}>
         <span class="big">{q.left}</span>
-        <span class="h2" style={{ fontWeight: 400, color: out ? AMBER.fg : 'var(--muted)' }}>
-          dari {q.cap} bacaan
-        </span>
+        <span class="sub">dari {q.cap} bacaan</span>
       </span>
-      <QuotaBar q={q} />
-      <span class="label" style={{ color: out ? AMBER.fg : 'var(--muted)' }}>
+      <QuotaBar q={q} tall />
+      <span class="label sub">
         {out
           ? `Habis. Terisi lagi besok jam ${reset}. Rekaman yang dibuat sekarang tetap disimpan dan dibaca setelah jatah ada.`
           : `Terisi penuh lagi tiap jam ${reset}.`}
@@ -63,26 +58,28 @@ function Hero({ q }: { q: QuotaState }) {
   );
 }
 
-/** "✓ Foto" when done, "Foto belum" when not: a word, not colour alone. */
-function Done({ on, label }: { on: boolean; label: string }) {
+/** "✓ Foto sudah" when sent today, "Video belum" when not: a word, not colour alone. */
+export function MediaDone({ on, label, short }: { on: boolean; label: string; short?: boolean }) {
   return on ? (
     <span class="word ok">
-      <Tick /> {label}
+      <Tick /> {short ? label : `${label} sudah`}
     </span>
   ) : (
-    <span class="word warn">{label} belum</span>
+    <span class="word" style={{ color: 'var(--ink-2)' }}>
+      {label} belum
+    </span>
   );
 }
 
 function EarnRow({ title, children, bonus, earned, onClick }: { title: string; children: ComponentChildren; bonus: number; earned?: boolean; onClick: () => void }) {
   return (
-    <button type="button" class="list-row" onClick={onClick} style={{ width: '100%', border: 0, background: 'none', padding: '16px 0', textAlign: 'left', color: 'inherit' }}>
+    <button type="button" class="list-row earn-row" onClick={onClick}>
       <span class="grow stack-xs">
         <span class="strong">{title}</span>
         {children}
       </span>
-      <span class={`pill ${earned ? 'ok' : 'blue'}`} style={{ fontWeight: 800 }}>
-        {earned && <Tick />}+{bonus}
+      <span class={`pill ${earned ? 'ok' : 'blue'}`} style={{ fontWeight: 800, gap: 4 }}>
+        {earned && <Tick />}+{bonus} bacaan
       </span>
     </button>
   );
@@ -130,21 +127,23 @@ export function Quota({ role, go }: { role: Role | null; go: Go }) {
           <Hero q={q} />
 
           <section class="stack">
-            <h2>Satu rekaman = 1 bacaan</h2>
+            <h2>Satu rekaman = satu bacaan</h2>
             <div class="grid3">
               {USES.map((u) => (
-                <div key={u.label} class="card" style={{ padding: '16px 4px', gap: 4, alignItems: 'center', textAlign: 'center' }}>
-                  <span style={{ color: 'var(--accent)' }}>
+                <div key={u.label} class="card" style={{ padding: '12px 8px', borderRadius: 16, gap: 4, alignItems: 'center', textAlign: 'center' }}>
+                  <span style={{ color: 'var(--accent)', display: 'flex' }}>
                     <Icon name={u.icon} />
                   </span>
-                  <span class="label semi">{u.label}</span>
+                  <span class="label semi" style={{ lineHeight: 1.25 }}>
+                    {u.label}
+                  </span>
                 </div>
               ))}
             </div>
-            <div class="note ok" style={{ fontSize: '1rem' }}>
-              <Icon name="check" />
+            <div class="note ok">
+              <Icon name="check" size={20} stroke={2.5} />
               <span>
-                <b>Tidak memakai jatah:</b> laporan darurat dan hitung sidat mati, ketik sendiri, briefing sore dan Waspada.
+                <b style={{ fontWeight: 800 }}>Tidak memakai jatah:</b> laporan darurat dan hitung sidat mati, ketik sendiri, ringkasan malam, Waspada, dan bicara di Hubungi bantuan.
               </span>
             </div>
           </section>
@@ -153,39 +152,37 @@ export function Quota({ role, go }: { role: Role | null; go: Go }) {
             <h2>Tambah gratis</h2>
             <div class="card list">
               <EarnRow title="1 foto + 1 video kolam hari ini" bonus={pv.bonus} earned={pv.earned} onClick={() => go({ name: 'record' })}>
-                <span class="row" style={{ gap: 16 }}>
-                  <Done on={pv.photo} label="Foto" />
-                  <Done on={pv.video} label="Video" />
+                <span class="row label" style={{ gap: 12 }}>
+                  <MediaDone on={pv.photo} label="Foto" short />
+                  <MediaDone on={pv.video} label="Video" short />
                 </span>
               </EarnRow>
               <EarnRow title="Mencatat 7 hari beruntun" bonus={streak.bonus} onClick={() => go({ name: 'rewards' })}>
-                <span class="meta">
-                  Sekarang {streak.days} hari
+                <span class="label ink2 num">
+                  Sekarang {streak.days} hari beruntun
                   <br />
-                  Hadiah berikutnya di hari ke-{streak.nextAt}
+                  Berikutnya di hari ke-{streak.nextAt}
                 </span>
               </EarnRow>
             </div>
           </section>
 
           {owner && (
-            <section class="stack">
+            <section class="card" style={{ gap: 12 }}>
               <div class="row between">
                 <h2>Beli jatah tambahan</h2>
                 <Soon />
               </div>
-              <div class="stack-sm" aria-disabled="true">
+              <span class="label ink2">Harga paket diumumkan nanti.</span>
+              <ul class="packs" aria-label="Paket yang disiapkan">
                 {PACKS.map((p) => (
-                  <div key={p.name} class="stack-xs" style={{ background: '#fff', border: '2px solid var(--line-2)', borderRadius: 16, padding: '12px 16px', minHeight: 64, justifyContent: 'center' }}>
-                    <span class="strong">{p.name}</span>
-                    <span class="meta">{p.sub}</span>
-                  </div>
+                  <li key={p.name}>
+                    <span class="semi">{p.name}</span>
+                    <span class="label ink2">{p.sub}</span>
+                  </li>
                 ))}
-              </div>
-              <button type="button" class="btn primary" disabled>
-                Bayar dengan QRIS
-              </button>
-              <span class="meta">Jatah tambahan dipakai setelah jatah harian habis dan berlaku 30 hari.</span>
+              </ul>
+              <span class="label ink2">Jatah tambahan dipakai setelah jatah harian habis dan berlaku 30 hari.</span>
             </section>
           )}
 
@@ -194,8 +191,8 @@ export function Quota({ role, go }: { role: Role | null; go: Go }) {
               <h2>Dipakai hari ini</h2>
               <div class="card list">
                 {q.members.map((m) => (
-                  <div key={m.userId} class="list-row" style={{ minHeight: 72 }}>
-                    <span class="avatar" aria-hidden="true">
+                  <div key={m.userId} class="list-row" style={{ minHeight: 64, padding: '12px 0' }}>
+                    <span class="avatar sm-avatar" aria-hidden="true">
                       {initialOf(m.name)}
                     </span>
                     <span class="grow stack-xs" style={{ gap: 0 }}>

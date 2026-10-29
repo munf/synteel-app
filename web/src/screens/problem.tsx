@@ -2,24 +2,29 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { api, ApiError, type Behavior, type CountResult, type Emergency, type LogData, type PondSummary } from '../api.ts';
 import { prepareImage } from '../capture/media.ts';
 import type { Go } from '../app.tsx';
-import { fmtClock, fmtNum } from '../labels.ts';
-import { phaseLabel } from '../labels.ts';
+import { fmtClock, fmtNum, levelLabel, phaseLabel, readingLabel } from '../labels.ts';
+import { setForcedNight } from '../prefs.ts';
 import { StepList, useSteps } from '../steps.tsx';
-import { Icon, PondThumb, Shape, Soon, Stepper, Tick, TickBox, toneOf, type IconName } from '../ui.tsx';
+import { Icon, PondThumb, Shape, Stepper, Tick, TickBox, toneOf, type IconName } from '../ui.tsx';
 import './problem.css';
 
 type Sign = 'dead' | 'surface' | 'inlet' | 'feed' | 'skin' | 'water' | 'power' | 'other';
 
+// The four most common signs first; the rest sit behind "Gejala lain".
 const SIGNS: { id: Sign; label: string; icon: IconName }[] = [
   { id: 'dead', label: 'Sidat mati', icon: 'dead' },
   { id: 'surface', label: 'Naik ke permukaan', icon: 'up' },
-  { id: 'inlet', label: 'Kumpul di air masuk', icon: 'inlet' },
   { id: 'feed', label: 'Tidak mau makan', icon: 'bowl' },
+  { id: 'power', label: 'Aerator atau listrik mati', icon: 'bolt' },
+  { id: 'inlet', label: 'Kumpul di air masuk', icon: 'inlet' },
   { id: 'skin', label: 'Luka, bercak, jamur', icon: 'spots' },
   { id: 'water', label: 'Air berubah warna atau bau', icon: 'drop' },
-  { id: 'power', label: 'Aerator atau listrik mati', icon: 'bolt' },
   { id: 'other', label: 'Lainnya', icon: 'dots' },
 ];
+const COMMON = 4;
+
+/** "Rabu 18.40": full day name, never "Rab". */
+const dayClock = (t: number) => `${new Date(t).toLocaleDateString('id-ID', { weekday: 'long', timeZone: 'Asia/Jakarta' })} ${fmtClock(t)}`;
 
 // Which emergency SOP (knowledge/emergencies.json) answers which sign. Deterministic: works without the AI.
 const SOP: Partial<Record<Sign, string>> = { dead: 'low_do', surface: 'low_do', inlet: 'low_do', power: 'power_outage', water: 'heavy_rain' };
@@ -192,8 +197,9 @@ function PondChooser({ ponds, value, onChange }: { ponds: PondSummary[]; value: 
                   <span class="strong">{p.name}</span>
                   <Meta p={p} />
                 </span>
-                <span class={`word ${toneOf(p.level)}`}>
+                <span class="word pond-word">
                   <Shape tone={toneOf(p.level)} />
+                  {levelLabel[p.level]}
                 </span>
                 {p.id === value && <Tick />}
               </button>
@@ -310,16 +316,18 @@ function Result({ report, emergencies, go, onBack, onSaved }: { report: Report; 
     .join(', ');
 
   const summary = [
-    `Laporan ${pond.name}, ${fmtClock(report.at, true)}`,
+    `Laporan ${pond.name}, ${dayClock(report.at)}`,
     `Terlihat: ${signText}${report.dead ? ` (${report.dead} ekor mati)` : ''}`,
-    ...(['temperature', 'ph', 'tds'] as const).filter((k) => pond.latest[k]).map((k) => `${k === 'temperature' ? 'Suhu' : k === 'ph' ? 'pH' : 'TDS'} terakhir: ${fmtNum(pond.latest[k]!.value)}`),
+    ...(['temperature', 'ph', 'tds'] as const)
+      .filter((k) => pond.latest[k])
+      .map((k) => `${readingLabel[k].name} terakhir: ${fmtNum(pond.latest[k]!.value)}${readingLabel[k].unit ? ' ' + readingLabel[k].unit : ''}`),
     count ? `Sudah dilakukan: ${steps.filter((s) => done[s]).map((s) => `${s} (${fmtClock(done[s].at)})`).join('; ')}` : '',
   ]
     .filter(Boolean)
     .join('\n');
 
   return (
-    <div class="screen">
+    <div class="screen problem-flow">
       <header class="row">
         <button class="icon-btn" aria-label="Kembali" onClick={onBack}>
           <Icon name="back" />
@@ -342,17 +350,10 @@ function Result({ report, emergencies, go, onBack, onSaved }: { report: Report; 
           </span>
         </div>
       ) : (
-        <>
-          <div class="note ok" role="status">
-            <Icon name="check" />
-            <span class="grow">Laporan tersimpan di catatan kolam.</span>
-          </div>
-          <div class="note warn" style={{ alignItems: 'center' }}>
-            <Icon name="chat" />
-            <span class="grow">Kabar otomatis ke pemilik tambak</span>
-            <Soon />
-          </div>
-        </>
+        <div class="note ok" role="status">
+          <Icon name="check" />
+          <span class="grow">Laporan tersimpan di catatan kolam.</span>
+        </div>
       )}
 
       {steps.length > 0 && (
@@ -373,35 +374,31 @@ function Result({ report, emergencies, go, onBack, onSaved }: { report: Report; 
         </section>
       )}
 
-      <section class="card soft-bad">
+      {/* The owner is not told by the app: the farmer sends the summary (FAKTA: automatic message is not built). */}
+      <section class="card soft-bad help-card">
         <div class="row top">
           <span class="icon-box bad">
-            <Icon name="phone" />
+            <Icon name="info" />
           </span>
           <div class="stack-xs">
-            <span class="strong" style={{ color: '#7A1A10' }}>
-              Minta bantuan kalau
-            </span>
-            <span class="label" style={{ color: '#5C1A12' }}>
-              Sidat mati bertambah dalam 6 jam, atau muncul bercak, luka atau jamur. Aplikasi ini tidak memberi dosis obat.
-            </span>
+            <span class="strong help-head">Minta bantuan pemilik tambak atau penyuluh kalau</span>
+            <span class="label help-body">sidat mati bertambah dalam 6 jam, atau muncul bercak, luka atau jamur. Aplikasi ini tidak memberi dosis obat.</span>
           </div>
         </div>
+        <p class="row top semi help-head">
+          <Icon name="chat" size={20} />
+          <span class="grow">Pemilik belum dikabari. Kirim ringkasan lewat WhatsApp.</span>
+        </p>
         <a class="btn danger" href={`https://wa.me/?text=${encodeURIComponent(summary)}`} target="_blank" rel="noopener">
           <Icon name="chat" size={20} /> Kirim ringkasan ke WhatsApp
         </a>
-        {queued ? (
-          <span class="label" style={{ color: '#5C1A12' }}>
-            Tetap bisa tanpa sinyal: WhatsApp mengirim pesan begitu ada sinyal.
+        {queued && <span class="label help-body">Tetap bisa tanpa sinyal: WhatsApp mengirim pesan begitu ada sinyal.</span>}
+        <div class="summary-box stack-xs">
+          <span class="label strong help-head">Isi ringkasan</span>
+          <span class="label ink2" style={{ whiteSpace: 'pre-line' }}>
+            {summary}
           </span>
-        ) : (
-          <div class="row between">
-            <span class="btn secondary grow" aria-disabled="true" style={{ opacity: 0.7 }}>
-              <Icon name="phone" size={20} /> Telepon penyuluh
-            </span>
-            <Soon />
-          </div>
-        )}
+        </div>
       </section>
 
       {report.counted && (
@@ -412,7 +409,7 @@ function Result({ report, emergencies, go, onBack, onSaved }: { report: Report; 
             <strong>{report.counted.result.count} sidat mati terhitung</strong>
             {report.dead !== report.counted.result.count && `, dicatat ${report.dead} setelah dicek`}.
           </p>
-          <span class="meta">Dihitung AI (Meta SAM 3.1). Sidat yang bertumpuk bisa terlewat.</span>
+          <span class="label ink2">Dihitung AI. Sidat yang bertumpuk bisa terlewat.</span>
         </section>
       )}
 
@@ -421,18 +418,14 @@ function Result({ report, emergencies, go, onBack, onSaved }: { report: Report; 
         {causes.length === 0 && <p class="ink2">Catatan terakhir belum menunjukkan penyebab yang jelas. Ukur suhu, pH dan TDS sekarang.</p>}
         {causes.map((f, i) => (
           <div class="row top" key={f.id}>
-            <span
-              style={{ width: 32, height: 32, flex: 'none', borderRadius: 12, background: i === 0 ? 'var(--navy)' : 'var(--tint)', color: i === 0 ? '#fff' : 'var(--navy)', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >
-              {i + 1}
-            </span>
+            <span class={`cause-num${i === 0 ? ' first' : ''}`}>{i + 1}</span>
             <div class="stack-xs">
               <span class="strong">{f.title}</span>
               <span class="label ink2">{f.detail}</span>
             </div>
           </div>
         ))}
-        <span class="meta">Dari catatan kolam dan aturan ambang batas. Ini saran, bukan diagnosis.</span>
+        <span class="label ink2">Dari catatan kolam dan aturan ambang batas. Ini saran, bukan diagnosis.</span>
       </section>
 
       <section class="card">
@@ -515,9 +508,13 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
   const [counting, setCounting] = useState(false);
   const [failed, setFailed] = useState<Failed | null>(null);
   const [manual, setManual] = useState(false);
+  const [more, setMore] = useState(false);
   const photo = useRef<HTMLInputElement>(null);
 
   useSendPending(onSaved);
+  // Opened from the night alarm, alarm.tsx forces the dark theme; it ends when this flow (form and result) is left.
+  // Elsewhere the flow follows the manual Profil switch "Tampilan malam".
+  useEffect(() => () => setForcedNight(false), []);
 
   // The basin photo → SAM 3.1 count with outlines; the stepper below starts from it.
   const onBasinPhoto = async (file: File | undefined) => {
@@ -606,8 +603,12 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
     }
   };
 
+  // A hidden sign that is ticked stays visible.
+  const shown = SIGNS.filter((s, i) => more || i < COMMON || signs.includes(s.id));
+  const hidden = SIGNS.length - shown.length;
+
   return (
-    <div class="screen">
+    <div class="screen problem-flow has-bar">
       <section class="stack-sm">
         <h1>Ada masalah?</h1>
         <p class="ink2">Pilih kolamnya dulu, lalu pilih yang terlihat.</p>
@@ -618,18 +619,10 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
         <PondChooser ponds={ponds} value={pondId} onChange={setPondId} />
       </div>
 
-      <div class="row between" style={{ background: 'var(--navy)', color: '#fff', borderRadius: 16, padding: '12px 16px', minHeight: 64 }}>
-        <span class="row">
-          <Icon name="mic" />
-          <span class="strong">Ceritakan dengan suara</span>
-        </span>
-        <Soon />
-      </div>
-
       <section class="stack-sm">
         <span class="field-label">Pilih yang terlihat</span>
         <div class="grid2">
-          {SIGNS.map((s) => {
+          {shown.map((s) => {
             const on = signs.includes(s.id);
             return (
               <button key={s.id} type="button" class={`tile${on ? ' on' : ''}`} aria-pressed={on} onClick={() => toggle(s.id)}>
@@ -642,6 +635,12 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
             );
           })}
         </div>
+        {(more || hidden > 0) && (
+          <button type="button" class="more-signs" aria-expanded={more} onClick={() => setMore(!more)}>
+            <span>{more ? 'Sembunyikan gejala lain' : `Gejala lain (${hidden})`}</span>
+            <Icon name="down" size={20} />
+          </button>
+        )}
       </section>
 
       {signs.includes('dead') && (
@@ -667,13 +666,21 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
             <div class="stack-sm">
               <CountedPhoto c={counted} />
               {counted.mock ? (
-                <p class="note warn">Mode contoh: hitung otomatis tidak aktif di server ini. Hitung manual.</p>
+                <p class="note info">
+                  <Icon name="info" size={20} />
+                  <span>Mode contoh: hitung otomatis tidak aktif di server ini. Hitung manual.</span>
+                </p>
               ) : (
                 <>
                   <p>
-                    <strong>{counted.result.count} sidat mati terhitung.</strong> Angka di atas sudah diisi; ubah kalau berbeda.
+                    <strong>{counted.result.count} sidat mati terhitung.</strong> Jumlah di atas sudah diisi. Ubah kalau berbeda.
                   </p>
-                  {counted.result.review && <p class="note warn">Sidat bertumpuk atau kurang jelas bisa terlewat. Cek lagi hitungannya.</p>}
+                  {counted.result.review && (
+                    <p class="note info">
+                      <Icon name="info" size={20} />
+                      <span>Sidat bertumpuk atau kurang jelas bisa terlewat. Cek lagi hitungannya.</span>
+                    </p>
+                  )}
                 </>
               )}
             </div>
@@ -685,14 +692,16 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
         <CountFailed failed={failed} onRetake={() => photo.current?.click()} onManual={() => setManual(true)} />
       )}
 
+      <span class="label ink2 center">Laporan darurat tidak memakai jatah baca AI.</span>
       {error && <p class="error">{error}</p>}
-      <button class="btn primary" disabled={pondId === null || signs.length === 0 || busy} onClick={submit}>
-        {pondId === null ? 'Pilih kolam dulu' : signs.length === 0 ? 'Pilih yang terlihat' : 'Lihat yang harus dilakukan'}
-        {pondId !== null && signs.length > 0 && <Icon name="arrow" size={20} />}
-      </button>
-      <span class="meta center" style={{ marginTop: -12 }}>
-        Laporan darurat tidak memakai jatah baca AI.
-      </span>
+
+      {/* Main action: pinned above the tab bar while the page scrolls. */}
+      <div class="problem-bar">
+        <button class="btn primary" disabled={pondId === null || signs.length === 0 || busy} onClick={submit}>
+          {pondId === null ? 'Pilih kolam dulu' : signs.length === 0 ? 'Pilih yang terlihat' : 'Lihat yang harus dilakukan'}
+          {pondId !== null && signs.length > 0 && <Icon name="arrow" size={20} />}
+        </button>
+      </div>
     </div>
   );
 }

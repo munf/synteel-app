@@ -1,0 +1,23 @@
+/* Profil and Hadiah rajin mencatat (canvas Profil, Reward). */
+.profile .size-opt {
+  position: relative; min-height: 96px; border-radius: 16px; background: var(--surface); color: var(--ink);
+  border: 2px solid var(--line-2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 0;
+}
+.profile .size-opt.on { border: 3px solid var(--navy); }
+.profile .night-row { min-height: 64px; border-top: 1px solid var(--line); padding-top: 16px; }
+/* Features that do not exist yet: one quiet group, one chip. */
+.profile .later { padding: 16px 20px 4px; gap: 0; }
+.profile .later-title { font-size: 1rem; color: var(--ink-2); }
+.profile .later-row { min-height: 56px; padding: 8px 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; justify-content: center; }
+.profile .help-row { min-height: 56px; padding: 12px 16px; }
+/* Hadiah: the 7-day ladder. */
+.profile .bonus-pill { font-weight: 800; white-space: nowrap; }
+.profile .ladder-row { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 8px 0; border-top: 1px solid var(--line); }
+.profile .ladder-day {
+  width: 48px; height: 48px; flex: none; border-radius: 16px; display: flex; align-items: center; justify-content: center;
+  font-weight: 800; background: var(--bg); color: var(--ink-2);
+}
+.profile .ladder-day.got { background: var(--ok-bg); color: var(--ok); }
+.profile .ladder-day.next { background: var(--navy); color: #fff; }
+.profile .ladder-row .pill { gap: 4px; font-weight: 600; white-space: nowrap; }
+.profile .quota-link { flex-direction: row; align-items: center; gap: 12px; border: 0; text-align: left; color: var(--ink); width: 100%; }

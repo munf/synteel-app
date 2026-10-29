@@ -3,9 +3,9 @@ import { api, type Briefing, type FarmState, type Nowcast, type NowcastPoint, ty
 import type { Go } from '../app.tsx';
 import { actionIcon, armAlarms, askNotifyPermission, canNotify, GLYPH, loadDone, notifyPermission, onDoneChange, saveDone, tonightChecks, type NightCheck } from '../alarms.ts';
 import { NowcastChart } from '../chart.tsx';
-import { fmtClock } from '../labels.ts';
+import { fmtClock, fmtTemp, readingWord } from '../labels.ts';
 import { usePrefs } from '../prefs.ts';
-import { Icon } from '../ui.tsx';
+import { Icon, Shape, type Tone } from '../ui.tsx';
 import './watch.css';
 
 const HOUR = 3600_000;
@@ -29,6 +29,17 @@ export function Glyph({ d, size = 22, stroke = 2 }: { d: string; size?: number; 
   );
 }
 
+const LEVEL_WORD = { ok: 'Aman', warning: 'Perhatian', critical: 'Bahaya' } as const;
+const TONE: Record<keyof typeof LEVEL_WORD, Tone> = { ok: 'ok', warning: 'warn', critical: 'bad' };
+
+/** "30,4 °C · Terlalu panas", or the pond's first warning. */
+function pondDetail(p: FarmState['ponds'][number]) {
+  const t = p.latest.temperature;
+  const st = p.status.temperature;
+  if (t && st && st !== 'ok') return `${fmtTemp(t.value)} · ${readingWord('temperature', t.value, st, p.limits.temperature).text}`;
+  return p.findings.find((f) => f.level === 'critical' || f.level === 'warning')?.title ?? 'Risiko oksigen malam ini';
+}
+
 const LevelShape = ({ level, size = 28 }: { level: keyof typeof LEVEL_SHAPE; size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 12 12" aria-hidden="true">
     <path d={LEVEL_SHAPE[level].d} fill={LEVEL_SHAPE[level].fill} />
@@ -50,7 +61,7 @@ function stepLabel(step: Briefing['steps'][number], pondName: (id: number) => st
     case 'search_guidance':
       return `Mencari panduan: “${step.args.query ?? ''}”`;
     case 'submit_briefing':
-      return 'Menyusun briefing dan jadwal cek';
+      return 'Menyusun ringkasan malam dan jadwal cek';
     default:
       return step.tool;
   }
@@ -60,7 +71,7 @@ function stepLabel(step: Briefing['steps'][number], pondName: (id: number) => st
 function chip(f: RiskFactor, p: NowcastPoint): { icon: string; label: string } {
   switch (f.id) {
     case 'temp':
-      return { icon: GLYPH.thermo, label: p.temp === null ? 'Air hangat' : `Air hangat ${Math.round(p.temp)}°` };
+      return { icon: GLYPH.thermo, label: p.temp === null ? 'Air agak panas' : `Air agak panas ${fmtTemp(p.temp)}` };
     case 'signs':
       return { icon: GLYPH.up, label: 'Sidat naik' };
     case 'aeration_off':
@@ -137,7 +148,7 @@ function groupRows(checks: NightCheck[], done: Record<string, boolean>): Row[] {
     // "· puncak rawan" when this is the check for the pond's worst hour.
     const atPeak = cs.length === 1 && first.peak && first.peak.level !== 'ok' && Math.abs(first.peak.t - first.t) <= HOUR;
     const agent = cs.find((c) => c.agent);
-    const why = agent ? `Tambahan AI: ${agent.why ?? agent.reason}` : /^risiko/i.test(first.reason) ? first.reason : '';
+    const why = (agent ? `${agent.why ?? agent.reason}` : /^risiko/i.test(first.reason) ? first.reason : '').replace(/°c\b/g, '°C');
     return {
       key,
       t: first.t,
@@ -195,7 +206,7 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
   if (!nowcast)
     return (
       <div class="screen">
-        <h1>Malam ini</h1>
+        <h1>Waspada malam ini</h1>
         <p class="muted">Memuat perkiraan…</p>
       </div>
     );
@@ -207,12 +218,22 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
   const focus = casts[0];
   const pondName = (id: number) => state.ponds.find((p) => p.id === id)?.name ?? 'Kolam';
   const risky = !!focus && focus.peak.level !== 'ok';
-  const calmOthers = casts.filter((nc) => nc !== focus && nc.peak.level === 'ok' && nc.now.level === 'ok').length;
+  // Other ponds at Bahaya or Perhatian tonight: by their own status or their night forecast.
+  const castOf = (id: number) => nowcast.ponds.find((n) => n.pondId === id);
+  const levelOf = (p: FarmState['ponds'][number]) => {
+    const nc = castOf(p.id);
+    const own = p.level === 'critical' ? 2 : p.level === 'warning' ? 1 : 0;
+    return Math.max(own, nc ? worst(nc) : 0);
+  };
+  const others = state.ponds.filter((p) => !risky || p.id !== focus?.pondId);
+  const alsoBad = others.filter((p) => levelOf(p) === 2);
+  const alsoWarn = others.filter((p) => levelOf(p) === 1);
+  const calmOthers = others.length - alsoBad.length - alsoWarn.length;
 
   const headline = !focus
     ? 'Belum ada perkiraan kolam'
     : !risky
-      ? 'Semua kolam tenang malam ini'
+      ? 'Semua kolam aman malam ini'
       : weather
         ? `${pondName(focus.pondId)} rawan, puncaknya jam ${fmtClock(focus.peak.t)}`
         : `${pondName(focus.pondId)} perlu dijaga malam ini`;
@@ -224,6 +245,8 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
   const peakCol = Math.max(7, Math.min(13, peakIdx - 2));
 
   const rows = groupRows(checks, done);
+  const warnNames = new Set(alsoWarn.map((p) => p.name));
+  const warnCheck = rows.find((r) => !r.done && r.checks.some((c) => warnNames.has(c.pondName)));
   const nextIdx = rows.findIndex((r) => !r.done);
   const next = nextIdx >= 0 ? rows[nextIdx] : null;
   const rest = rows.filter((_, i) => i !== nextIdx);
@@ -276,7 +299,7 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
   return (
     <div class="screen">
       <header class="w-head">
-        <h1>Malam ini</h1>
+        <h1>Waspada malam ini</h1>
         <span class="meta">
           {weather ? 'perkiraan' : 'dari catatan'} · {fmtClock(nowcast.generatedAt)}
         </span>
@@ -291,7 +314,14 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
         )}
         <div class="w-headline">
           {focus && <LevelShape level={focus.peak.level} />}
-          <h2>{headline}</h2>
+          <div class="stack-xs">
+            {focus && (
+              <span class="label strong" style={{ color: '#fff' }}>
+                {LEVEL_WORD[focus.peak.level]}
+              </span>
+            )}
+            <h2>{headline}</h2>
+          </div>
         </div>
         {reasons.length > 0 && (
           <ul class="w-chips" aria-label="Alasan">
@@ -307,9 +337,26 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
 
         {weather && ahead.length > 0 && (
           <figure class="w-risk" aria-label={`Risiko per jam dari ${fmtClock(ahead[0].t)} sampai ${fmtClock(ahead.at(-1)!.t)}${risky ? `, puncak jam ${fmtClock(focus.peak.t)}` : ''}`}>
+            {peakIdx >= 0 && (
+              <div class="w-ticks">
+                <span class="peak row" style={{ gridColumn: `${Math.max(1, Math.min(19, peakIdx - 2))} / span 6`, justifyContent: 'center', gap: 4 }}>
+                  <Shape tone={TONE[focus.peak.level]} />
+                  {LEVEL_WORD[focus.peak.level]}
+                </span>
+              </div>
+            )}
             <div class="w-bars">
               {ahead.map((h, i) => (
-                <span key={h.t} style={{ height: `${i === peakIdx ? 64 : 14 + rank[h.level] * 20}px`, background: BAR[rank[h.level]], opacity: i === 0 || i === peakIdx ? 1 : 0.8 }} />
+                <span
+                  key={h.t}
+                  style={{
+                    height: `${i === peakIdx ? 64 : 14 + rank[h.level] * 20}px`,
+                    background: BAR[rank[h.level]],
+                    opacity: i === 0 || i === peakIdx ? 1 : 0.8,
+                    borderRadius: h.level === 'ok' ? 999 : 3,
+                    boxShadow: i === peakIdx ? '0 0 0 2px #fff' : 'none',
+                  }}
+                />
               ))}
             </div>
             <div class="w-ticks">
@@ -322,6 +369,18 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
               <span class="end" style={{ gridColumn: '19 / span 6' }}>
                 {endLabel(ahead.at(-1)!.t, now)}
               </span>
+            </div>
+            <div class="row label" style={{ flexWrap: 'wrap', gap: '4px 16px', color: 'var(--on-navy)' }}>
+              <span class="row" style={{ gap: 6 }}>
+                <Shape tone="ok" /> Aman
+              </span>
+              <span class="row" style={{ gap: 6 }}>
+                <Shape tone="warn" /> Perhatian
+              </span>
+              <span class="row" style={{ gap: 6 }}>
+                <Shape tone="bad" /> Bahaya
+              </span>
+              <span>· makin tinggi makin rawan</span>
             </div>
           </figure>
         )}
@@ -369,7 +428,7 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
             {briefing ? (
               <>
                 <span class="sub">
-                  {briefing.source === 'agent' ? 'Briefing dari AI Meta (Muse Spark)' : 'Disusun dari aturan'} · {fmtClock(briefing.generatedAt)}
+                  {briefing.source === 'agent' ? 'Ringkasan malam dari AI' : 'Ringkasan malam dari aturan'} · {fmtClock(briefing.generatedAt)}
                 </span>
                 <p style={{ color: 'var(--on-navy)' }}>{briefing.summary}</p>
                 {briefing.steps.length > 0 && (
@@ -392,11 +451,11 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
                 <span class="sub">Saran, bukan diagnosis. AI hanya boleh menambah cek, tidak menghapus.</span>
               </>
             ) : (
-              <p style={{ color: 'var(--on-navy)' }}>Belum ada briefing hari ini. AI Meta akan membaca catatan, prakiraan dan cuaca, lalu menyusun rencana malam.</p>
+              <p style={{ color: 'var(--on-navy)' }}>Belum ada ringkasan malam hari ini. AI akan membaca catatan, prakiraan dan cuaca, lalu menyusun rencana malam.</p>
             )}
             {briefError && <p class="label" style={{ color: '#FDA29B', fontWeight: 600 }}>{briefError}</p>}
             <button type="button" class="w-link" disabled={briefBusy} onClick={makeBriefing}>
-              {briefBusy ? 'AI sedang membaca data…' : briefing ? 'Susun ulang' : 'Susun briefing sekarang'}
+              {briefBusy ? 'AI sedang membaca data…' : briefing ? 'Susun ulang' : 'Susun ringkasan malam sekarang'}
             </button>
           </div>
         )}
@@ -428,7 +487,7 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
                 <span class="h2">{next.action}</span>
                 <span class="meta">{next.ponds}</span>
               </div>
-              {next.agent && <span class="w-ai">AI</span>}
+              {next.agent && <span class="w-ai">Tambahan AI</span>}
             </div>
             {next.why && <span class="label ink2">{next.why}</span>}
             {next.alarm && <span class="label ink2">Alarm berbunyi di HP ini jam {fmtClock(next.t)}.</span>}
@@ -451,7 +510,7 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
                     <span class="a">{r.action}</span>
                     <span class="meta">{r.ponds}</span>
                   </span>
-                  {r.agent && <span class="w-ai">AI</span>}
+                  {r.agent && <span class="w-ai">Tambahan AI</span>}
                   {r.alarm && !r.done && (
                     <span class="bell" aria-label="Alarm">
                       <Glyph d={GLYPH.bell} size={20} />
@@ -490,10 +549,46 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
         )}
       </section>
 
-      {risky && calmOthers > 0 && (
+      {(alsoBad.length > 0 || alsoWarn.length > 0) && (
+        <section class="stack" style={{ gap: 12 }}>
+          <h2>Juga perlu dilihat</h2>
+          <div class="card list">
+            {alsoBad.map((p) => (
+              <button key={p.id} class="list-row w-also" onClick={() => go({ name: 'pond', id: p.id })}>
+                <span class="grow stack-xs" style={{ gap: 0 }}>
+                  <span class="strong">{p.name}</span>
+                  <span class="label ink2 num">{pondDetail(p)}</span>
+                </span>
+                <span class="word bad strong">
+                  <Shape tone="bad" /> Bahaya
+                </span>
+                <Icon name="next" size={20} />
+              </button>
+            ))}
+            {alsoWarn.length > 0 && (
+              <button class="list-row w-also" onClick={() => (alsoWarn.length === 1 ? go({ name: 'pond', id: alsoWarn[0].id }) : go({ name: 'record' }))}>
+                <span class="grow stack-xs" style={{ gap: 0 }}>
+                  <span class="strong">{pondList(alsoWarn.map((p) => p.name))}</span>
+                  <span class="label ink2">{warnCheck ? `Ikut dicek jam ${fmtClock(warnCheck.t)}` : alsoWarn.length === 1 ? pondDetail(alsoWarn[0]) : `${alsoWarn.length} kolam perlu perhatian`}</span>
+                </span>
+                <span class="word warn strong">
+                  <Shape tone="warn" /> Perhatian
+                </span>
+                <Icon name="next" size={20} />
+              </button>
+            )}
+          </div>
+        </section>
+      )}
+
+      {calmOthers > 0 && (
         <button class="w-calm" onClick={() => go({ name: 'record' })}>
-          <LevelShape level="ok" size={14} />
-          <span class="grow">{calmOthers} kolam lain tenang malam ini</span>
+          <span class="word ok strong">
+            <Shape tone="ok" /> Aman
+          </span>
+          <span class="grow">
+            {calmOthers} kolam {focus && risky ? 'lain ' : ''}aman malam ini
+          </span>
           <span style={{ color: 'var(--muted)', display: 'inline-flex' }}>
             <Icon name="next" size={20} />
           </span>
@@ -536,6 +631,7 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
                   </div>
                 ))}
               </div>
+              <span class="label ink2">Ringkasan malam disusun AI Meta (Muse Spark) dari prakiraan, cuaca dan catatan. Skor risiko dari aturan Synteel.</span>
             </div>
           )}
         </section>

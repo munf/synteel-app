@@ -113,7 +113,7 @@ export function StepList({ steps, done, toggle, onAllDone }: { steps: string[]; 
             Lihat lagi sidat sekitar 1 jam lagi. Kalau belum membaik, minta bantuan.
           </span>
           {onAllDone && (
-            <button type="button" class="btn" style={{ background: '#fff', color: 'var(--navy)' }} onClick={onAllDone.run}>
+            <button type="button" class="btn" style={{ background: '#fff', color: '#13264A' }} onClick={onAllDone.run}>
               {onAllDone.label}
             </button>
           )}

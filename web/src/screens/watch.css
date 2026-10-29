@@ -38,13 +38,13 @@
 .w-noweather .msg svg { flex: none; margin-top: 1px; color: #fbd38d; }
 .w-noweather .btn { min-height: 48px; }
 
-.w-next { background: #fff; border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 16px; border: 2px solid var(--accent); }
+.w-next { background: var(--surface); border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 16px; border: 2px solid var(--accent); }
 .w-next .kicker { font-size: 0.875rem; font-weight: 800; color: var(--accent-ink); letter-spacing: 0.04em; }
 .w-next .time { font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .w-ai { flex: none; min-height: 32px; display: inline-flex; align-items: center; padding: 0 12px; border-radius: 999px; background: var(--tint); color: var(--accent-ink); font-size: 0.875rem; font-weight: 800; }
 
 .w-rows { display: flex; flex-direction: column; }
-.w-row { display: flex; flex-direction: column; border-bottom: 1px solid var(--line-2); }
+.w-row { display: flex; flex-direction: column; border-bottom: 1px solid var(--line); }
 .w-row:last-child { border-bottom: 0; }
 .w-row > button { min-height: 56px; width: 100%; border: 0; background: transparent; padding: 8px 0; display: flex; align-items: center; gap: 12px; text-align: left; color: var(--ink); }
 .w-row.done > button { color: var(--muted); }
@@ -54,15 +54,15 @@
 .w-row .bell { flex: none; display: inline-flex; color: var(--muted); }
 .w-row .tick { flex: none; display: inline-flex; color: var(--ok); }
 .w-row .more { display: flex; flex-direction: column; gap: 8px; padding: 0 0 12px 98px; font-size: 0.875rem; color: var(--ink-2); }
-.w-row .more button { min-height: 44px; align-self: flex-start; border-radius: 16px; border: 2px solid var(--line-2); background: #fff; padding: 0 14px; font-size: 0.875rem; font-weight: 800; color: var(--navy); }
+.w-row .more button { min-height: 44px; align-self: flex-start; border-radius: 16px; border: 2px solid var(--line-2); background: var(--surface); padding: 0 14px; font-size: 0.875rem; font-weight: 800; color: var(--ink); }
 
 .w-quiet { display: flex; flex-direction: column; gap: 8px; font-size: 0.875rem; color: var(--muted); }
-.w-quiet button { min-height: 44px; align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; border-radius: 16px; border: 2px solid var(--line-2); background: #fff; padding: 0 14px; font-size: 0.875rem; font-weight: 800; color: var(--navy); }
+.w-quiet button { min-height: 44px; align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; border-radius: 16px; border: 2px solid var(--line-2); background: var(--surface); padding: 0 14px; font-size: 0.875rem; font-weight: 800; color: var(--ink); }
 
-.w-calm { min-height: 56px; display: flex; align-items: center; gap: 12px; padding: 0 16px; border-radius: 16px; background: #fff; border: 0; width: 100%; text-align: left; color: var(--ink); font-weight: 600; }
+.w-calm { min-height: 56px; display: flex; align-items: center; gap: 12px; padding: 0 16px; border-radius: 16px; background: var(--surface); border: 0; width: 100%; text-align: left; color: var(--ink); font-weight: 600; }
 .w-calm .grow { font-weight: 600; }
 
-.w-tech > button { width: 100%; min-height: 64px; border: 0; background: #fff; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; font-weight: 800; color: var(--ink); }
+.w-tech > button { width: 100%; min-height: 64px; border: 0; background: var(--surface); padding: 0 20px; display: flex; align-items: center; justify-content: space-between; font-weight: 800; color: var(--ink); }
 
 /* ---------- alarm, full screen above everything (the nav included) ---------- */
 .alarm { position: fixed; inset: 0; z-index: 1000; overflow-y: auto; background: #0b1730; color: #fff; }
@@ -87,3 +87,6 @@
 .alarm .soon { color: var(--on-navy); background: transparent; border-color: var(--on-navy-2); }
 .alarm .error { color: #fda29b; }
 .w-risk .w-ticks .end { direction: rtl; }
+
+.w-also { width: 100%; border-left: 0; border-right: 0; border-top: 0; background: transparent; padding: 0; text-align: left; color: var(--ink); }
+.w-also > svg { color: var(--muted); flex: none; }

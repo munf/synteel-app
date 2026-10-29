@@ -6,7 +6,7 @@ import { canRecordAudio, prepareImage, prepareVideo, startRecording, voiceToWav,
 import { queue, Retryable, type CaptureKind, type Job } from '../capture/queue.ts';
 import { aerationCheckLabel, behaviorLabel, colorLabel, fmtClock, leftoverLabel, phaseLabel, smellLabel } from '../labels.ts';
 import { newId, onClips, retryAll } from '../queue.ts';
-import { Chips, Field, FindingCard, Icon, PondThumb, Shape, StatusPill, Stepper, type IconName } from '../ui.tsx';
+import { ActionBar, Chips, Field, FindingCard, Icon, PondThumb, StatusPill, Stepper, type IconName } from '../ui.tsx';
 import { secondsLeft, sendCapture, type Progress } from '../upload.ts';
 import './record.css';
 
@@ -21,11 +21,20 @@ type EditKey = ReadingField | 'mortality' | 'behavior' | 'aeration' | 'leftover'
 export const parseNum = (s: string) => (s.trim() === '' ? undefined : Number(s.replace(',', '.')));
 const showNum = (n: number) => String(n).replace('.', ',');
 
+/** Durations in words: "48 detik", "2 menit", "2 menit 10 detik" (never "2:10"). */
+export function fmtDur(sec: number) {
+  const s = Math.max(0, Math.round(sec));
+  if (s < 60) return `${s} detik`;
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return r ? `${m} menit ${r} detik` : `${m} menit`;
+}
+
 const kindWord: Record<CaptureKind, string> = { photo: 'foto', voice: 'suara', video: 'video' };
 const READINGS: { key: ReadingField; label: string; placeholder: string; mode: 'decimal' | 'numeric' }[] = [
-  { key: 'temperature', label: 'Suhu °C', placeholder: '28,5', mode: 'decimal' },
-  { key: 'ph', label: 'pH', placeholder: '7,2', mode: 'decimal' },
-  { key: 'tds', label: 'TDS ppm', placeholder: '150', mode: 'numeric' },
+  { key: 'temperature', label: 'Suhu °C', placeholder: 'contoh: 28,5', mode: 'decimal' },
+  { key: 'ph', label: 'pH', placeholder: 'contoh: 7,2', mode: 'decimal' },
+  { key: 'tds', label: 'TDS ppm', placeholder: 'contoh: 150', mode: 'numeric' },
 ];
 const METER: Record<ReadingField, string> = { temperature: 'Termometer', ph: 'pH meter', tds: 'TDS meter' };
 
@@ -144,7 +153,7 @@ export function useMic() {
         setGranted(true);
       } catch (e) {
         setPanel(isDenied(e) ? 'denied' : null);
-        if (!isDenied(e)) setError('Mikrofon tidak ditemukan di HP ini. Ketik saja dulu.');
+        if (!isDenied(e)) setError('Mikrofon tidak ditemukan di HP ini. Ketik sendiri dulu.');
       }
     },
     denied: () => setPanel('denied'),
@@ -185,7 +194,7 @@ export function MicAsk({ onAllow, onType }: { onAllow: () => void; onType: () =>
         <Icon name="mic" /> Izinkan mikrofon
       </button>
       <button type="button" class="btn secondary" onClick={onType}>
-        <Icon name="pencil" /> Ketik saja dulu
+        <Icon name="pencil" /> Ketik sendiri
       </button>
     </section>
   );
@@ -259,7 +268,7 @@ export function MicDenied({ onRetry, onType }: { onRetry: () => void; onType: ()
         <Glyph name="retry" /> Sudah diizinkan, coba lagi
       </button>
       <button type="button" class="btn secondary" onClick={onType}>
-        <Icon name="pencil" /> Ketik saja dulu
+        <Icon name="pencil" /> Ketik sendiri
       </button>
     </section>
   );
@@ -319,7 +328,7 @@ export function UploadCard({ what, p, thumb, onOther }: { what: string; p: Progr
       </div>
       <p class="note ok">
         <Icon name="check" size={20} />
-        <span>Boleh tutup app, {what} tetap terkirim. Hasilnya muncul untuk dicek setelah terbaca.</span>
+        <span>Boleh tutup aplikasi, {what} tetap terkirim. Hasilnya muncul untuk dicek setelah terbaca.</span>
       </p>
       {onOther && (
         <button type="button" class="btn primary" onClick={onOther}>
@@ -388,6 +397,8 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
   const [jobs, setJobs] = useState<Job[]>([]);
   const [editing, setEditing] = useState<EditKey | null>(null);
   const [manual, setManual] = useState(false);
+  /** In the review state the capture buttons fold behind "Rekam ulang". */
+  const [redo, setRedo] = useState(false);
   const mic = useMic();
 
   const photoInput = useRef<HTMLInputElement>(null);
@@ -436,6 +447,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
     setNotice('');
     setEditing(null);
     setManual(false);
+    setRedo(false);
     setPhotoCheck(null);
     setDarkVideo(null);
   };
@@ -464,7 +476,8 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
     setTranscript(draft.transcript ?? '');
     setProblems(draft.problems);
     setSource(kind);
-    if (Object.keys(got).length === 0) setNotice('AI tidak menemukan angka atau keterangan. Coba lagi, atau isi manual.');
+    setRedo(false);
+    if (Object.keys(got).length === 0) setNotice('AI tidak menemukan angka atau keterangan. Coba lagi, atau ketik sendiri.');
   }
 
   /** Kept on the phone first, so closing the app mid-upload loses nothing. */
@@ -550,7 +563,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
       });
     } catch (e) {
       if (isDenied(e)) mic.denied();
-      else setError('Mikrofon tidak bisa dipakai di HP ini. Ketik saja dulu.');
+      else setError('Mikrofon tidak bisa dipakai di HP ini. Ketik sendiri dulu.');
     }
   }
 
@@ -715,6 +728,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
   const draftKeys = (Object.keys(LABELS) as EditKey[]).filter((k) => k === 'temperature' || k === 'ph' || k === 'tds' || filled[k]);
   const blocked = !!working || !!recording;
   const typeInstead = () => (mic.close(), setManual(true));
+  const folded = reviewing && !manual && !redo && !recording;
   const glare = photoCheck?.image.issues.some((i) => i.includes('silau'));
   const target = photoCheck?.field ? pond.limits[photoCheck.field]?.target : null;
 
@@ -727,25 +741,51 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
         <PondThumb kind={pond.kind} size={48} />
         <div class="grow" style={{ display: 'flex', flexDirection: 'column' }}>
           <h1>Catat {pond.name}</h1>
-          {pond.batch && pond.program ? (
-            <>
-              <span class="meta">
-                {phaseLabel[pond.batch.phase]} · minggu {pond.program.week}
-              </span>
-              {pond.program.estimatedAlive !== null && <span class="meta">sekitar {pond.program.estimatedAlive.toLocaleString('id-ID')} ekor</span>}
-            </>
-          ) : (
-            <span class="meta">Belum ada batch</span>
-          )}
+          <span class="label ink2">
+            {pond.batch && pond.program
+              ? [
+                  `${phaseLabel[pond.batch.phase]} · minggu ${pond.program.week}`,
+                  pond.program.estimatedAlive !== null ? `sekitar ${pond.program.estimatedAlive.toLocaleString('id-ID')} ekor` : '',
+                ]
+                  .filter(Boolean)
+                  .join(' · ')
+              : 'Belum ada batch'}
+          </span>
+          <button type="button" class="link-btn label row" style={{ alignSelf: 'flex-start', gap: 4, fontWeight: 800 }} onClick={() => go({ name: 'pond', id: pond.id })}>
+            Detail kolam <Icon name="next" size={16} stroke={2.5} />
+          </button>
         </div>
       </header>
 
-      {aiMode === 'mock' && <p class="note warn">Mode contoh: hasil foto dan suara adalah contoh, bukan bacaan sungguhan.</p>}
-      {aiMode === 'off' && <p class="note warn">AI belum aktif. Rekaman disimpan di HP dan dibaca setelah AI aktif. Ketik sendiri tetap bisa.</p>}
+      {aiMode === 'mock' && (
+        <p class="note info">
+          <Icon name="info" />
+          <span>Mode contoh: hasil foto dan suara adalah contoh, bukan bacaan AI sungguhan.</span>
+        </p>
+      )}
+      {aiMode === 'off' && (
+        <p class="note info">
+          <Icon name="info" />
+          <span>AI belum aktif. Rekaman disimpan di HP dan dibaca setelah AI aktif. Ketik sendiri tetap bisa.</span>
+        </p>
+      )}
       {mic.granted && !recording && <MicGranted />}
       {mic.error && <p class="error">{mic.error}</p>}
 
-      {mic.panel === 'ask' ? (
+      {folded && (
+        <button type="button" class="go-row" style={{ color: 'var(--ink)', paddingLeft: 16 }} onClick={() => setRedo(true)}>
+          <Icon name="mic" />
+          <span class="grow" style={{ display: 'flex', flexDirection: 'column' }}>
+            <span class="strong">Rekam ulang</span>
+            <span class="label ink2" style={{ fontWeight: 400 }}>
+              Bicara, foto alat ukur atau video
+            </span>
+          </span>
+          <Icon name="down" size={20} />
+        </button>
+      )}
+
+      {folded ? null : mic.panel === 'ask' ? (
         <MicAsk onAllow={mic.allow} onType={typeInstead} />
       ) : mic.panel === 'denied' ? (
         <MicDenied onRetry={mic.allow} onType={typeInstead} />
@@ -755,7 +795,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
             <Icon name="mic" size={32} />
           </span>
           <span class="stack-xs">
-            <span class="title">{recording ? `Selesai · ${elapsed} dtk` : 'Bicara'}</span>
+            <span class="title">{recording ? `Selesai · ${fmtDur(elapsed)}` : 'Bicara'}</span>
             <span class="label" style={{ color: '#E4EAF5' }}>
               {recording ? `Merekam ${pond.name}. Ketuk untuk selesai, paling lama 60 detik.` : 'Sebutkan suhu, pH, TDS, sidat mati, sisa pakan dan aerator.'}
             </span>
@@ -763,6 +803,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
         </button>
       )}
 
+      {!folded && (
       <div class="grid2">
         <button type="button" class="capture-tile" onClick={() => takePhoto()} disabled={blocked}>
           <span class="icon-box">
@@ -784,10 +825,14 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
         </button>
       </div>
 
-      <div class="note info">
-        <Icon name="wifi" />
-        <span>Tidak ada sinyal? Rekaman disimpan di HP dan dibaca otomatis saat ada sinyal.</span>
-      </div>
+      )}
+
+      {!folded && (
+        <div class="note info">
+          <Icon name="wifi" />
+          <span>Tidak ada sinyal? Rekaman disimpan di HP dan dibaca otomatis saat ada sinyal.</span>
+        </div>
+      )}
 
       {upload && isSlow(upload.p) ? (
         <UploadCard what={upload.what} p={upload.p} thumb={upload.thumb} onOther={() => go({ name: 'record' })} />
@@ -798,7 +843,12 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
           </p>
         )
       )}
-      {notice && <p class="note warn">{notice}</p>}
+      {notice && (
+        <p class="note info">
+          <Icon name="info" />
+          <span>{notice}</span>
+        </p>
+      )}
 
       <input ref={photoInput} type="file" accept="image/*" capture="environment" hidden onChange={(e) => (onPhoto(e.currentTarget.files?.[0]), (e.currentTarget.value = ''))} />
       <input ref={videoInput} type="file" accept="video/*" capture="environment" hidden onChange={(e) => (onVideo(e.currentTarget.files?.[0]), (e.currentTarget.value = ''))} />
@@ -840,7 +890,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
                 {readingInput(photoCheck.field, { autoFocus: true })}
                 <span class="field-hint">
                   {target && target.min !== undefined && target.max !== undefined ? `Target ${showNum(target.min)}–${showNum(target.max)}. ` : ''}
-                  {photoCheck.field === 'tds' ? 'Contoh: 150.' : `Pakai koma, misalnya ${photoCheck.field === 'ph' ? '7,4' : '28,5'}.`}
+                  {photoCheck.field === 'tds' ? 'contoh: 150.' : `Pakai koma, contoh: ${photoCheck.field === 'ph' ? '7,4' : '28,5'}.`}
                 </span>
               </label>
               <button class="btn primary" disabled={busy || !readings[photoCheck.field]}>
@@ -892,15 +942,16 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
           </div>
           {transcript && <p class="quote">“{transcript}”</p>}
           {problems.map((p) => (
-            <p key={p} class="note warn">
-              {p}
+            <p key={p} class="note info">
+              <Icon name="info" />
+              <span>{p}</span>
             </p>
           ))}
-          <span class="meta">Ada yang salah? Ketuk barisnya.</span>
-          <div>
+          <span class="label ink2">Ada yang salah? Ketuk barisnya.</span>
+          <div class="stack-sm">
             {draftKeys.map((k) =>
               editing === k ? (
-                <div class="draft-edit" key={k}>
+                <div class="draft-edit" key={k} style={{ border: '2px solid var(--ink)', borderRadius: 16, padding: '12px 16px' }}>
                   <span class="strong">{LABELS[k]}</span>
                   {editor(k)}
                   <button type="button" class="btn blue" onClick={() => setEditing(null)}>
@@ -908,17 +959,24 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
                   </button>
                 </div>
               ) : (
-                <button type="button" class="draft-row" key={k} onClick={() => setEditing(k)}>
+                <button
+                  type="button"
+                  class="draft-row"
+                  key={k}
+                  aria-label={`Ubah ${LABELS[k]}`}
+                  onClick={() => setEditing(k)}
+                  style={{ border: '2px solid var(--line-2)', borderRadius: 16, background: 'var(--surface)', padding: '0 16px', color: 'var(--ink)' }}
+                >
                   <span class="ink2">{LABELS[k]}</span>
                   <span class="row" style={{ gap: 8 }}>
                     {doubtful.includes(k) && (
-                      <span class="pill warn">
-                        <Shape tone="warn" size={10} />
+                      <span class="pill blue" style={{ gap: 6, color: 'var(--ink)' }}>
+                        <Icon name="info" size={16} />
                         cek lagi
                       </span>
                     )}
                     <span class="strong num">{showValue(k) ?? '–'}</span>
-                    <span class="muted">
+                    <span style={{ display: 'inline-flex', color: 'var(--ink)' }}>
                       <Icon name="pencil" size={18} />
                     </span>
                   </span>
@@ -926,18 +984,9 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
               ),
             )}
           </div>
-          {error && <p class="error">{error}</p>}
-          <button class="btn primary" disabled={busy || !!working}>
-            <Icon name="check" size={20} stroke={2.4} /> Simpan catatan
+          <button type="button" class="btn secondary" onClick={() => (setManual(true), setEditing(null))}>
+            <Icon name="pencil" size={20} /> Ketik sendiri
           </button>
-          <div class="stack-sm" style={{ gap: 12 }}>
-            <button type="button" class="btn secondary" onClick={toggleVoice} disabled={!!working}>
-              <Icon name="mic" size={20} /> Ulangi bicara
-            </button>
-            <button type="button" class="btn secondary" onClick={() => (setManual(true), setEditing(null))}>
-              <Icon name="pencil" size={20} /> Ketik semua
-            </button>
-          </div>
         </section>
       )}
 
@@ -966,14 +1015,19 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
               </div>
             ))}
             <Field label="Catatan">
-              <textarea rows={2} value={note} onInput={(e) => setNote(e.currentTarget.value)} placeholder="mis. habis hujan deras" />
+              <textarea rows={2} value={note} onInput={(e) => setNote(e.currentTarget.value)} placeholder="contoh: habis hujan deras" />
             </Field>
-            {error && <p class="error">{error}</p>}
-            <button class="btn primary" disabled={busy || !!working}>
-              <Icon name="check" size={20} stroke={2.4} /> Simpan catatan
-            </button>
           </div>
         </details>
+      )}
+
+      {(reviewing || manual) && (
+        <ActionBar>
+          {error && <p class="error">{error}</p>}
+          <button class="btn primary" disabled={busy || !!working}>
+            <Icon name="check" size={20} stroke={2.4} /> Simpan catatan
+          </button>
+        </ActionBar>
       )}
     </form>
   );
@@ -1030,7 +1084,7 @@ function PhotoTrouble(props: {
 /** A video too dark to see the eels: the narration is still read (Gangguan 11). */
 function DarkVideo(props: { seconds: number; at: number; frame?: Blob; heard: boolean; busy: boolean; onCheck: () => void; onRetake: () => void }) {
   const url = useBlobUrl(props.frame);
-  const len = `${Math.floor(props.seconds / 60)}:${String(Math.round(props.seconds % 60)).padStart(2, '0')}`;
+  const len = `rekaman ${fmtDur(props.seconds)}`;
   return (
     <section class="card">
       <div class="row between">

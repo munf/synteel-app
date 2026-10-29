@@ -3,10 +3,10 @@ import { api, ApiError, type AutoFix, type LogData, type PondSummary, type Readi
 import type { Go } from '../app.tsx';
 import { startRecording, voiceToWav } from '../capture/media.ts';
 import { fmtAgo, fmtClock, fmtNum, summarizeLog } from '../labels.ts';
-import { clips, fmtLen, readClip, waitReason, type Clip, type RoundItem } from '../queue.ts';
+import { clips, readClip, waitReason, type Clip, type RoundItem } from '../queue.ts';
 import { Icon, kindLabel, StatusPill, Stepper } from '../ui.tsx';
 import { sendRound, type Progress } from '../upload.ts';
-import { Glyph, isDenied, isSlow, parseNum, UploadCard, useTick, type GlyphName } from './record-pond.tsx';
+import { fmtDur, Glyph, isDenied, isSlow, parseNum, UploadCard, useTick, type GlyphName } from './record-pond.tsx';
 import './record.css';
 
 const FIELD: Record<ReadingField, { label: string; unit: string; example: string }> = {
@@ -165,7 +165,7 @@ export function Round({ ponds, queued, onSaved, go }: { ponds: PondSummary[]; qu
         <h1>Cek hasil suara</h1>
         {clip && (
           <span class="meta num">
-            Rekaman {fmtLen(clip.seconds)} · direkam {fmtClock(clip.createdAt)}
+            Rekaman {fmtDur(clip.seconds)} · direkam {fmtClock(clip.createdAt)}
           </span>
         )}
       </div>
@@ -224,7 +224,10 @@ export function Round({ ponds, queued, onSaved, go }: { ponds: PondSummary[]; qu
 
   const result = clip.result;
   const mock = result.mode === 'mock' && (
-    <p class="note warn">Mode contoh: hasil suara adalah contoh, bukan bacaan sungguhan.</p>
+    <p class="note info">
+      <Icon name="info" />
+      <span>Mode contoh: hasil suara adalah contoh, bukan bacaan AI sungguhan.</span>
+    </p>
   );
 
   if (result.empty || items.length === 0)
@@ -242,7 +245,7 @@ export function Round({ ponds, queued, onSaved, go }: { ponds: PondSummary[]; qu
           </div>
           <button type="button" class="rp-play" onClick={play} aria-pressed={playing}>
             <Glyph name={playing ? 'pause' : 'play'} size={20} />
-            <span class="grow">{playing ? `Memutar rekaman ${fmtLen(clip.seconds)}…` : `Putar rekaman ${fmtLen(clip.seconds)}`}</span>
+            <span class="grow">{playing ? `Memutar rekaman ${fmtDur(clip.seconds)}…` : `Putar rekaman ${fmtDur(clip.seconds)}`}</span>
           </button>
           <div class="stack rp-tips">
             <span class="label semi muted">Supaya terbaca:</span>
@@ -317,7 +320,7 @@ export function Round({ ponds, queued, onSaved, go }: { ponds: PondSummary[]; qu
           </button>
         )}
         {error && <p class="error">{error}</p>}
-        {pending > 0 && <span class="label" style={{ color: '#6B4100' }}>{pending} yang perlu dicek belum disimpan, tetap di sini sampai dicek.</span>}
+        {pending > 0 && <span class="label ink2">{pending} yang perlu dicek belum disimpan, tetap di sini sampai dicek.</span>}
       </section>
 
       {alerts.map((p) => (
@@ -484,7 +487,7 @@ function CheckCard(props: {
         </span>
         <div class="grow stack-xs" style={{ gap: 2 }}>
           <span class="h2">{name}</span>
-          <span class="label semi" style={{ color: 'var(--warn)' }}>
+          <span class="label semi" style={{ color: 'var(--ink)' }}>
             {kindText}
           </span>
         </div>
@@ -629,7 +632,7 @@ function TypeValue({ field, onDone }: { field: ReadingField; onDone: (v: number)
           {FIELD[field].label}
           {FIELD[field].unit ? ` (${FIELD[field].unit})` : ''}
         </span>
-        <input class="input" inputMode={field === 'tds' ? 'numeric' : 'decimal'} placeholder={`mis. ${FIELD[field].example}`} value={v} onInput={(e) => setV(e.currentTarget.value)} autoFocus />
+        <input class="input" inputMode={field === 'tds' ? 'numeric' : 'decimal'} placeholder={`contoh: ${FIELD[field].example}`} value={v} onInput={(e) => setV(e.currentTarget.value)} autoFocus />
       </label>
       <button type="button" class="btn primary" disabled={!ok} onClick={() => ok && onDone(n!)}>
         Pakai angka ini
@@ -686,7 +689,7 @@ function Unclear(props: { issue: Extract<RoundIssue, { kind: 'unclear' }>; item:
       setBusy(true);
       const { round } = await sendRound(await voiceToWav(audio));
       const d = round.drafts.find((x) => x.pondId === item.pondId) ?? round.drafts.find((x) => x.pondId === null) ?? round.drafts[0];
-      if (!d || d.issues.some((x) => x.kind === 'unclear')) return setError('Masih kurang jelas. Coba lagi lebih dekat ke HP, atau ketik.');
+      if (!d || d.issues.some((x) => x.kind === 'unclear')) return setError('Masih kurang jelas. Coba lagi lebih dekat ke HP, atau ketik sendiri.');
       const twice = d.issues.find((x) => x.kind === 'twice');
       let data: LogData = { ...item.data, ...d.data, readings: { ...item.data.readings, ...d.data.readings } };
       if (twice?.kind === 'twice') data = setReading(data, twice.field, twice.values[twice.values.length - 1]);
@@ -696,14 +699,14 @@ function Unclear(props: { issue: Extract<RoundIssue, { kind: 'unclear' }>; item:
       const why = waitReason(err);
       setError(
         isDenied(err)
-          ? 'Mikrofon belum diizinkan. Ketik saja dulu.'
+          ? 'Mikrofon belum diizinkan. Ketik sendiri dulu.'
           : why === 'quota'
-            ? 'Jatah baca AI hari ini habis. Ketik saja dulu.'
+            ? 'Jatah baca AI hari ini habis. Ketik sendiri dulu.'
             : why
-              ? 'Belum bisa dibaca sekarang. Ketik saja dulu.'
+              ? 'Belum bisa dibaca sekarang. Ketik sendiri dulu.'
               : err instanceof ApiError
                 ? err.message
-                : 'Mikrofon tidak bisa dipakai. Ketik saja dulu.',
+                : 'Mikrofon tidak bisa dipakai. Ketik sendiri dulu.',
       );
     } finally {
       setBusy(false);
@@ -736,7 +739,7 @@ function Unclear(props: { issue: Extract<RoundIssue, { kind: 'unclear' }>; item:
             <Icon name="mic" /> Rekam ulang
           </button>
           <button type="button" class="btn secondary" onClick={() => setTyping(true)} disabled={busy}>
-            Ketik
+            Ketik sendiri
           </button>
         </div>
       )}
@@ -764,7 +767,7 @@ function TypeAll({ data, onDone }: { data: LogData; onDone: (d: LogData) => void
             {FIELD[k].label}
             {FIELD[k].unit ? ` (${FIELD[k].unit})` : ''}
           </span>
-          <input class="input" inputMode={k === 'tds' ? 'numeric' : 'decimal'} placeholder={`mis. ${FIELD[k].example}`} value={v[k]} onInput={(e) => setV({ ...v, [k]: e.currentTarget.value })} />
+          <input class="input" inputMode={k === 'tds' ? 'numeric' : 'decimal'} placeholder={`contoh: ${FIELD[k].example}`} value={v[k]} onInput={(e) => setV({ ...v, [k]: e.currentTarget.value })} />
         </label>
       ))}
       <div class="field">

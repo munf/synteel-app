@@ -9,8 +9,9 @@ const TZ = 'Asia/Jakarta';
 const DAY = 86400_000;
 const clock = (t: number) => new Date(t).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: TZ });
 const dayKey = (t: number) => new Date(t).toLocaleDateString('en-CA', { timeZone: TZ });
-const shortDate = (t: number, weekday: 'long' | 'short' = 'long') =>
-  new Date(t).toLocaleDateString('id-ID', { weekday, day: 'numeric', month: 'short', timeZone: TZ }).replace(',', '').replace('.', '');
+/** "Rabu 28 Oktober": full day and month names, no abbreviations. */
+const shortDate = (t: number, _weekday: 'long' | 'short' = 'long') =>
+  new Date(t).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', timeZone: TZ }).replace(',', '');
 
 const SRC: Record<LogSource, { short: string; long: string; icon: IconName; ai: boolean }> = {
   voice: { short: 'Suara', long: 'Suara, dibaca AI lalu dicek', icon: 'mic', ai: true },
@@ -37,7 +38,12 @@ function readingTone(v: number, l: Limits | undefined): Tone | null {
   return null;
 }
 
-const WORD = { temperature: ['Suhu terlalu dingin', 'Suhu terlalu panas'], ph: ['pH terlalu rendah', 'pH terlalu tinggi'], tds: ['TDS terlalu rendah', 'TDS terlalu tinggi'] } as const;
+// Perhatian → "agak …", Bahaya → "terlalu …" (FAKTA words).
+const WORD = {
+  temperature: { warn: ['Suhu agak dingin', 'Suhu agak panas'], bad: ['Suhu terlalu dingin', 'Suhu terlalu panas'] },
+  ph: { warn: ['pH agak rendah', 'pH agak tinggi'], bad: ['pH terlalu rendah', 'pH terlalu tinggi'] },
+  tds: { warn: ['TDS agak rendah', 'TDS agak tinggi'], bad: ['TDS terlalu rendah', 'TDS terlalu tinggi'] },
+} as const;
 
 /** Shape + word flags for one record, worst first. */
 function flags(d: LogData, pond: PondSummary | undefined): { tone: Tone; word: string }[] {
@@ -53,10 +59,27 @@ function flags(d: LogData, pond: PondSummary | undefined): { tone: Tone; word: s
     const tone = readingTone(v, l);
     if (!tone) continue;
     const low = v < (l?.target?.min ?? l?.warning?.below ?? -Infinity);
-    out.push({ tone, word: WORD[k][low ? 0 : 1] });
+    out.push({ tone, word: WORD[k][tone === 'bad' ? 'bad' : 'warn'][low ? 0 : 1] });
   }
   if (d.mortality) out.push({ tone: 'warn', word: `${d.mortality} ekor mati` });
   return out.sort((a, b) => (a.tone === 'bad' ? 0 : 1) - (b.tone === 'bad' ? 0 : 1));
+}
+
+/**
+ * A data-quality hint, not a status: a temperature far from the pond's other readings that day
+ * was probably measured in another pond.
+ */
+function suspectNote(l: HistoryLog, all: HistoryLog[], pondName: string) {
+  const v = l.data.readings?.temperature;
+  if (v === undefined) return null;
+  const day = dayKey(Date.parse(l.loggedAt));
+  const rest = all.filter((o) => o.id !== l.id && o.data.readings?.temperature !== undefined && dayKey(Date.parse(o.loggedAt)) === day).map((o) => o.data.readings!.temperature!);
+  if (rest.length === 0) return null;
+  const sorted = [...rest].sort((a, b) => a - b);
+  const mid = sorted[Math.floor(sorted.length / 2)];
+  const diff = v - mid;
+  if (Math.abs(diff) < 2) return null;
+  return `Suhu ${fmtNum(Math.round(Math.abs(diff) * 10) / 10)} °C lebih ${diff < 0 ? 'rendah' : 'tinggi'} dari catatan ${pondName} lain hari ini. Mungkin alat ukur dicelup di kolam lain.`;
 }
 
 /** Label/value pairs for the open record. */
@@ -316,6 +339,7 @@ export function History({ ponds, pondId, role, onChanged, go }: { ponds: PondSum
               const isOpen = open === l.id;
               const src = SRC[l.source];
               const fl = flags(l.data, pond);
+              const suspect = suspectNote(l, logs ?? [], pond?.name ?? 'kolam ini');
               const numKeys: NumKey[] = [...(Object.keys(l.data.readings ?? {}) as ReadingKey[]), ...(l.data.mortality !== undefined ? (['mortality'] as const) : [])];
               const editKeys: NumKey[] = numKeys.length ? numKeys : ['temperature', 'ph', 'tds'];
               const q = query.trim().toLowerCase();
@@ -341,8 +365,14 @@ export function History({ ponds, pondId, role, onChanged, go }: { ponds: PondSum
                       </span>
                     </span>
                     <span class="num">{valuesLine(l.data)}</span>
-                    {fl.length > 0 && (
+                    {(fl.length > 0 || suspect) && (
                       <span class="h-flags">
+                        {suspect && (
+                          <span class="h-info">
+                            <Icon name="info" size={16} />
+                            Mungkin salah kolam
+                          </span>
+                        )}
                         {fl.map((f) => (
                           <span key={f.word} class={`word ${f.tone}`} style={{ gap: 6 }}>
                             <Shape tone={f.tone} />
@@ -365,6 +395,12 @@ export function History({ ponds, pondId, role, onChanged, go }: { ponds: PondSum
                     <div class="h-panel">
                       {mode === 'lihat' && (
                         <>
+                          {suspect && (
+                            <p class="note info" style={{ padding: 12, borderRadius: 12 }}>
+                              <Icon name="info" size={18} />
+                              <span>{suspect}</span>
+                            </p>
+                          )}
                           <div class="readings">
                             {fields(l).map(([k, v]) => (
                               <div key={k} class="reading">

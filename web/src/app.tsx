@@ -6,6 +6,7 @@ import { Profile, Rewards } from './screens/profile.tsx';
 import { Record } from './screens/record.tsx';
 import { AddPond, FarmSetup, NoPonds } from './screens/setup.tsx';
 import { SignIn } from './screens/signin.tsx';
+import { needsWelcome, Welcome, type SignInMode } from './screens/welcome.tsx';
 import { Today } from './screens/today.tsx';
 import { Watch } from './screens/watch.tsx';
 import { RecordPond } from './screens/record-pond.tsx';
@@ -42,7 +43,7 @@ const tabs: { name: 'today' | 'record' | 'watch' | 'problem'; label: string; ico
   { name: 'today', label: 'Beranda', icon: 'home' },
   { name: 'record', label: 'Catat', icon: 'pencil' },
   { name: 'watch', label: 'Waspada', icon: 'eye' },
-  { name: 'problem', label: 'Masalah', icon: 'alert' },
+  { name: 'problem', label: 'Masalah', icon: 'siren' },
 ];
 
 const TAB_OF: Partial<Record<Route['name'], (typeof tabs)[number]['name']>> = {
@@ -65,6 +66,11 @@ export function App() {
   const [retrying, setRetrying] = useState(false);
   /** A retry has failed since the banner appeared: say it keeps trying by itself. */
   const [retried, setRetried] = useState(false);
+  /** Sambutan on the first open on this phone; then the mode picked there opens Masuk. */
+  const [welcome, setWelcome] = useState(needsWelcome);
+  const [signinMode, setSigninMode] = useState<SignInMode>('login');
+  /** The PIN just created on Daftar, shown once on Siapkan tambak. Kept in memory only. */
+  const [newPin, setNewPin] = useState<string | null>(null);
   const meRef = useRef(me);
   meRef.current = me;
 
@@ -72,6 +78,8 @@ export function App() {
     setMe(null);
     setState(null);
     setNowcast(null);
+    setNewPin(null);
+    setSigninMode('login');
     setRoute({ name: 'today' });
   }, []);
 
@@ -162,7 +170,9 @@ export function App() {
     window.scrollTo(0, 0);
   };
 
-  const signedIn = (m: Me) => {
+  const signedIn = (m: Me, pin?: string) => {
+    setNewPin(pin ?? null);
+    setWelcome(false);
     setEnded(null);
     setState(null);
     setNowcast(null);
@@ -193,7 +203,28 @@ export function App() {
     );
   } else if (me === null) {
     // Help is reachable signed out too: an owner who forgot the PIN has no one else to ask.
-    body = route.name === 'help' ? <Help me={null} go={go} /> : <SignIn key={ended ? `ended:${ended.phone}` : 'signin'} onSignedIn={signedIn} onHelp={() => go({ name: 'help' })} sessionEnded={ended !== null} lastPhone={ended?.phone || undefined} />;
+    body =
+      route.name === 'help' ? (
+        <Help me={null} go={go} />
+      ) : welcome && !ended ? (
+        <Welcome
+          onSignedIn={signedIn}
+          onPick={(mode) => {
+            setSigninMode(mode);
+            setWelcome(false);
+            window.scrollTo(0, 0);
+          }}
+        />
+      ) : (
+        <SignIn
+          key={ended ? `ended:${ended.phone}` : `signin:${signinMode}`}
+          initialMode={signinMode}
+          onSignedIn={signedIn}
+          onHelp={() => go({ name: 'help' })}
+          sessionEnded={ended !== null}
+          lastPhone={ended?.phone || undefined}
+        />
+      );
   } else if (!me || !state) {
     body = (
       <div class="screen">
@@ -201,7 +232,16 @@ export function App() {
       </div>
     );
   } else if (!state.farm) {
-    body = <FarmSetup onDone={loadMe} onLogout={() => api.logout().catch(() => {}).then(signedOut)} />;
+    body = (
+      <FarmSetup
+        newPin={newPin ?? undefined}
+        onDone={() => {
+          setNewPin(null);
+          loadMe();
+        }}
+        onLogout={() => api.logout().catch(() => {}).then(signedOut)}
+      />
+    );
   } else if (route.name === 'add-pond' && owner) {
     body = (
       <AddPond

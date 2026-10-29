@@ -1,7 +1,14 @@
 import { useState } from 'preact/hooks';
 import type { Nowcast, NowcastPoint } from './api.ts';
 import { fmtNum, riskLabel } from './labels.ts';
-import { StatusPill } from './ui.tsx';
+import { Shape, StatusPill, type Tone } from './ui.tsx';
+
+/** A status shape in the legend; sized inline because `.chart svg` stretches every svg in the figure. */
+const KeyShape = ({ tone }: { tone: Tone }) => (
+  <span style={{ display: 'inline-flex', width: 12, height: 12, flex: 'none' }}>
+    <Shape tone={tone} />
+  </span>
+);
 
 const W = 340;
 const H = 196;
@@ -92,9 +99,19 @@ export function NowcastChart({ nc }: { nc: Nowcast }) {
           <circle key={m.t} class="measured" cx={x(m.t)} cy={y(m.value)} r={4.5} />
         ))}
 
-        {nc.hours.map((h) => (
-          <rect key={h.t} class={`risk lv-${h.level}`} x={x(h.t) - cellW / 2 + 1} y={stripY} width={Math.max(1, cellW - 2)} height={STRIP_H} rx={2} />
-        ))}
+        {nc.hours.map((h) =>
+          // The peak hour is a triangle when it is risky: the strip carries the status shape, not colour alone.
+          h.t === nc.peak.t && nc.peak.level !== 'ok' ? (
+            <path
+              key={h.t}
+              class={`risk lv-${h.level}`}
+              d={`M${x(h.t).toFixed(1)},${stripY - 1.5}L${(x(h.t) + 5.5).toFixed(1)},${stripY + STRIP_H}L${(x(h.t) - 5.5).toFixed(1)},${stripY + STRIP_H}Z`}
+              stroke-linejoin="round"
+            />
+          ) : (
+            <rect key={h.t} class={`risk lv-${h.level}`} x={x(h.t) - cellW / 2 + 1} y={stripY} width={Math.max(1, cellW - 2)} height={STRIP_H} rx={2} />
+          ),
+        )}
         <text class="tick" style={TICK} x={PAD.left - 8} y={stripY + 11} text-anchor="end">
           O₂
         </text>
@@ -117,9 +134,19 @@ export function NowcastChart({ nc }: { nc: Nowcast }) {
         </span>
       </figcaption>
       <p class="chart-key">
-        <span class="key-line" /> perkiraan suhu air <span class="key-dot" /> hasil ukur <span class="key-cell lv-ok" />
-        <span class="key-cell lv-warning" />
-        <span class="key-cell lv-critical" /> risiko oksigen rendah, sedang, tinggi
+        <span class="key-line" /> perkiraan suhu air <span class="key-dot" /> hasil ukur
+      </p>
+      <p class="chart-key" style={{ gap: '4px 12px' }}>
+        <span>Pita bawah: risiko oksigen rendah per jam</span>
+        <span class="row" style={{ gap: 6 }}>
+          <KeyShape tone="ok" /> Aman
+        </span>
+        <span class="row" style={{ gap: 6 }}>
+          <KeyShape tone="warn" /> Perhatian
+        </span>
+        <span class="row" style={{ gap: 6 }}>
+          <KeyShape tone="bad" /> Bahaya{nc.peak.level !== 'ok' ? ` (segitiga = puncak ${clock(nc.peak.t)})` : ''}
+        </span>
       </p>
 
       <details class="plain">

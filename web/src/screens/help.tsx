@@ -5,12 +5,13 @@ import { api, type Me, type SupportTopic } from '../api.ts';
 import type { Go } from '../app.tsx';
 import { Field, fmtPhone, Icon, roleLabel, Tick } from '../ui.tsx';
 import { canRecordAudio, startRecording, voiceToWav } from '../capture/media.ts';
+import './help.css';
 
 const TOPICS: { key: SupportTopic; label: string; hint: string }[] = [
-  { key: 'pin', label: 'Masuk dan PIN', hint: 'mis. pemilik lupa PIN dan tidak bisa masuk' },
-  { key: 'catat', label: 'Catat dan suara', hint: 'mis. suara di Kolam B tidak terbaca sejak kemarin' },
-  { key: 'waspada', label: 'Waspada dan alarm', hint: 'mis. alarm jam 23.30 tidak bunyi' },
-  { key: 'jatah', label: 'Jatah AI', hint: 'mis. jatah habis padahal baru dipakai sedikit' },
+  { key: 'pin', label: 'Masuk dan PIN', hint: 'contoh: pemilik lupa PIN dan tidak bisa masuk' },
+  { key: 'catat', label: 'Catat dan suara', hint: 'contoh: suara di Kolam B tidak terbaca sejak kemarin' },
+  { key: 'waspada', label: 'Waspada dan alarm', hint: 'contoh: alarm jam 23.30 tidak bunyi' },
+  { key: 'jatah', label: 'Jatah AI', hint: 'contoh: jatah habis padahal baru dipakai sedikit' },
   { key: 'lain', label: 'Lainnya', hint: 'Ceritakan singkat saja' },
 ];
 
@@ -40,10 +41,12 @@ function SpeakToText({ onText }: { onText: (text: string) => void }) {
   const [rec, setRec] = useState<{ stop: () => Promise<Blob> } | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
+  const [heard, setHeard] = useState(false);
   if (!canRecordAudio()) return null;
 
   const start = async () => {
     setNote('');
+    setHeard(false);
     try {
       setRec(await startRecording(60));
     } catch {
@@ -58,7 +61,8 @@ function SpeakToText({ onText }: { onText: (text: string) => void }) {
     try {
       const { text } = await api.transcribe(await voiceToWav(audio, 60));
       if (text) onText(text);
-      setNote(text ? 'Sudah jadi teks di atas. Periksa dulu sebelum kirim.' : 'Suara belum terbaca. Coba lagi lebih dekat, atau ketik saja.');
+      setHeard(!!text);
+      setNote(text ? '' : 'Suara belum terbaca. Coba lagi lebih dekat, atau ketik saja.');
     } catch (err) {
       setNote((err as Error).message);
     } finally {
@@ -68,10 +72,24 @@ function SpeakToText({ onText }: { onText: (text: string) => void }) {
 
   return (
     <div class="stack-xs" style={{ gap: 8 }}>
-      <button type="button" class={`btn ${rec ? 'danger' : 'secondary'}`} disabled={busy} onClick={rec ? stop : start}>
-        <Icon name="mic" size={20} /> {busy ? 'Mengubah suara jadi teks…' : rec ? 'Selesai bicara' : 'Bicara, nanti jadi teks'}
+      <button type="button" class={`btn speak${rec ? ' rec' : ''}`} aria-pressed={!!rec} disabled={busy} onClick={rec ? stop : start}>
+        {rec ? (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M7 7h10v10H7z" />
+          </svg>
+        ) : (
+          <Icon name="mic" size={20} />
+        )}
+        {busy ? 'Mengubah suara jadi teks…' : rec ? 'Merekam… ketuk untuk selesai' : 'Bicara, nanti jadi teks'}
       </button>
-      {note && <span class="label muted">{note}</span>}
+      {heard && !rec ? (
+        <p role="status" class="note info">
+          <Icon name="check" size={18} stroke={2.5} />
+          Sudah jadi teks di atas. Periksa dulu sebelum kirim.
+        </p>
+      ) : (
+        <span class="label ink2">{note || 'Yang terkirim hanya teksnya. Tidak memakai jatah baca AI.'}</span>
+      )}
     </div>
   );
 }
@@ -150,22 +168,20 @@ export function Help({ me, go }: { me: Me | null; go: Go }) {
         </section>
       ) : (
         <>
-          {signedIn ? (
-            <button type="button" class="note bad" style={{ alignItems: 'center' }} onClick={() => go({ name: 'problem' })}>
-              <Icon name="alert" />
-              <span class="grow">
-                Sidat sekarat atau mati sekarang? Jangan tunggu balasan, pakai <b>Ada Masalah</b>.
-              </span>
-              <Icon name="next" size={20} />
-            </button>
-          ) : (
-            <div class="note bad" style={{ alignItems: 'center' }}>
-              <Icon name="alert" />
-              <span class="grow">
-                Sidat sekarat atau mati sekarang? Jangan tunggu balasan, pakai <b>Ada Masalah</b>.
-              </span>
-            </div>
-          )}
+          <div class="note bad emergency-line">
+            <Icon name="siren" size={20} />
+            <span class="grow">
+              Sidat sekarat atau mati sekarang? Jangan tunggu balasan, pakai{' '}
+              {signedIn ? (
+                <button type="button" class="tab-link" onClick={() => go({ name: 'problem' })}>
+                  tab Masalah
+                </button>
+              ) : (
+                <b>tab Masalah</b>
+              )}
+              .
+            </span>
+          </div>
 
           <section class="stack-sm">
             <span class="strong">Soal apa?</span>
@@ -185,7 +201,7 @@ export function Help({ me, go }: { me: Me | null; go: Go }) {
             </Field>
             {signedIn && <SpeakToText onText={(t) => setMessage((m) => (m.trim() ? `${m.trim()} ${t}` : t))} />}
             <Field label="Nomor WhatsApp untuk balasan">
-              <input type="tel" inputMode="tel" autoComplete="tel" placeholder="mis. 0812 3456 7890" value={replyPhone} onInput={(e) => setReplyPhone(e.currentTarget.value)} />
+              <input type="tel" inputMode="tel" autoComplete="tel" placeholder="contoh: 0812 3456 7890" value={replyPhone} onInput={(e) => setReplyPhone(e.currentTarget.value)} />
             </Field>
             {me ? (
               <div class="field">
@@ -203,7 +219,7 @@ export function Help({ me, go }: { me: Me | null; go: Go }) {
             )}
             <button type="button" role="checkbox" aria-checked={withDevice} class="check-row" onClick={() => setWithDevice(!withDevice)}>
               <span class={`check-box${withDevice ? ' on' : ''}`}>{withDevice && <Tick />}</span>
-              Sertakan jenis HP dan versi app
+              Sertakan jenis HP dan versi aplikasi
             </button>
           </section>
 

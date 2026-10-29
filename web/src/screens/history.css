@@ -1,6 +1,6 @@
 /* Riwayat catatan: records on the page background, divided by lines; the open one gets a white panel. */
 .h-rows { display: flex; flex-direction: column; }
-.h-row { display: flex; flex-direction: column; border-bottom: 1px solid var(--line-2); }
+.h-row { display: flex; flex-direction: column; border-bottom: 1px solid var(--line); }
 .h-row:last-child { border-bottom: 0; }
 .h-head { width: 100%; min-height: 56px; border: 0; background: transparent; padding: 14px 0; display: flex; flex-direction: column; gap: 4px; text-align: left; color: var(--ink); }
 .h-src { display: inline-flex; align-items: center; gap: 4px; font-size: 0.875rem; font-weight: 600; color: var(--ink-2); }
@@ -9,7 +9,7 @@
 .h-ico { flex: none; display: inline-flex; color: var(--muted); }
 .h-flags { display: flex; flex-wrap: wrap; gap: 4px 16px; }
 .h-trace { display: flex; align-items: flex-start; gap: 6px; font-size: 0.875rem; color: var(--muted); }
-.h-panel { background: #fff; border-radius: 16px; padding: 16px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 12px; }
+.h-panel { background: var(--surface); border-radius: 16px; padding: 16px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 12px; }
 .h-panel .readings { border-radius: 12px; padding: 4px 12px; }
 .h-k { width: 104px; flex: none; font-size: 0.875rem; color: var(--muted); }
 .h-perm { display: flex; align-items: flex-start; gap: 8px; font-size: 0.875rem; color: var(--ink-2); }
@@ -17,14 +17,15 @@
 .h-act { min-height: 48px; border: 0; border-radius: 16px; background: var(--bg); padding: 0 12px; display: flex; align-items: center; gap: 12px; font-weight: 800; color: var(--navy); text-align: left; }
 .h-act.bad { color: var(--bad); }
 .h-input { display: flex; align-items: center; gap: 12px; }
-.h-input input { flex: 1; min-width: 0; min-height: 48px; box-sizing: border-box; padding: 0 12px; border: 2px solid var(--line-2); border-radius: 16px; background: #fff; font-weight: 800; font-variant-numeric: tabular-nums; outline: 0; }
+.h-input input { flex: 1; min-width: 0; min-height: 48px; box-sizing: border-box; padding: 0 12px; border: 2px solid var(--line-2); border-radius: 16px; background: var(--surface); font-weight: 800; font-variant-numeric: tabular-nums; outline: 0; }
 .h-input input:focus, .h-search:focus-within { border-color: var(--accent); }
 .h-unit { width: 40px; flex: none; font-size: 0.875rem; color: var(--muted); }
-.h-search { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 12px; border: 2px solid var(--line-2); border-radius: 16px; background: #fff; color: var(--muted); }
+.h-search { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 12px; border: 2px solid var(--line-2); border-radius: 16px; background: var(--surface); color: var(--muted); }
 .h-search input { flex: 1; min-width: 0; border: 0; background: transparent; outline: 0; color: var(--ink); }
-.h-search input::placeholder { color: #7a869c; }
+.h-search input::placeholder { color: var(--muted); }
 .h-pick { min-height: 56px; width: 100%; border: 0; border-radius: 16px; background: var(--bg); display: flex; align-items: center; gap: 12px; padding: 6px 12px; color: var(--ink); text-align: left; }
 .h-notice { min-height: 56px; padding: 8px 0; display: flex; align-items: center; gap: 12px; }
-.h-notice-icon { width: 40px; height: 40px; flex: none; border-radius: 12px; background: #fff; color: var(--ink-2); display: inline-flex; align-items: center; justify-content: center; }
+.h-notice-icon { width: 40px; height: 40px; flex: none; border-radius: 12px; background: var(--surface); color: var(--ink-2); display: inline-flex; align-items: center; justify-content: center; }
 .h-notice-icon.ok { background: var(--ok-bg); color: #0f5139; }
-.h-undo { min-height: 44px; flex: none; border: 0; border-radius: 16px; background: #fff; padding: 0 12px; font-size: 0.875rem; font-weight: 800; color: var(--navy); }
+.h-undo { min-height: 44px; flex: none; border: 0; border-radius: 16px; background: var(--surface); padding: 0 12px; font-size: 0.875rem; font-weight: 800; color: var(--navy); }
+.h-info { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 10px; border-radius: 999px; background: var(--tint); color: var(--ink); font-size: 0.875rem; font-weight: 600; }

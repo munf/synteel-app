@@ -3,9 +3,11 @@ import { api, type PondSummary, type Role } from '../api.ts';
 import type { Go } from '../app.tsx';
 import { actionIcon, alarmClosed, armedChecks, findArmed, GLYPH, loadDone, markDone, snoozeAlarm, startTone, stopTone, unsnoozeAlarm } from '../alarms.ts';
 import { fmtClock, levelLabel } from '../labels.ts';
-import { Icon, Soon } from '../ui.tsx';
+import { setForcedNight } from '../prefs.ts';
+import { Icon } from '../ui.tsx';
 import { Glyph } from './watch.tsx';
 import './watch.css';
+import './alarm.css';
 
 type Step = 'ring' | 'snoozed' | 'ask' | 'done';
 
@@ -26,6 +28,8 @@ export function Alarm({ ponds, at, pondId, onSaved, go }: { ponds: PondSummary[]
   const pond = ponds.find((p) => p.id === pondId);
   const pondName = pond?.name ?? check?.pondName ?? 'Kolam';
   const action = check?.action ?? 'Lihat sidat dan aerator';
+  // A check that is about looking at the eels asks the question the farmer answers next.
+  const actionText = actionIcon(action) === GLYPH.eye ? 'Cek: sidat naik ke permukaan?' : action;
 
   const [step, setStep] = useState<Step>('ring');
   // Where "Kembali" returns to from the question: the ringing or the snoozed screen.
@@ -86,8 +90,11 @@ export function Alarm({ ponds, at, pondId, onSaved, go }: { ponds: PondSummary[]
     }
   };
 
+  // The emergency flow opened from this night alarm stays dark (canvas: Masalah tema Malam), even when the
+  // Profil switch is off; problem.tsx ends it when that flow is left.
   const problem = () => {
     markDone([key]);
+    setForcedNight(true);
     go({ name: 'problem', pondId });
   };
 
@@ -104,7 +111,7 @@ export function Alarm({ ponds, at, pondId, onSaved, go }: { ponds: PondSummary[]
         </span>
         <div class="grow stack-xs" style={{ gap: 2 }}>
           <span class="pond">{pondName}</span>
-          <span style={{ color: 'var(--on-navy)' }}>{action}</span>
+          <span style={{ color: 'var(--on-navy)' }}>{actionText}</span>
         </div>
       </div>
       {peak && (
@@ -146,9 +153,7 @@ export function Alarm({ ponds, at, pondId, onSaved, go }: { ponds: PondSummary[]
                 <Glyph d={GLYPH.clock} />
                 Tunda 10 menit
               </button>
-              <p class="foot">
-                Kalau tidak dijawab 10 menit, pemilik dikabari <Soon />
-              </p>
+              <p class="foot">Alarm terus berbunyi sampai dijawab.</p>
             </div>
           </>
         )}
@@ -195,6 +200,7 @@ export function Alarm({ ponds, at, pondId, onSaved, go }: { ponds: PondSummary[]
                 {busy ? 'Menyimpan…' : 'Ya, normal'}
               </button>
               <button type="button" class="b-bad" onClick={problem}>
+                <Icon name="siren" size={22} />
                 Ada masalah
               </button>
               <button type="button" class="b-text" onClick={() => setStep(from)}>
@@ -208,7 +214,7 @@ export function Alarm({ ponds, at, pondId, onSaved, go }: { ponds: PondSummary[]
           <>
             <div class="mid">
               <div class="clock" style={{ gap: 16 }}>
-                <span class="circle" style={{ background: '#1F9D6B', color: '#fff' }}>
+                <span class="circle" style={{ background: '#1E8A5F', color: '#fff' }}>
                   <Icon name="check" size={36} stroke={3} />
                 </span>
                 <span class="title">Tercatat</span>

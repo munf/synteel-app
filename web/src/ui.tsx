@@ -54,6 +54,8 @@ const PATHS = {
   userCheck: 'M9 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM2 21a7 7 0 0 1 12.5-4.3M15 18l2 2 4-4',
   refresh: 'M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5',
   offline: 'M3 3l18 18M8.5 16a5 5 0 0 1 7 0M5 12.5a10 10 0 0 1 4.2-2.6M14.5 9.9a10 10 0 0 1 4.5 2.6M12 19.5h.01',
+  siren: 'M7 18v-6a5 5 0 0 1 10 0v6M5 21h14v-3H5zM12 3v1.5M4.6 6.6l1.1 1.1M19.4 6.6l-1.1 1.1',
+  info: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 11v5M12 7.5v.5',
   headset: 'M4 13a8 8 0 0 1 16 0M4 13v3a2 2 0 0 0 2 2h1v-6H6a2 2 0 0 0-2 2zM20 13v3a2 2 0 0 1-2 2h-1v-6h1a2 2 0 0 1 2 2zM17 18c0 1.5-2 3-5 3',
 } as const;
 
@@ -77,8 +79,8 @@ export type Tone = 'ok' | 'warn' | 'bad' | 'blue';
 export const toneOf = (level: Level): Tone => (level === 'critical' ? 'bad' : level === 'warning' ? 'warn' : level === 'info' ? 'blue' : 'ok');
 
 const SHAPE: Record<Tone, { d: string; fill: string }> = {
-  ok: { d: 'M6 1a5 5 0 1 0 0 10A5 5 0 0 0 6 1z', fill: '#1F9D6B' },
-  warn: { d: 'M1 1h10v10H1z', fill: '#E0A100' },
+  ok: { d: 'M6 1a5 5 0 1 0 0 10A5 5 0 0 0 6 1z', fill: '#1E8A5F' },
+  warn: { d: 'M1 1h10v10H1z', fill: '#A86A00' },
   bad: { d: 'M5.13 1.5a1 1 0 0 1 1.74 0l4.5 8a1 1 0 0 1-.87 1.5H1.5a1 1 0 0 1-.87-1.5z', fill: '#D92D20' },
   blue: { d: 'M6 1a5 5 0 1 0 0 10A5 5 0 0 0 6 1z', fill: '#2F6FE4' },
 };
@@ -102,14 +104,15 @@ export function StatusPill({ level, children }: { level: Level; children?: Compo
 }
 
 /** Marks a part of the design that is not live yet. */
-export const Soon = ({ children = 'Segera' }: { children?: ComponentChildren }) => <span class="soon">{children}</span>;
+export const Soon = ({ children = 'Belum tersedia' }: { children?: ComponentChildren }) => <span class="soon">{children}</span>;
 
-// ---------- pond thumbnail: the farmer's photo later; the pond type's shape for now ----------
+// ---------- pond thumbnail: the farmer's photo later; a line drawing of the pond type for now ----------
+// Line drawings, never a plain circle or square: those shapes mean Aman and Perhatian.
 
 const TANK: Record<string, string> = {
-  bulat: 'M28 8a20 20 0 1 0 0 40 20 20 0 0 0 0-40z',
-  terpal: 'M12 12h32a4 4 0 0 1 4 4v24a4 4 0 0 1-4 4H12a4 4 0 0 1-4-4V16a4 4 0 0 1 4-4z',
-  fiber: 'M14 16h28l-3 24H17z',
+  bulat: 'M5 7c0-1.7 3.1-3 7-3s7 1.3 7 3v10c0 1.7-3.1 3-7 3s-7-1.3-7-3zM5 7c0 1.7 3.1 3 7 3s7-1.3 7-3M5 13c2 .8 4.3 1.2 7 1.2s5-.4 7-1.2',
+  terpal: 'M3 8h18l-2 11H5zM6.5 12.5c1.4-.9 2.8-.9 4.2 0s2.8.9 4.2 0 2.4-.8 3.1-.4',
+  fiber: 'M4 6h16v3H4zM5 9l1 10h12l1-10M8 14c1.3-.8 2.7-.8 4 0s2.7.8 4 0',
 };
 export const tankPath = (kind: string | null) => TANK[kind === 'beton' ? 'terpal' : (kind ?? 'terpal')] ?? TANK.terpal;
 export const kindLabel: Record<string, string> = { bulat: 'Tangki bulat', terpal: 'Terpal', beton: 'Beton', fiber: 'Bak fiber' };
@@ -117,8 +120,8 @@ export const kindLabel: Record<string, string> = { bulat: 'Tangki bulat', terpal
 export function PondThumb({ kind, size = 56 }: { kind: string | null; size?: number }) {
   return (
     <span class={`thumb${size <= 40 ? ' sm' : ''}`} style={{ width: size, height: size }}>
-      <svg width={size} height={size} viewBox="0 0 56 56" aria-hidden="true">
-        <path d={tankPath(kind)} fill="#8DB6D9" stroke="#FFFFFF" stroke-width="3" />
+      <svg width={Math.round(size * 0.5)} height={Math.round(size * 0.5)} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d={tankPath(kind)} />
       </svg>
     </span>
   );
@@ -126,7 +129,7 @@ export function PondThumb({ kind, size = 56 }: { kind: string | null; size?: num
 
 export function pondMeta(p: PondSummary): string {
   if (!p.batch || !p.program) return p.kind ? kindLabel[p.kind] ?? p.kind : 'Belum ada batch';
-  const parts = [phaseLabel[p.batch.phase], `minggu ${p.program.week}`];
+  const parts = [phaseLabel[p.batch.phase], `minggu ${Math.max(1, p.program.week)}`];
   if (p.program.estimatedAlive !== null) parts.push(`sekitar ${p.program.estimatedAlive.toLocaleString('id-ID')} ekor`);
   return parts.join(' · ');
 }
@@ -451,6 +454,156 @@ export function ConnectionBanner({ since, retrying, stillOff, onRetry }: { since
         <Icon name="refresh" size={20} />
         {retrying ? 'Menyambung…' : 'Coba lagi'}
       </button>
+    </div>
+  );
+}
+
+// ---------- round 3 additions (appended; earlier exports unchanged) ----------
+
+/** A stroke icon from a path that is not in the shared set (24 grid). */
+export function Glyph({ d, size = 22, stroke = 2, style }: { d: string; size?: number; stroke?: number; style?: Record<string, string | number> }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width={stroke} stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style={{ flex: 'none', ...style }}>
+      <path d={d} />
+    </svg>
+  );
+}
+
+export const GLYPH = {
+  eyeOff: 'M3 3l18 18M10.6 6.1A10 10 0 0 1 12 6c6.5 0 10 6 10 6a17 17 0 0 1-3.2 3.9M6.6 6.6C3.7 8.4 2 12 2 12s3.5 6 10 6a9.7 9.7 0 0 0 4.4-1',
+  mobile: 'M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM11 18h2',
+  play: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM10 8.5v7l6-3.5z',
+  errorCircle: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8v5M12 16v.5',
+  spinner: 'M12 3a9 9 0 1 0 9 9',
+} as const;
+
+/**
+ * Six-digit PIN as six boxes over one hidden number field. The next box is outlined only while the
+ * field has focus. A PIN being created is shown by default (no typo), a PIN being typed to sign in is masked.
+ */
+export function PinBoxes({
+  value,
+  onChange,
+  defaultShow = false,
+  autoComplete = 'current-password',
+  locked = false,
+  error = false,
+  hint,
+  id = 'pin',
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  defaultShow?: boolean;
+  autoComplete?: string;
+  /** Too many tries: grey boxes, no field, "Dikunci". */
+  locked?: boolean;
+  /** The last try was wrong: red outlines. */
+  error?: boolean;
+  hint?: ComponentChildren;
+  id?: string;
+}) {
+  const [show, setShow] = useState(defaultShow);
+  const [focus, setFocus] = useState(false);
+  return (
+    <div class="stack-sm">
+      <div class="row between" style={{ gap: 8 }}>
+        <label for={id} class="field-label" style={locked ? { color: 'var(--ink-2)' } : undefined}>
+          {locked ? 'PIN' : 'PIN 6 angka'}
+        </label>
+        {locked ? (
+          <span class="label strong row" style={{ minHeight: 44, gap: 4, color: 'var(--ink-2)' }}>
+            <Icon name="lock" size={18} /> Dikunci
+          </span>
+        ) : (
+          <button type="button" class="link-btn label row" style={{ gap: 4, fontWeight: 800 }} aria-pressed={show} onClick={() => setShow(!show)}>
+            {show ? <Glyph d={GLYPH.eyeOff} size={18} /> : <Icon name="eye" size={18} />}
+            {show ? 'Sembunyikan' : 'Lihat PIN'}
+          </button>
+        )}
+      </div>
+      <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 8 }}>
+        {[0, 1, 2, 3, 4, 5].map((i) => {
+          const has = !locked && Boolean(value[i]);
+          const next = !locked && focus && i === Math.min(value.length, 5);
+          const border = locked
+            ? '2px solid var(--line)'
+            : next
+              ? '3px solid var(--ink)'
+              : error
+                ? '2px solid var(--bad-dot)'
+                : has
+                  ? '2px solid #5e7bb0'
+                  : '2px solid var(--line-2)';
+          return (
+            <span
+              key={i}
+              aria-hidden="true"
+              style={{
+                height: 56,
+                borderRadius: 16,
+                border,
+                background: locked ? 'var(--bg)' : has ? 'var(--soft)' : 'var(--surface)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.5rem',
+                fontWeight: 800,
+                fontVariantNumeric: 'tabular-nums',
+                color: 'var(--ink)',
+              }}
+            >
+              {has ? (show ? value[i] : '•') : ''}
+            </span>
+          );
+        })}
+        {!locked && (
+          <input
+            id={id}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={6}
+            autoComplete={autoComplete}
+            aria-label="PIN 6 angka"
+            aria-invalid={error || undefined}
+            value={value}
+            onFocus={() => setFocus(true)}
+            onBlur={() => setFocus(false)}
+            onInput={(e) => {
+              const v = e.currentTarget.value.replace(/\D/g, '').slice(0, 6);
+              e.currentTarget.value = v;
+              onChange(v);
+            }}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', padding: 0, margin: 0, opacity: 0, border: 0, fontSize: 16, cursor: 'text', caretColor: 'transparent' }}
+          />
+        )}
+      </div>
+      {hint && <span class="label ink2">{hint}</span>}
+    </div>
+  );
+}
+
+/**
+ * The main action of a long screen, kept in reach: sticky above the tab bar (72px), full-bleed white with a
+ * hairline on top. Put it last inside `.screen`.
+ */
+export function ActionBar({ children }: { children: ComponentChildren }) {
+  return (
+    <div
+      style={{
+        position: 'sticky',
+        bottom: 'calc(72px + env(safe-area-inset-bottom, 0px))',
+        zIndex: 5,
+        margin: '0 -20px -24px',
+        padding: '12px 20px',
+        background: 'var(--surface)',
+        borderTop: '1px solid var(--line)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+      }}
+    >
+      {children}
     </div>
   );
 }

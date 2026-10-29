@@ -4,19 +4,19 @@ import type { Go } from '../app.tsx';
 import { canRecordAudio, startRecording, voiceToWav } from '../capture/media.ts';
 import { queue as captures, type Job } from '../capture/queue.ts';
 import { fmtAgo, fmtClock, phaseLabel } from '../labels.ts';
-import { clips, fmtLen, joinWav, newId, onClips, retryAll, type Clip } from '../queue.ts';
+import { clips, joinWav, newId, onClips, retryAll, type Clip } from '../queue.ts';
 import { Icon, PondPicker, PondThumb, pondMeta, Shape, toneOf } from '../ui.tsx';
-import { Glyph, handToPond, isDenied, MicAsk, MicDenied, MicGranted, recordedToday, RecordPond, sortForRecording, useMic, useTick } from './record-pond.tsx';
+import { fmtDur, Glyph, handToPond, isDenied, MicAsk, MicDenied, MicGranted, recordedToday, RecordPond, sortForRecording, useMic, useTick } from './record-pond.tsx';
 import './record.css';
 
 /** A round recording stays under the server's 15 MB audio limit as 16 kHz WAV (about 7,8 minutes). */
 const ROUND_MAX_S = 420;
 
 type Filter = 'semua' | 'belum' | 'perhatian';
-const FILTERS: { key: Filter; label: string }[] = [
-  { key: 'semua', label: 'Semua' },
-  { key: 'belum', label: 'Belum dicatat' },
-  { key: 'perhatian', label: 'Perlu perhatian' },
+const FILTERS: { key: Filter; short: string; label: string }[] = [
+  { key: 'semua', short: 'Semua', label: 'Semua' },
+  { key: 'belum', short: 'Belum', label: 'Belum dicatat' },
+  { key: 'perhatian', short: 'Perhatian', label: 'Perlu perhatian' },
 ];
 const needsAttention = (p: PondSummary) => p.level === 'warning' || p.level === 'critical';
 const captureWord: Record<Job['kind'], string> = { photo: 'Foto', voice: 'Suara', video: 'Video' };
@@ -103,7 +103,7 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
     setError('');
     setKept(null);
     setConfirmDrop(false);
-    if (!canRecordAudio()) return setError('HP ini tidak bisa merekam dari aplikasi. Ketuk kolam di daftar untuk mencatat.');
+    if (!canRecordAudio()) return setError('HP ini tidak bisa merekam dari aplikasi. Ketik sendiri: ketuk kolam di daftar.');
     if (!(await mic.ready())) return;
     try {
       const r = await startRecording(ROUND_MAX_S - (base?.seconds ?? 0));
@@ -114,7 +114,7 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
       r.finished.then((audio) => finish(audio, next));
     } catch (e) {
       if (isDenied(e)) mic.denied();
-      else setError('Mikrofon tidak bisa dipakai di HP ini. Ketuk kolam di daftar untuk mencatat.');
+      else setError('Mikrofon tidak bisa dipakai di HP ini. Ketik sendiri: ketuk kolam di daftar.');
     }
   }
 
@@ -164,7 +164,7 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
     <div class="screen">
       <section class="stack-sm">
         <h1>Catat kondisi kolam</h1>
-        <p class="ink2">Sebut nama kolam lalu kondisinya. Boleh beberapa kolam sekaligus, boleh bahasa&nbsp;Jawa.</p>
+        <p class="ink2">Sebut nama kolam lalu kondisinya. Boleh beberapa kolam sekaligus.</p>
       </section>
 
       {cut && !rec && (
@@ -174,8 +174,8 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
               <Icon name="phone" />
             </span>
             <div class="grow stack-xs">
-              <h2>Rekaman terputus di {fmtLen(cut.seconds)}</h2>
-              <span class="label ink2">Aplikasi tertutup atau ada telepon masuk. Suara sampai {fmtLen(cut.seconds)} tetap tersimpan.</span>
+              <h2>Rekaman terputus setelah {fmtDur(cut.seconds)}</h2>
+              <span class="label ink2">Aplikasi tertutup atau ada telepon masuk. Suara sampai saat itu tetap tersimpan.</span>
             </div>
           </div>
           {!confirmDrop ? (
@@ -199,7 +199,7 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
             </>
           ) : (
             <>
-              <p class="strong">Buang rekaman {fmtLen(cut.seconds)}? Tidak bisa dikembalikan.</p>
+              <p class="strong">Buang rekaman {fmtDur(cut.seconds)} ini? Tidak bisa dikembalikan.</p>
               <div class="grid2" style={{ gap: 8 }}>
                 <button type="button" class="btn danger" onClick={() => (clips.remove(cut.id), setConfirmDrop(false))}>
                   Ya, buang
@@ -228,8 +228,8 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
             <Icon name="mic" size={32} />
           </span>
           <span class="stack-xs">
-            <span class="title num">{rec ? `Selesai · ${fmtLen(elapsed)}` : 'Bicara'}</span>
-            <span class="label" style={{ color: '#E4EAF5' }}>
+            <span class="title num">{rec ? `Selesai · ${fmtDur(elapsed)}` : 'Bicara'}</span>
+            <span class="label" style={{ color: '#e4eaf5' }}>
               {rec ? 'Ketuk kalau sudah selesai keliling' : 'Sambil keliling: “Kolam A suhu 27, pH 7,4…”'}
             </span>
           </span>
@@ -307,13 +307,12 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
         <div class="rp-filters" role="group" aria-label="Saring kolam">
           {FILTERS.map((f) => {
             const on = filter === f.key;
+            const n = ponds.filter(tests[f.key]).length;
             return (
-              <button type="button" key={f.key} class={on ? 'on' : ''} aria-pressed={on} onClick={() => setFilter(f.key)}>
-                <span class="h2 num row" style={{ gap: 6 }}>
-                  {on && <Icon name="check" size={18} stroke={3} />}
-                  {ponds.filter(tests[f.key]).length}
-                </span>
-                <span class="label semi">{f.label}</span>
+              <button type="button" key={f.key} class={on ? 'on' : ''} aria-pressed={on} aria-label={`${f.label}, ${n} kolam`} onClick={() => setFilter(f.key)}>
+                {on && <Icon name="check" size={16} stroke={3} />}
+                {f.short}
+                <span class="n">{n}</span>
               </button>
             );
           })}
@@ -343,12 +342,13 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
   }
 }
 
+/** One destination per row: record this pond. Recorded today: a green tick and the time instead of the button. */
 function PondRow({ pond: p, today, go }: { pond: PondSummary; today: boolean; go: Go }) {
   const tone = toneOf(p.level);
-  const ago = p.lastLogAt ? fmtAgo(Date.parse(p.lastLogAt)) : null;
+  const last = p.lastLogAt ? Date.parse(p.lastLogAt) : null;
   return (
     <div class="rp-row">
-      <button type="button" class="rp-row-main" onClick={() => go({ name: 'record-pond', pondId: p.id })}>
+      <button type="button" class="rp-row-main" aria-label={`Catat ${p.name}`} onClick={() => go({ name: 'record-pond', pondId: p.id })}>
         <PondThumb kind={p.kind} size={48} />
         <span class="grow stack-xs" style={{ gap: 2 }}>
           <span class="rp-row-name">
@@ -360,21 +360,21 @@ function PondRow({ pond: p, today, go }: { pond: PondSummary; today: boolean; go
               </span>
             )}
           </span>
-          <span class="meta">{p.batch && p.program ? `${phaseLabel[p.batch.phase]} · minggu ${p.program.week}` : pondMeta(p)}</span>
-          {today ? (
-            <span class="word ok" style={{ gap: 6 }}>
-              <Icon name="check" size={16} stroke={2.6} />
-              {ago === '0 menit lalu' ? 'Dicatat barusan' : `Dicatat ${ago}`}
+          <span class="label ink2">{p.batch && p.program ? `${phaseLabel[p.batch.phase]} · minggu ${p.program.week}` : pondMeta(p)}</span>
+          {!today && (
+            <span class="label ink2" style={{ fontWeight: 400 }}>
+              Belum dicatat hari ini · {last ? `terakhir ${fmtAgo(last)}` : 'belum pernah'}
             </span>
-          ) : (
-            <span class="word warn">Belum dicatat hari ini</span>
           )}
-          {!today && <span class="meta">{ago ? `Terakhir ${ago}` : 'Belum pernah dicatat'}</span>}
         </span>
-        <span class={`rp-act${today ? '' : ' dark'}`}>Catat</span>
-      </button>
-      <button type="button" class="rp-detail" aria-label={`Detail ${p.name}`} onClick={() => go({ name: 'pond', id: p.id })}>
-        <Icon name="next" />
+        {today && last ? (
+          <span class="rp-done">
+            <Icon name="check" size={18} stroke={3} />
+            Dicatat {fmtClock(last)}
+          </span>
+        ) : (
+          <span class="rp-act dark">Catat</span>
+        )}
       </button>
     </div>
   );
@@ -393,8 +393,8 @@ function QuotaCard({ rec, elapsed, kept, onTalk, go }: { rec: Rec | null; elapse
           <span class="meta">Disimpan dulu, dibaca besok pagi</span>
         </span>
       </div>
-      <div class="note warn" style={{ fontSize: '1rem' }}>
-        <Icon name="clock" />
+      <div class="note info" style={{ fontSize: '1rem' }}>
+        <Icon name="info" />
         <span class="stack-xs">
           <span class="strong">Jatah baca AI hari ini habis</span>
           <span class="label">Rekaman tetap disimpan dan dibaca otomatis besok pagi, atau begitu jatah ditambah.</span>
@@ -405,18 +405,18 @@ function QuotaCard({ rec, elapsed, kept, onTalk, go }: { rec: Rec | null; elapse
       </div>
       <button type="button" class={`btn ${rec ? 'danger' : 'primary'}`} onClick={onTalk}>
         <Icon name="mic" />
-        {rec ? `Selesai · ${fmtLen(elapsed)}` : kept !== null ? 'Rekam lagi' : 'Mulai rekam'}
+        {rec ? `Selesai · ${fmtDur(elapsed)}` : kept !== null ? 'Rekam lagi' : 'Mulai rekam'}
       </button>
       {kept !== null && !rec && (
         <div class="note ok" role="status" style={{ alignItems: 'center' }}>
           <Icon name="check" />
-          <span>Rekaman {fmtLen(kept)} disimpan. Dibaca besok pagi, lalu muncul untuk dicek.</span>
+          <span>Rekaman {fmtDur(kept)} disimpan. Dibaca besok pagi, lalu muncul untuk dicek.</span>
         </div>
       )}
       <div class="stack-sm rp-quota-foot">
         <span class="row top label ink2">
           <Icon name="pencil" size={20} />
-          Mengetik tetap bisa: ketuk kolam di daftar.
+          Ketik sendiri tetap bisa: ketuk kolam di daftar.
         </span>
         <span class="row top label ink2">
           <Icon name="alert" size={20} />
@@ -438,7 +438,7 @@ function Waiting({ clips: list, jobs, ponds, go }: { clips: Clip[]; jobs: Job[];
     ...list.map((c) => ({
       id: c.id,
       at: c.createdAt,
-      title: `Rekaman ${fmtLen(c.seconds)}`,
+      title: `Rekaman ${fmtDur(c.seconds)}`,
       state: c.status === 'ready' ? 'Sudah dibaca' : c.status === 'failed' ? 'Gagal dibaca' : c.reason === 'quota' ? 'Menunggu jatah' : 'Menunggu',
       ready: c.status !== 'waiting',
       open: () => go({ name: 'round', queued: c.id }),
@@ -474,7 +474,7 @@ function Waiting({ clips: list, jobs, ponds, go }: { clips: Clip[]; jobs: Job[];
               <span class="strong num">{r.title}</span>
               <span class="meta num">direkam {fmtClock(r.at)}</span>
             </span>
-            <span class={`word ${r.ready ? (r.state === 'Gagal dibaca' ? 'bad' : 'ok') : 'warn'}`} style={{ gap: 6 }}>
+            <span class={r.ready ? `word ${r.state === 'Gagal dibaca' ? 'bad' : 'ok'}` : 'word ink2'} style={{ gap: 6 }}>
               {r.state === 'Sudah dibaca' && <Icon name="check" size={16} stroke={2.6} />}
               {r.state}
             </span>

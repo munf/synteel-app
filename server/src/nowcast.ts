@@ -223,7 +223,7 @@ export function computeNowcast(input: NowcastInput): Nowcast {
       const crit = limits.critical?.above;
       const warn = limits.warning?.above;
       if (crit !== undefined && temp > crit) factors.push({ id: 'temp', label: `Air diperkirakan ${fmt(temp)} °C, oksigen terlarut turun`, points: 3 });
-      else if (warn !== undefined && temp > warn) factors.push({ id: 'temp', label: `Air diperkirakan hangat (${fmt(temp)} °C)`, points: 2 });
+      else if (warn !== undefined && temp > warn) factors.push({ id: 'temp', label: `Air diperkirakan agak panas (${fmt(temp)} °C)`, points: 2 });
     }
 
     const recent = within(DAY_MS, known);
@@ -311,7 +311,7 @@ export function suggestChecks(ahead: NowcastPoint[], now: number, timezone: stri
   const riskCheck = (h: NowcastPoint, t: number): SuggestedCheck => ({
     t,
     kind: 'look',
-    reason: `Risiko ${h.level === 'critical' ? 'tinggi' : 'naik'}: ${h.factors[0]?.label.toLowerCase() ?? 'beberapa faktor'}`,
+    reason: `Risiko ${h.level === 'critical' ? 'tinggi' : 'naik'}: ${h.factors[0] ? h.factors[0].label[0].toLowerCase() + h.factors[0].label.slice(1) : 'beberapa faktor'}`,
     alarm: isSleeping(localParts(t, timezone).hour),
   });
 

@@ -47,8 +47,8 @@ function Due({ r, go, onDone }: { r: Recheck; go: Go; onDone: (next?: Recheck) =
           <Icon name="clock" />
         </span>
         <div class="stack-xs grow">
-          <h2 style={{ color: '#7A1A10' }}>Cek ulang {r.pondName}</h2>
-          <span class="label" style={{ color: '#5C1A12' }}>
+          <h2 style={{ color: 'var(--bad)' }}>Cek ulang {r.pondName}</h2>
+          <span class="label" style={{ color: 'var(--ink-2)' }}>
             Lapor masalah jam {fmtClock(r.at)}
             {r.dead ? ` · ${r.dead} ekor mati` : ''}
           </span>

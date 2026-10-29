@@ -4,3 +4,67 @@
 .count-tips svg { flex: none; }
 /* Counting by hand: the number is the one used in the report, so it is ringed. */
 .count-manual .stepper output { box-shadow: inset 0 0 0 3px var(--accent); }
+
+/* ---------- Ada masalah (form and result): canvas Masalah, MasalahHitung, MasalahHasil ---------- */
+/* Main action in a bar pinned above the tab bar (73px); the page ends right under it. */
+.screen.has-bar { min-height: 100dvh; padding-bottom: calc(73px + env(safe-area-inset-bottom, 0px)); }
+.problem-bar {
+  position: sticky; z-index: 5; bottom: calc(73px + env(safe-area-inset-bottom, 0px));
+  margin: 0 calc(-1 * max(20px, env(safe-area-inset-right, 0px))) 0 calc(-1 * max(20px, env(safe-area-inset-left, 0px)));
+  padding: 12px 20px; background: var(--surface); border-top: 1px solid #d9e1ec;
+  display: flex; flex-direction: column;
+}
+/* On a short page the bar still sits right on the tab bar. */
+.problem-bar { margin-top: auto; }
+/* "Gejala lain (n)": the less common signs, folded. */
+.more-signs {
+  min-height: 48px; border-radius: 16px; border: 2px solid var(--line-2); background: var(--surface); color: var(--ink);
+  padding: 0 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 1rem; font-weight: 600;
+}
+.more-signs[aria-expanded='true'] svg { transform: rotate(180deg); }
+/* Pond picker: a line glyph on a neutral tile; a chosen pond is not ringed in navy. */
+.problem-flow .picker .thumb { background: var(--bg); border-radius: 12px; color: var(--ink-2); }
+.problem-flow .picker-btn { border-color: var(--surface); }
+.problem-flow .picker-btn.open { border-color: var(--navy); }
+.problem-flow .picker-btn.empty { background: var(--bg); border: 3px dashed var(--line-2); }
+.problem-flow .picker-menu { border: 1px solid #d9e1ec; }
+.problem-flow .pond-word { flex: none; gap: 4px; color: var(--ink-2); }
+/* The count field reads as "tap to type": white, dashed. */
+.problem-flow .stepper input { background: #fff; color: #13203a; }
+.problem-flow .stepper input:focus { border-color: var(--navy); }
+/* Result. */
+.problem-flow header .thumb { background: var(--surface); border-radius: 12px; }
+.problem-flow .help-head { color: #7a1a10; }
+.problem-flow .help-body { color: #5c1a12; }
+.problem-flow .help-card .btn.danger { background: #b42318; color: #fff; }
+.problem-flow .summary-box { background: var(--surface); border-radius: 16px; padding: 12px 16px; }
+.cause-num {
+  width: 32px; height: 32px; flex: none; border-radius: 12px; background: var(--tint); color: var(--navy);
+  font-weight: 800; display: flex; align-items: center; justify-content: center;
+}
+.cause-num.first { background: var(--navy); color: #fff; }
+
+/* Night (Profil switch, or forced when opened from the night alarm): canvas tema Malam. */
+:root[data-theme='night'] .problem-flow .picker-btn.open { border-color: #fbd38d; }
+:root[data-theme='night'] .problem-flow .picker-menu { border-color: #3a5486; box-shadow: 0 16px 40px rgba(11, 23, 48, 0.3); }
+:root[data-theme='night'] .problem-flow .picker .thumb { background: #22375f; color: #b9c6e0; }
+:root[data-theme='night'] .problem-flow .problem-bar { border-top-color: #3a5486; }
+:root[data-theme='night'] .problem-flow .tile { border-color: #3a5486; }
+:root[data-theme='night'] .problem-flow .tile .icon-box { background: #22375f; color: #fbd38d; }
+:root[data-theme='night'] .problem-flow .tile.on { background: #22375f; border-color: #fbd38d; }
+:root[data-theme='night'] .problem-flow .tile.on .icon-box { background: #fbd38d; color: #0b1730; }
+:root[data-theme='night'] .problem-flow .tile.on .tick-box { background: #fff; border-color: #fff; color: #13264a; }
+:root[data-theme='night'] .problem-flow .btn.primary { background: #fff; color: #0b1730; }
+:root[data-theme='night'] .problem-flow .btn:disabled { background: #22375f; border-color: #22375f; color: #b9c6e0; }
+:root[data-theme='night'] .problem-flow .hero { background: #17284a; }
+:root[data-theme='night'] .problem-flow .note.ok { background: #17284a; color: #a7e3c8; }
+:root[data-theme='night'] .problem-flow .note.info { background: #22375f; color: #fff; }
+:root[data-theme='night'] .problem-flow .help-card { background: #17284a; border: 2px solid #f04438; }
+:root[data-theme='night'] .problem-flow .help-card .icon-box { background: #22375f; color: #fff; }
+:root[data-theme='night'] .problem-flow .help-head { color: #fff; }
+:root[data-theme='night'] .problem-flow .help-body { color: #b9c6e0; }
+:root[data-theme='night'] .problem-flow .summary-box { background: #22375f; }
+:root[data-theme='night'] .problem-flow header .thumb { background: #17284a; color: #b9c6e0; }
+:root[data-theme='night'] .problem-flow .cause-num { color: #fff; }
+:root[data-theme='night'] .problem-flow .cause-num.first { background: #fff; color: #0b1730; }
+:root[data-theme='night'] .problem-flow .card:not(.help-card) .icon-box { color: #fbd38d; }

@@ -30,7 +30,7 @@ export const riskLabel: Record<RiskLevel, string> = { ok: 'Aman', warning: 'Perh
 export const sourceLabel: Record<LogSource, string> = { manual: 'Ketik manual', voice: 'Suara · AI, dicek', photo: 'Foto alat · AI, dicek', video: 'Video · AI, dicek' };
 
 const WORDS = {
-  temperature: { low: ['Agak dingin', 'Terlalu dingin'], high: ['Agak hangat', 'Terlalu panas'] },
+  temperature: { low: ['Agak dingin', 'Terlalu dingin'], high: ['Agak panas', 'Terlalu panas'] },
   ph: { low: ['Agak rendah', 'Terlalu rendah'], high: ['Agak tinggi', 'Terlalu tinggi'] },
   tds: { low: ['Agak rendah', 'Terlalu rendah'], high: ['Agak tinggi', 'Terlalu tinggi'] },
 } as const;
@@ -40,7 +40,8 @@ export function readingWord(key: 'temperature' | 'ph' | 'tds', value: number, st
   if (!status || status === 'ok' || !limits) return { text: 'Baik', tone: 'ok' as const };
   const below = limits.target?.min ?? limits.warning?.below ?? -Infinity;
   const side = value < below ? 'low' : 'high';
-  const strong = status === 'warning' || status === 'critical';
+  // Perhatian → "Agak …", Bahaya → "Terlalu …" (FAKTA words).
+  const strong = status === 'critical';
   return { text: WORDS[key][side][strong ? 1 : 0], tone: status === 'critical' ? ('bad' as const) : ('warn' as const) };
 }
 
@@ -59,13 +60,13 @@ export const smellLabel = { normal: 'Normal', foul: 'Busuk' } as const;
 export const fmtNum = (n: number) => n.toLocaleString('id-ID', { maximumFractionDigits: 2 });
 
 export function fmtTime(iso: string): string {
-  return new Date(iso).toLocaleString('id-ID', { weekday: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' });
+  return new Date(iso).toLocaleString('id-ID', { weekday: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' });
 }
 
 /** "04.00" in farm time; adds the weekday when it is not today. */
 export function fmtClock(t: number, withDay = false): string {
   const opts: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' };
-  return new Date(t).toLocaleString('id-ID', withDay ? { ...opts, weekday: 'short' } : opts);
+  return new Date(t).toLocaleString('id-ID', withDay ? { ...opts, weekday: 'long' } : opts);
 }
 
 export function fmtAgo(t: number, now = Date.now()): string {
@@ -97,3 +98,6 @@ export function summarizeLog(data: LogData): string {
   if (data.note) parts.push(`“${data.note}”`);
   return parts.join(' · ');
 }
+
+/** "29,8 °C": comma decimal, a space, °C. */
+export const fmtTemp = (n: number) => `${(Math.round(n * 10) / 10).toLocaleString('id-ID', { maximumFractionDigits: 1 })} °C`;

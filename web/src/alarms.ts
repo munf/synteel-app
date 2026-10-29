@@ -7,6 +7,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { api, type Briefing, type NowcastState, type PondSummary } from './api.ts';
 import type { Go } from './app.tsx';
 import { fmtClock } from './labels.ts';
+import { getPrefs } from './prefs.ts';
 
 export interface ArmedCheck {
   /** Same key as the Jadwal cek tick: `${pondId}-${t}`. */
@@ -181,7 +182,7 @@ export function armAlarms(checks: ArmedCheck[], go: Go) {
 }
 
 function tick() {
-  if (ringing || !navigate) return;
+  if (ringing || !navigate || !getPrefs().alarms) return;
   const now = Date.now();
   const done = loadDone();
   const due = armed.find((c) => c.alarm && !done[c.key] && c.t <= now && now - c.t < LATE_MS + SNOOZE_MS && (rung.get(c.key) ?? 0) <= now);
