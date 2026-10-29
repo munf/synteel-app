@@ -114,6 +114,20 @@ test('support works signed out; the ticket is stored and mailed after the answer
   assert.ok(store.supportTicket(1)?.mailedAt);
 });
 
+test('the website contact form asks for a reply by e-mail; a bad address is refused', async () => {
+  const smtp = await fakeSmtp();
+  const { client } = server(undefined, { mail: mailer(smtp.cfg) });
+  const call = client();
+  assert.equal((await call('POST', '/support', { topic: 'lain', message: 'Halo, saya punya 4 kolam elver', replyEmail: 'bukan-email' })).status, 400);
+  const res = await call('POST', '/support', { topic: 'lain', message: 'Name: Sari\nPonds: 4\nHalo, saya punya 4 kolam elver', replyEmail: 'Sari@Example.com' });
+  assert.equal(res.status, 201);
+  await smtp.delivered;
+  smtp.close();
+  const msg = parse(smtp.got.data);
+  assert.match(msg.body, /Email untuk balasan: sari@example\.com/);
+  assert.doesNotMatch(msg.body, /WhatsApp untuk balasan/);
+});
+
 test('support signed in names the person and farm; validation and the hourly limit', async () => {
   const mails: Mail[] = [];
   const { worker, owner, client } = await farmWithWorker(undefined, {

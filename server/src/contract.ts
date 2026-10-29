@@ -103,8 +103,10 @@ export type SupportTopic = 'pin' | 'catat' | 'waspada' | 'jatah' | 'lain';
 export interface SupportRequest {
   topic: SupportTopic;
   message: string;
-  /** WhatsApp number for the reply. */
-  replyPhone: string;
+  /** WhatsApp number for the reply (the app's help screen). */
+  replyPhone?: string;
+  /** Or an e-mail address for the reply (the eel.synt.fun contact form). One of the two is required. */
+  replyEmail?: string;
   /** When signed out (forgot PIN): the phone number of the account. */
   accountPhone?: string;
   /** Device and app version, only when the person ticked the box. */

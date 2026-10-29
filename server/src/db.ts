@@ -134,6 +134,9 @@ export function openDb(path = process.env.SYNTEEL_DB ?? defaultPath) {
   for (const [col, type] of [['created_by', 'integer references users(id)'], ['deleted_at', 'text'], ['edits', 'text']]) {
     if (!logCols.includes(col)) db.exec(`alter table logs add column ${col} ${type}`);
   }
+  // Tickets from the website's contact form can ask for a reply by e-mail.
+  const ticketCols = (db.prepare('pragma table_info(support_tickets)').all() as { name: string }[]).map((c) => c.name);
+  if (!ticketCols.includes('reply_email')) db.exec('alter table support_tickets add column reply_email text');
   db.exec('create index if not exists ponds_farm on ponds (farm_id)');
   // Single-farm databases (before accounts): the old farm becomes farm 1 and owns every pond.
   const legacy = db.prepare("select name from sqlite_master where type = 'table' and name = 'farm'").get();
@@ -489,10 +492,11 @@ export function repo(db: Db) {
     },
 
     // ---------- support ----------
-    addSupportTicket(t: { topic: string; message: string; replyPhone: string; accountPhone: string | null; userId: number | null; farmId: number | null; device: string | null }): number {
+    /** `replyPhone` is '' when the reply goes to `replyEmail` instead. */
+    addSupportTicket(t: { topic: string; message: string; replyPhone: string; replyEmail?: string | null; accountPhone: string | null; userId: number | null; farmId: number | null; device: string | null }): number {
       const { lastInsertRowid } = db
-        .prepare('insert into support_tickets (created_at, topic, message, reply_phone, account_phone, user_id, farm_id, device) values (?, ?, ?, ?, ?, ?, ?, ?)')
-        .run(now(), t.topic, t.message, t.replyPhone, t.accountPhone, t.userId, t.farmId, t.device);
+        .prepare('insert into support_tickets (created_at, topic, message, reply_phone, reply_email, account_phone, user_id, farm_id, device) values (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(now(), t.topic, t.message, t.replyPhone, t.replyEmail ?? null, t.accountPhone, t.userId, t.farmId, t.device);
       return Number(lastInsertRowid);
     },
 

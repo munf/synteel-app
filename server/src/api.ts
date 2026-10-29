@@ -618,13 +618,18 @@ export function createApi(
         throw invalid(field);
       }
     };
-    const replyPhone = phone(body.replyPhone, 'Nomor WhatsApp');
+    // The app asks for WhatsApp; the website's contact form asks for e-mail.
+    const replyEmail = body.replyEmail && !body.replyPhone ? String(body.replyEmail).trim().toLowerCase() : null;
+    if (replyEmail !== null && (replyEmail.length > 120 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(replyEmail))) {
+      throw new BadRequest(tx('Alamat email tidak valid', 'The e-mail address is not valid'));
+    }
+    const replyPhone = replyEmail !== null ? '' : phone(body.replyPhone, 'Nomor WhatsApp');
     const accountPhone = body.accountPhone ? phone(body.accountPhone, 'Nomor HP akun') : null;
     const device = body.device ? String(body.device).trim().slice(0, 300) || null : null;
-    const keys = [`ip:${clientIp(c)}`, `phone:${replyPhone}`];
+    const keys = [`ip:${clientIp(c)}`, replyEmail !== null ? `email:${replyEmail}` : `phone:${replyPhone}`];
     supportLimiter.check(...keys);
     supportLimiter.fail(...keys);
-    const ticket = { topic, message, replyPhone, accountPhone, device, userId: session?.userId ?? null, farmId: session?.farmId ?? null };
+    const ticket = { topic, message, replyPhone, replyEmail, accountPhone, device, userId: session?.userId ?? null, farmId: session?.farmId ?? null };
     const id = store.addSupportTicket(ticket);
     const number = String(id).padStart(4, '0');
     // Not awaited: the farmer gets the ticket number right away.
@@ -634,7 +639,7 @@ export function createApi(
     return c.json({ ticket: number }, 201);
   });
 
-  async function mailTicket(id: number, number: string, t: { topic: SupportTopic; message: string; replyPhone: string; accountPhone: string | null; device: string | null; userId: number | null; farmId: number | null }, role: Role | null) {
+  async function mailTicket(id: number, number: string, t: { topic: SupportTopic; message: string; replyPhone: string; replyEmail: string | null; accountPhone: string | null; device: string | null; userId: number | null; farmId: number | null }, role: Role | null) {
     if (!mail) {
       console.log(`support ticket #${number} stored (mail not configured)`);
       return;
@@ -647,7 +652,7 @@ export function createApi(
       '',
       t.message,
       '',
-      `WhatsApp untuk balasan: +${t.replyPhone}`,
+      t.replyEmail ? `Email untuk balasan: ${t.replyEmail}` : `WhatsApp untuk balasan: +${t.replyPhone}`,
       `Nomor HP akun: ${t.accountPhone ? `+${t.accountPhone}` : user ? `+${user.phone}` : '-'}`,
       `Pengguna: ${user ? `${user.name} (SE-${String(user.id).padStart(6, '0')})${role ? `, ${role === 'owner' ? 'pemilik' : 'pekerja'}` : ''}` : 'belum masuk'}`,
       `Tambak: ${farm?.name ?? '-'}`,
