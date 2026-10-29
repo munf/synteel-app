@@ -148,12 +148,12 @@ export function NoPonds({
       </header>
       <section class="stack center" style={{ alignItems: 'center', flex: 1, justifyContent: 'center' }}>
         <svg width="200" height="150" viewBox="0 0 200 150" aria-hidden="true">
-          <ellipse cx="100" cy="132" rx="80" ry="10" fill="#DCE3EC" />
-          <circle cx="100" cy="72" r="60" style={{ fill: 'var(--surface)' }} stroke="#B7C4D9" stroke-width="3" stroke-dasharray="8 8" />
-          <path d="M62 78c10-7 18-7 28 0s18 7 28 0 18-7 28 0" fill="none" stroke="#BFD8EC" stroke-width="5" stroke-linecap="round" />
-          <path d="M70 96c10-7 18-7 28 0s18 7 28 0" fill="none" stroke="#BFD8EC" stroke-width="5" stroke-linecap="round" />
-          <circle cx="148" cy="30" r="20" fill="#13264A" />
-          <path d="M148 21v18M139 30h18" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" />
+          <ellipse class="art-shadow" cx="100" cy="132" rx="80" ry="10" fill="#DCE3EC" />
+          <circle cx="100" cy="72" r="60" class="art-ring" style={{ fill: 'var(--surface)' }} stroke="#B7C4D9" stroke-width="3" stroke-dasharray="8 8" />
+          <path d="M62 78c10-7 18-7 28 0s18 7 28 0 18-7 28 0" class="art-wave" fill="none" stroke="#BFD8EC" stroke-width="5" stroke-linecap="round" />
+          <path d="M70 96c10-7 18-7 28 0s18 7 28 0" class="art-wave" fill="none" stroke="#BFD8EC" stroke-width="5" stroke-linecap="round" />
+          <circle class="art-plus" cx="148" cy="30" r="20" fill="#13264A" />
+          <path class="art-plus-line" d="M148 21v18M139 30h18" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" />
         </svg>
         <h1>{t('Belum ada kolam', 'No ponds yet')}</h1>
         <p class="ink2" style={{ textWrap: 'balance' }}>
@@ -225,7 +225,7 @@ function Nicknames({ nicks, onChange, draft, onDraft }: { nicks: string[]; onCha
       {nicks.length > 0 && (
         <div role="list" aria-label={t('Nama panggilan', 'Nicknames')} class="chips">
           {nicks.map((n) => (
-            <span key={n} role="listitem" class="chip" style={{ paddingRight: 0, background: 'var(--tint)', borderColor: 'var(--tint)', color: 'var(--navy)' }}>
+            <span key={n} role="listitem" class="chip" style={{ paddingRight: 0, background: 'var(--tint)', borderColor: 'var(--tint)', color: 'var(--navy-ink)' }}>
               {n}
               <button
                 type="button"
@@ -255,7 +255,7 @@ function Nicknames({ nicks, onChange, draft, onDraft }: { nicks: string[]; onCha
           }}
           placeholder={t('contoh: pojok', 'example: corner')}
         />
-        <button type="button" class="btn secondary" style={{ color: 'var(--navy)', fontWeight: 800, padding: '0 16px' }} onClick={add}>
+        <button type="button" class="btn secondary" style={{ color: 'var(--navy-ink)', fontWeight: 800, padding: '0 16px' }} onClick={add}>
           <Icon name="plus" size={20} /> {t('Tambah', 'Add')}
         </button>
       </div>

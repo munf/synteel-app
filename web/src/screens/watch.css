@@ -65,21 +65,21 @@
 .w-tech > button { width: 100%; min-height: 64px; border: 0; background: var(--surface); padding: 0 20px; display: flex; align-items: center; justify-content: space-between; font-weight: 800; color: var(--ink); }
 
 /* ---------- alarm, full screen above everything (the nav included) ---------- */
-.alarm { position: fixed; inset: 0; z-index: 1000; overflow-y: auto; background: #0b1730; color: #fff; }
+.alarm { position: fixed; inset: 0; z-index: 1000; overflow-y: auto; background: #101010; color: #fff; }
 .alarm-in { max-width: 560px; min-height: 100%; box-sizing: border-box; margin: 0 auto; padding: calc(24px + env(safe-area-inset-top, 0px)) 20px calc(32px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 24px; }
 .alarm .top { min-height: 44px; display: flex; align-items: center; gap: 8px; color: #fbd38d; font-size: 0.875rem; font-weight: 800; letter-spacing: 0.06em; }
 .alarm .mid { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 32px; }
 .alarm .clock { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
 .alarm .clock .huge { font-size: 5rem; font-weight: 800; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .alarm .sub { font-size: 1rem; color: var(--on-navy-2); }
-.alarm .card2 { background: #17284a; border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+.alarm .card2 { background: #1c1c1e; border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
 .alarm .card2 .pond { font-size: 1.5rem; font-weight: 800; line-height: 1.25; }
-.alarm .badge { width: 56px; height: 56px; flex: none; border-radius: 16px; background: #fbd38d; color: #0b1730; display: flex; align-items: center; justify-content: center; }
+.alarm .badge { width: 56px; height: 56px; flex: none; border-radius: 16px; background: #fbd38d; color: #101010; display: flex; align-items: center; justify-content: center; }
 .alarm .risk { display: flex; align-items: center; gap: 8px; border-top: 1px solid rgba(255, 255, 255, 0.12); padding-top: 16px; font-size: 0.875rem; color: var(--on-navy-2); }
 .alarm .circle { width: 72px; height: 72px; border-radius: 36px; display: flex; align-items: center; justify-content: center; }
 .alarm .buttons { display: flex; flex-direction: column; gap: 12px; }
 .alarm .buttons > button { min-height: 64px; border-radius: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 1.125rem; font-weight: 800; }
-.alarm .b-main { border: 0; background: #fff; color: #0b1730; }
+.alarm .b-main { border: 0; background: #fff; color: #101010; }
 .alarm .b-line { border: 2px solid rgba(255, 255, 255, 0.35); background: transparent; color: #fff; }
 .alarm .b-bad { border: 2px solid #f04438; background: transparent; color: #fff; }
 .alarm .buttons > button.b-text { min-height: 44px; border: 0; background: transparent; color: var(--on-navy-2); font-size: 1rem; font-weight: 600; }
@@ -90,3 +90,8 @@
 
 .w-also { width: 100%; border-left: 0; border-right: 0; border-top: 0; background: transparent; padding: 0; text-align: left; color: var(--ink); }
 .w-also > svg { color: var(--muted); flex: none; }
+/* Dark theme: Dengarkan like the other light buttons; the next check is ringed in the night accent, like its alarm. */
+:root[data-theme='night'] .w-listen { background: #f5f5f5; color: #101010; }
+:root[data-theme='night'] .w-listen[aria-pressed='true'] { background: #fbd38d; }
+:root[data-theme='night'] .w-next { border-color: #fbd38d; }
+:root[data-theme='night'] .w-next .kicker { color: #fbd38d; }

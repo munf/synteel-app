@@ -1,11 +1,12 @@
+import type { ComponentChild } from 'preact';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { api, type Farm, type FarmState, type Me, type QuotaState } from '../api.ts';
 import type { Go } from '../app.tsx';
 import { askNotifyPermission } from '../alarms.ts';
-import { setPrefs, usePrefs, type Prefs } from '../prefs.ts';
+import { setPrefs, usePrefs, type Prefs, type Theme } from '../prefs.ts';
 import { isEn, lang, LOCALE, setLang, t, type Lang, siteInAppLanguage } from '../i18n.ts';
-import { Field, Icon, initialOf, roleLabel, Shape, Soon, Switch, Tick } from '../ui.tsx';
+import { Field, Icon, initialOf, roleLabel, Shape, Soon, Switch, Tick, Glyph, GLYPH } from '../ui.tsx';
 import { ChangePin, Members } from './members.tsx';
 import { MediaDone, QuotaBar } from './quota.tsx';
 import { LocateButton, useLocate } from './setup.tsx';
@@ -151,14 +152,14 @@ function StreakDays({ state }: { state: FarmState }) {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#fff',
-              background: d.done ? '#2F6FE4' : 'transparent',
-              border: d.done ? 'none' : d.today ? '2px dashed #8FA3C8' : '2px solid #3A4F78',
+              color: 'var(--streak-ink)',
+              background: d.done ? 'var(--streak)' : 'transparent',
+              border: d.done ? 'none' : d.today ? '2px dashed #6e6e73' : '2px solid var(--hero-ring)',
             }}
           >
             {d.done && <Tick size={14} />}
           </span>
-          <span class="label num" aria-hidden="true" style={{ color: '#B9C6E0' }}>
+          <span class="label num" aria-hidden="true" style={{ color: '#b3b3b8' }}>
             {d.label}
           </span>
         </span>
@@ -247,6 +248,11 @@ export function Profile({
     { label: t('Sangat besar', 'Very large'), px: 24 },
   ];
   // Language names are never translated.
+  const themes: { id: Theme; label: string; icon: ComponentChild }[] = [
+    { id: 'light', label: t('Terang', 'Light'), icon: <Icon name="sun" size={20} /> },
+    { id: 'dark', label: t('Gelap', 'Dark'), icon: <Icon name="moon" size={20} /> },
+    { id: 'system', label: t('Ikuti HP', 'Like phone'), icon: <Glyph d={GLYPH.mobile} size={20} /> },
+  ];
   const langs: { id: Lang; label: string }[] = [
     { id: 'id', label: 'Bahasa Indonesia' },
     { id: 'en', label: 'English' },
@@ -276,7 +282,7 @@ export function Profile({
             <span class="semi" style={{ color: '#fff' }}>
               {farm?.name}
             </span>
-            <span class="label" style={{ color: '#C9D4EA' }}>
+            <span class="label" style={{ color: 'var(--on-hero-soft)' }}>
               {[state.role && roleLabel[state.role], farm?.locationName ?? t('Lokasi belum diatur', 'Location not set')].filter(Boolean).join(' · ')}
             </span>
           </div>
@@ -284,7 +290,7 @@ export function Profile({
         <div class="stack-sm" style={{ background: 'rgba(255,255,255,0.08)', borderRadius: 16, padding: 16 }}>
           <div class="row between" style={{ alignItems: 'baseline' }}>
             <span class="strong num">{t(`${state.streak} hari beruntun`, `${state.streak} ${state.streak === 1 ? 'day' : 'days'} in a row`)}</span>
-            <span class="label" style={{ color: '#B9C6E0', whiteSpace: 'nowrap' }}>
+            <span class="label" style={{ color: '#b3b3b8', whiteSpace: 'nowrap' }}>
               {t('7 hari terakhir', 'Last 7 days')}
             </span>
           </div>
@@ -292,12 +298,12 @@ export function Profile({
         </div>
         <button class="btn light" style={{ justifyContent: 'space-between', paddingLeft: 16, paddingRight: 8 }} onClick={() => go({ name: 'rewards' })}>
           <span class="row" style={{ gap: 12 }}>
-            <span style={{ color: '#2F6FE4', display: 'flex' }}>
+            <span style={{ color: 'var(--streak)', display: 'flex' }}>
               <Icon name="gift" />
             </span>
             {t('Lihat hadiah', 'View rewards')}
           </span>
-          <span style={{ width: 40, height: 40, borderRadius: 20, background: '#13264A', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <span style={{ width: 40, height: 40, borderRadius: 20, background: 'var(--hero-bg)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Icon name="arrow" size={18} />
           </span>
         </button>
@@ -337,12 +343,27 @@ export function Profile({
           </span>
           <span class="ink2">{t('Sidat naik ke permukaan. Cek aerator sekarang.', 'Eels are coming up to the surface. Check the aerator now.')}</span>
         </div>
-        <div class="row night-row">
-          <div class="grow stack-xs">
-            <span class="strong">{t('Tampilan malam', 'Night display')}</span>
-            <span class="label ink2">{t('Layar gelap untuk cek kolam malam hari', 'Dark screen for checking ponds at night')}</span>
+        <div class="stack night-row">
+          <div class="stack-xs">
+            <span class="strong">{t('Terang atau gelap', 'Light or dark')}</span>
+            <span class="label ink2">{t('Gelap nyaman untuk cek kolam malam hari', 'Dark is easier on the eyes for night checks')}</span>
           </div>
-          <Switch checked={prefs.night} label={t('Tampilan malam', 'Night display')} onChange={(v) => setPrefs({ night: v })} />
+          <div role="radiogroup" aria-label={t('Terang atau gelap', 'Light or dark')} class="grid3" style={{ gap: 8 }}>
+            {themes.map((g) => {
+              const on = prefs.theme === g.id;
+              return (
+                <button key={g.id} role="radio" aria-checked={on} class={`size-opt lang-opt${on ? ' on' : ''}`} onClick={() => setPrefs({ theme: g.id })}>
+                  {g.icon}
+                  <span class="semi">{g.label}</span>
+                  {on && (
+                    <span class="corner-tick">
+                      <Tick size={14} />
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
         <div class="stack lang-row">
           <div class="stack-xs">
@@ -546,7 +567,7 @@ export function Rewards({ state, go }: { state: FarmState; go: Go }) {
       <section class="hero" style={{ gap: 16 }}>
         <div class="row top between">
           <div class="stack-sm">
-            <span class="label semi" style={{ color: '#B9C6E0' }}>
+            <span class="label semi" style={{ color: '#b3b3b8' }}>
               {t('Mencatat beruntun', 'Recording streak')}
             </span>
             <span class="row" style={{ alignItems: 'baseline', gap: 8 }}>
@@ -554,17 +575,17 @@ export function Rewards({ state, go }: { state: FarmState; go: Go }) {
               <span class="h2">{t('hari beruntun', streak === 1 ? 'day in a row' : 'days in a row')}</span>
             </span>
           </div>
-          <span style={{ width: 56, height: 56, flex: 'none', borderRadius: 28, background: '#2F6FE4', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <span style={{ width: 56, height: 56, flex: 'none', borderRadius: 28, background: 'var(--streak)', color: 'var(--streak-ink)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Icon name="flame" size={28} />
           </span>
         </div>
         <div class="stack-sm" style={{ background: 'rgba(255,255,255,0.08)', borderRadius: 16, padding: 16 }}>
-          <span class="label" style={{ color: '#B9C6E0' }}>
+          <span class="label" style={{ color: '#b3b3b8' }}>
             {t('7 hari terakhir', 'Last 7 days')}
           </span>
           <StreakDays state={state} />
         </div>
-        <p style={{ color: '#DCE4F2' }}>
+        <p style={{ color: 'var(--on-navy)' }}>
           {isEn ? (
             <>
               Record {nextAt - streak} more {nextAt - streak === 1 ? 'day' : 'days'} for +{bonus} reads on <span style={{ whiteSpace: 'nowrap' }}>day {nextAt}</span>.

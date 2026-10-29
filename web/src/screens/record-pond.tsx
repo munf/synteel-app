@@ -188,7 +188,7 @@ export function MicAsk({ onAllow, onType }: { onAllow: () => void; onType: () =>
           </li>
         ))}
       </ul>
-      <p class="note info" style={{ color: 'var(--navy)' }}>
+      <p class="note info" style={{ color: 'var(--navy-ink)' }}>
         <span>
           {t('Sesudah ini HP akan bertanya. Pilih', 'Next, your phone will ask. Choose')}{' '}
           <strong style={{ whiteSpace: 'nowrap' }}>{t('Saat aplikasi digunakan', 'While using the app')}</strong>.
@@ -829,7 +829,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
           </span>
           <span class="stack-xs">
             <span class="title">{recording ? `${t('Selesai', 'Done')} · ${fmtDur(elapsed)}` : t('Bicara', 'Speak')}</span>
-            <span class="label" style={{ color: '#E4EAF5' }}>
+            <span class="label" style={{ color: 'var(--on-hero-pale)' }}>
               {recording
                 ? t(`Merekam ${pond.name}. Ketuk untuk selesai, paling lama 60 detik.`, `Recording ${pond.name}. Tap to finish, 60 seconds at most.`)
                 : t('Sebutkan suhu, pH, TDS, sidat mati, sisa pakan dan aerator.', 'Say the temperature, pH, TDS, dead eels, leftover feed and aerator.')}

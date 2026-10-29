@@ -113,11 +113,11 @@ export function StepList({ steps, done, toggle, onAllDone }: { steps: string[]; 
             <Icon name="check" size={20} />
             <span class="strong">{t(`Semua langkah selesai ${fmtClock(last)}`, `All steps done at ${fmtClock(last)}`)}</span>
           </span>
-          <span class="label" style={{ color: '#C9D4EA' }}>
+          <span class="label" style={{ color: 'var(--on-hero-soft)' }}>
             {t('Lihat lagi sidat sekitar 1 jam lagi. Kalau belum membaik, minta bantuan.', 'Look at the eels again in about 1 hour. If they are no better, ask for help.')}
           </span>
           {onAllDone && (
-            <button type="button" class="btn" style={{ background: '#fff', color: '#13264A' }} onClick={onAllDone.run}>
+            <button type="button" class="btn" style={{ background: '#fff', color: 'var(--hero-bg)' }} onClick={onAllDone.run}>
               {onAllDone.label}
             </button>
           )}

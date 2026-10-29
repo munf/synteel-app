@@ -14,7 +14,7 @@
 .h-k { width: 104px; flex: none; font-size: 0.875rem; color: var(--muted); }
 .h-perm { display: flex; align-items: flex-start; gap: 8px; font-size: 0.875rem; color: var(--ink-2); }
 .h-perm.locked { color: var(--ink); }
-.h-act { min-height: 48px; border: 0; border-radius: 16px; background: var(--bg); padding: 0 12px; display: flex; align-items: center; gap: 12px; font-weight: 800; color: var(--navy); text-align: left; }
+.h-act { min-height: 48px; border: 0; border-radius: 16px; background: var(--bg); padding: 0 12px; display: flex; align-items: center; gap: 12px; font-weight: 800; color: var(--navy-ink); text-align: left; }
 .h-act.bad { color: var(--bad); }
 .h-input { display: flex; align-items: center; gap: 12px; }
 .h-input input { flex: 1; min-width: 0; min-height: 48px; box-sizing: border-box; padding: 0 12px; border: 2px solid var(--line-2); border-radius: 16px; background: var(--surface); font-weight: 800; font-variant-numeric: tabular-nums; outline: 0; }
@@ -27,5 +27,6 @@
 .h-notice { min-height: 56px; padding: 8px 0; display: flex; align-items: center; gap: 12px; }
 .h-notice-icon { width: 40px; height: 40px; flex: none; border-radius: 12px; background: var(--surface); color: var(--ink-2); display: inline-flex; align-items: center; justify-content: center; }
 .h-notice-icon.ok { background: var(--ok-bg); color: #0f5139; }
-.h-undo { min-height: 44px; flex: none; border: 0; border-radius: 16px; background: var(--surface); padding: 0 12px; font-size: 0.875rem; font-weight: 800; color: var(--navy); }
+.h-undo { min-height: 44px; flex: none; border: 0; border-radius: 16px; background: var(--surface); padding: 0 12px; font-size: 0.875rem; font-weight: 800; color: var(--navy-ink); }
 .h-info { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 10px; border-radius: 999px; background: var(--tint); color: var(--ink); font-size: 0.875rem; font-weight: 600; }
+:root[data-theme='night'] .h-notice-icon.ok { color: var(--ok); }

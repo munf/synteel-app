@@ -28,13 +28,13 @@ function markWelcomed() {
 function PondArt() {
   return (
     <svg viewBox="0 0 310 120" aria-hidden="true" style={{ display: 'block', width: '100%', height: 'auto' }}>
-      <ellipse cx="155" cy="68" rx="150" ry="48" fill="#1C3461" />
-      <path d="M24 56c20-8 36-8 56 0s36 8 56 0 36-8 56 0 36 8 56 0" fill="none" stroke="#2C4A80" stroke-width="3" stroke-linecap="round" />
-      <path d="M40 98c20-8 36-8 56 0s36 8 56 0 36-8 56 0 36 8 56 0" fill="none" stroke="#2C4A80" stroke-width="3" stroke-linecap="round" />
+      <ellipse class="art-water" cx="155" cy="68" rx="150" ry="48" fill="#1C3461" />
+      <path d="M24 56c20-8 36-8 56 0s36 8 56 0 36-8 56 0 36 8 56 0" class="art-wave" fill="none" stroke="#2C4A80" stroke-width="3" stroke-linecap="round" />
+      <path d="M40 98c20-8 36-8 56 0s36 8 56 0 36-8 56 0 36 8 56 0" class="art-wave" fill="none" stroke="#2C4A80" stroke-width="3" stroke-linecap="round" />
       <Eel x={45} y={38} scale={1.2} />
       <circle cx="246" cy="22" r="8" fill="#FBD38D" />
       <path d="M246 6v4M246 34v4M230 22h4M258 22h4M235 11l3 3M254 30l3 3M235 33l3-3M254 14l3-3" stroke="#FBD38D" stroke-width="2.2" stroke-linecap="round" />
-      <path d="M284 12a11 11 0 1 0 12 14 9 9 0 0 1-12-14z" fill="#C9D4EA" />
+      <path class="art-moon" d="M284 12a11 11 0 1 0 12 14 9 9 0 0 1-12-14z" fill="#C9D4EA" />
     </svg>
   );
 }
@@ -82,7 +82,7 @@ export function Welcome({ onPick, onSignedIn }: { onPick: (mode: SignInMode) => 
   return (
     <div class="screen" style={{ minHeight: '100dvh', paddingBottom: 'calc(32px + env(safe-area-inset-bottom, 0px))' }}>
       <div class="row" style={{ gap: 8 }}>
-        <span class="icon-box" style={{ width: 36, height: 36, borderRadius: 12, background: '#13264a', color: '#fbd38d' }}>
+        <span class="icon-box" style={{ width: 36, height: 36, borderRadius: 12, background: 'var(--hero-bg)', color: '#fbd38d' }}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
             <path d="M3 13c3-4 5-4 8 0s5 4 10-2" />
           </svg>
@@ -90,7 +90,7 @@ export function Welcome({ onPick, onSignedIn }: { onPick: (mode: SignInMode) => 
         <span class="title">synteel</span>
       </div>
 
-      <section class="hero" style={{ background: '#13264a', gap: 16 }}>
+      <section class="hero" style={{ background: 'var(--hero-bg)', gap: 16 }}>
         <PondArt />
         <h1 style={{ color: '#fff' }}>{t('Jaga kolam sidat, siang dan malam', 'Look after your eel ponds, day and night')}</h1>
       </section>

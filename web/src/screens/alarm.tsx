@@ -193,7 +193,7 @@ export function Alarm({ ponds, at, pondId, onSaved, go }: { ponds: PondSummary[]
           <>
             <div class="mid">
               <div class="clock" style={{ gap: 16 }}>
-                <span class="circle" style={{ background: '#17284A', color: '#FBD38D' }}>
+                <span class="circle" style={{ background: '#1c1c1e', color: '#FBD38D' }}>
                   <Glyph d={GLYPH.eye} size={36} />
                 </span>
                 <span class="title">{t(`Sidat ${pondName} normal?`, `${pondName} eels normal?`)}</span>

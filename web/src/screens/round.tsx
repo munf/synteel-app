@@ -565,7 +565,7 @@ function Remember({ nick, pond, onAnswer }: { nick: string; pond: PondSummary; o
   return (
     <div class="rs-offer">
       <div class="stack-xs" style={{ gap: 2 }}>
-        <span class="strong" style={{ color: 'var(--navy)' }}>
+        <span class="strong" style={{ color: 'var(--navy-ink)' }}>
           {t('Ingat', 'Remember')} “{nick}” = {pond.name}?
         </span>
         <span class="label ink2">{t(`Lain kali langsung masuk ke ${pond.name}.`, `Next time it goes straight to ${pond.name}.`)}</span>

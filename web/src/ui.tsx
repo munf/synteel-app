@@ -80,16 +80,16 @@ export type Tone = 'ok' | 'warn' | 'bad' | 'blue';
 export const toneOf = (level: Level): Tone => (level === 'critical' ? 'bad' : level === 'warning' ? 'warn' : level === 'info' ? 'blue' : 'ok');
 
 const SHAPE: Record<Tone, { d: string; fill: string }> = {
-  ok: { d: 'M6 1a5 5 0 1 0 0 10A5 5 0 0 0 6 1z', fill: '#1E8A5F' },
-  warn: { d: 'M1 1h10v10H1z', fill: '#A86A00' },
-  bad: { d: 'M5.13 1.5a1 1 0 0 1 1.74 0l4.5 8a1 1 0 0 1-.87 1.5H1.5a1 1 0 0 1-.87-1.5z', fill: '#D92D20' },
-  blue: { d: 'M6 1a5 5 0 1 0 0 10A5 5 0 0 0 6 1z', fill: '#2F6FE4' },
+  ok: { d: 'M6 1a5 5 0 1 0 0 10A5 5 0 0 0 6 1z', fill: 'var(--ok-dot)' },
+  warn: { d: 'M1 1h10v10H1z', fill: 'var(--warn-dot)' },
+  bad: { d: 'M5.13 1.5a1 1 0 0 1 1.74 0l4.5 8a1 1 0 0 1-.87 1.5H1.5a1 1 0 0 1-.87-1.5z', fill: 'var(--bad-dot)' },
+  blue: { d: 'M6 1a5 5 0 1 0 0 10A5 5 0 0 0 6 1z', fill: 'var(--accent)' },
 };
 
 export function Shape({ tone, size = 12 }: { tone: Tone; size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 12 12" aria-hidden="true">
-      <path d={SHAPE[tone].d} fill={SHAPE[tone].fill} />
+      <path d={SHAPE[tone].d} style={{ fill: SHAPE[tone].fill }} />
     </svg>
   );
 }
@@ -552,7 +552,7 @@ export function PinBoxes({
               : error
                 ? '2px solid var(--bad-dot)'
                 : has
-                  ? '2px solid #5e7bb0'
+                  ? '2px solid var(--pin-filled)'
                   : '2px solid var(--line-2)';
           return (
             <span

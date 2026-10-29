@@ -47,7 +47,7 @@ function Header() {
   return (
     <header
       style={{
-        background: '#13264a',
+        background: 'var(--hero-bg)',
         color: '#fff',
         padding: 'calc(20px + env(safe-area-inset-top, 0px)) 20px 44px',
         display: 'flex',
@@ -56,17 +56,17 @@ function Header() {
       }}
     >
       <div class="row" style={{ gap: 8 }}>
-        <span class="icon-box" style={{ width: 36, height: 36, borderRadius: 12, background: '#fbd38d', color: '#13264a' }}>
+        <span class="icon-box" style={{ width: 36, height: 36, borderRadius: 12, background: '#fbd38d', color: 'var(--hero-bg)' }}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
             <path d="M3 13c3-4 5-4 8 0s5 4 10-2" />
           </svg>
         </span>
         <span class="title">synteel</span>
         <svg width="150" height="36" viewBox="0 0 150 36" aria-hidden="true" style={{ marginLeft: 'auto', flex: 'none' }}>
-          <path d="M0 30c12-5 22-5 34 0s22 5 34 0 22-5 34 0 22 5 34 0" fill="none" stroke="#2C4471" stroke-width="2.5" stroke-linecap="round" />
+          <path d="M0 30c12-5 22-5 34 0s22 5 34 0 22-5 34 0 22 5 34 0" class="art-wave" fill="none" stroke="#2C4471" stroke-width="2.5" stroke-linecap="round" />
           <Eel x={2} y={-3} scale={0.62} />
-          <circle cx="134" cy="9" r="2.5" fill="none" stroke="#5E7BB0" stroke-width="1.8" />
-          <circle cx="141" cy="3" r="1.6" fill="none" stroke="#5E7BB0" stroke-width="1.6" />
+          <circle cx="134" cy="9" r="2.5" class="art-wave" fill="none" stroke="#5E7BB0" stroke-width="1.8" />
+          <circle cx="141" cy="3" r="1.6" class="art-wave" fill="none" stroke="#5E7BB0" stroke-width="1.6" />
         </svg>
       </div>
       <p style={{ fontSize: '1.125rem', fontWeight: 800, lineHeight: 1.3 }}>{t('Jaga kolam sidat, siang dan malam', 'Look after your eel ponds, day and night')}</p>

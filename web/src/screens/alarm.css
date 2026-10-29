@@ -1,3 +1,4 @@
 /* Alarm cek malam (canvas Alarm): always dark. Base layout lives in watch.css. */
 .alarm .risk { font-size: 1rem; font-weight: 600; color: #dce4f2; }
-.alarm .foot { text-wrap: balance; color: #b9c6e0; }
+.alarm .foot { text-wrap: balance; color: #b3b3b8; }
+:root[data-theme='night'] .alarm .risk { color: #e5e5ea; }

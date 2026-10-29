@@ -502,7 +502,7 @@ export function PondDetail({
             </p>
             {top.actions.length > 0 && (
               <>
-                <span class="label" style={{ color: '#C9D4EA' }}>
+                <span class="label" style={{ color: 'var(--on-hero-soft)' }}>
                   {t('Lakukan sekarang:', 'Do now:')}
                 </span>
                 <StepList steps={top.actions} done={done} toggle={toggle} onAllDone={{ label: t('Catat kondisi sekarang', 'Record conditions now'), run: () => go({ name: 'record-pond', pondId: id }) }} />
@@ -629,7 +629,7 @@ export function PondDetail({
                   return ok ? (
                     <circle key={f.t} cx={x} cy={y} r="7" style={{ fill: 'var(--ink)', stroke: 'var(--surface)' }} stroke-width="2" />
                   ) : (
-                    <rect key={f.t} x={x - 7} y={y - 7} width="14" height="14" fill="#A86A00" style={{ stroke: 'var(--surface)' }} stroke-width="2" />
+                    <rect key={f.t} x={x - 7} y={y - 7} width="14" height="14" style={{ fill: 'var(--warn-dot)', stroke: 'var(--surface)' }} stroke-width="2" />
                   );
                 })}
               </svg>

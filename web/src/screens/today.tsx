@@ -15,7 +15,8 @@ const SHOWN = [
   ['tds', 'TDS'],
 ] as const;
 /** Status stack bar: the status shape colours, plus grey for ponds not recorded today (no status yet). */
-const BAR = { critical: '#D92D20', warning: '#A86A00', ok: '#1E8A5F', none: '#D9E1EC' } as const;
+// Light values: #D92D20, #A86A00, #1E8A5F, #D9E1EC; the dark theme swaps them through the tokens.
+const BAR = { critical: 'var(--bad-dot)', warning: 'var(--warn-dot)', ok: 'var(--ok-dot)', none: 'var(--rule)' } as const;
 
 const fmtValue = (key: 'temperature' | 'ph' | 'tds', v: number) => (key === 'temperature' ? fmtTemp(v) : fmtNum(v));
 
@@ -335,7 +336,7 @@ function WeatherCard({
             {fit.length >= 3 ? (
               <svg width="56" height="56" viewBox="0 0 64 64" role="img" aria-label={t(`Perkiraan cocok ${good} dari ${fit.length} kali`, `Estimate matched ${good} of ${fit.length} times`)} style={{ flex: 'none' }}>
                 <circle cx="32" cy="32" r="26" fill="none" style={{ stroke: 'var(--tint)' }} stroke-width="8" />
-                <circle cx="32" cy="32" r="26" fill="none" stroke="#2F6FE4" stroke-width="8" stroke-linecap="round" stroke-dasharray={`${(good / fit.length) * circumference} ${circumference}`} transform="rotate(-90 32 32)" />
+                <circle cx="32" cy="32" r="26" fill="none" style={{ stroke: 'var(--accent)' }} stroke-width="8" stroke-linecap="round" stroke-dasharray={`${(good / fit.length) * circumference} ${circumference}`} transform="rotate(-90 32 32)" />
                 <text x="32" y="37" text-anchor="middle" font-size="16" font-weight="800" style={{ fill: 'var(--ink)' }}>
                   {good}/{fit.length}
                 </text>

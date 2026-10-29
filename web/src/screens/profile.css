@@ -3,7 +3,7 @@
   position: relative; min-height: 96px; border-radius: 16px; background: var(--surface); color: var(--ink);
   border: 2px solid var(--line-2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 0;
 }
-.profile .size-opt.on { border: 3px solid var(--navy); }
+.profile .size-opt.on { border: 3px solid var(--navy-ink); }
 .profile .night-row { min-height: 64px; border-top: 1px solid var(--line); padding-top: 16px; }
 /* Language: the same choice tiles as text size, two across. */
 .profile .lang-row { border-top: 1px solid var(--line); padding-top: 16px; }
@@ -24,3 +24,7 @@
 .profile .ladder-day.next { background: var(--navy); color: #fff; }
 .profile .ladder-row .pill { gap: 4px; font-weight: 600; white-space: nowrap; }
 .profile .quota-link { flex-direction: row; align-items: center; gap: 12px; border: 0; text-align: left; color: var(--ink); width: 100%; }
+
+/* Light / Dark / Like phone: three tiles, icon over the word. */
+.profile .night-row .lang-opt { padding: 8px 4px; flex-direction: column; gap: 4px; }
+:root[data-theme='night'] .profile .ladder-day.next { background: #f5f5f5; color: #101010; }

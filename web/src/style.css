@@ -23,9 +23,12 @@
   --line: #e4e9f1;
   --line-2: #7a869c;
   --accent: #2f6fe4;
+  /* Recording streak (Profil, Hadiah): blue in light, amber in dark. */
+  --streak: #2f6fe4;
+  --streak-ink: #ffffff;
   --accent-ink: #1f55bc;
   --on-navy: #dce4f2;
-  --on-navy-2: #b9c6e0;
+  --on-navy-2: #b3b3b8;
   --ok: #146c4b;
   --ok-bg: #ddf1e7;
   --ok-dot: #1e8a5f;
@@ -37,6 +40,14 @@
   --bad-soft: #fdf1ee;
   --bad-dot: #d92d20;
   --shadow: 0 10px 30px rgba(19, 38, 74, 0.14);
+  /* Roles that were hard-coded hexes: same values in light, neutral in the dark theme below. */
+  --navy-ink: #13264a; /* navy used as text or a ring (not as a fill) */
+  --hero-bg: #13264a; /* fixed navy panels: Sambutan art, Masuk header, logo tiles */
+  --hero-ring: #3a4f78;
+  --on-hero-soft: #c9d4ea;
+  --on-hero-pale: #e4eaf5;
+  --rule: #d9e1ec;
+  --pin-filled: #5e7bb0;
   color-scheme: light;
   font-family: 'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', system-ui, sans-serif;
   font-size: 16px; /* "Normal" by default; Profil switches to Besar or Sangat besar */
@@ -46,30 +57,41 @@
 
 /* Night theme: the same tokens, read for a dark pond at 2 a.m. (canvas: Profil › Tampilan malam, Waspada tema Malam). */
 :root[data-theme='night'] {
-  --bg: #0b1730;
-  --surface: #17284a;
-  --soft: #1b2f55;
-  --tint: #22375f;
-  --pond: #22375f;
-  --navy: #2f4f8f;
-  --ink: #ffffff;
-  --ink-2: #b9c6e0;
-  --muted: #9fb0cf;
-  --line: #2a3f68;
-  --line-2: #8fa3c8;
+  /* Neutral black, like the usual dark mode (no blue tint): easier to read at night. */
+  --streak: #fbd38d;
+  --streak-ink: #101010;
+  --bg: #101010;
+  --surface: #1c1c1e;
+  --soft: #232325;
+  --tint: #2c2c2e;
+  --pond: #2c2c2e;
+  --navy: #3a3a3c;
+  --ink: #f5f5f5;
+  --ink-2: #b3b3b8;
+  --muted: #98989d; /* #8e8e93 fell under 4.5:1 on raised (#2c2c2e) surfaces */
+  --line: #2e2e30;
+  --line-2: #6e6e73;
   --accent: #8fb6ff;
   --accent-ink: #a9c6ff;
   --ok: #8fe0bd;
-  --ok-bg: #173d35;
+  --ok-bg: #12301f;
   --ok-dot: #3fb984;
   --warn: #fbd38d;
-  --warn-bg: #3d3216;
+  --warn-bg: #33290f;
   --warn-dot: #f0b323;
   --bad: #ffb4a8;
-  --bad-bg: #4a1f1f;
-  --bad-soft: #3a1c22;
+  --bad-bg: #3a1515;
+  --bad-soft: #2e1416;
   --bad-dot: #f04438;
-  --shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  --on-navy: #e5e5ea;
+  --navy-ink: #f5f5f5;
+  --hero-bg: #2c2c2e;
+  --hero-ring: #6e6e73;
+  --on-hero-soft: #b3b3b8;
+  --on-hero-pale: #d1d1d6;
+  --rule: #3a3a3c;
+  --pin-filled: #b3b3b8;
   color-scheme: dark;
 }
 
@@ -160,7 +182,7 @@ a { color: var(--accent-ink); }
 .btn.light { background: #fff; color: var(--navy); }
 .btn.secondary { background: var(--surface); color: var(--ink); border: 2px solid var(--line-2); font-weight: 600; }
 .btn.danger { background: var(--bad); color: #fff; }
-.btn.dashed { background: transparent; color: var(--navy); border: 2px dashed var(--line-2); }
+.btn.dashed { background: transparent; color: var(--navy-ink); border: 2px dashed var(--line-2); }
 .btn.blue { background: var(--accent); color: #fff; }
 .btn:disabled { background: #c9d2de; color: var(--ink-2); border-color: #c9d2de; }
 .icon-btn {
@@ -224,7 +246,7 @@ a { color: var(--accent-ink); }
   border: 2px solid var(--line-2); display: inline-flex; align-items: center; justify-content: center; color: #fff;
 }
 .tick-box.on { background: var(--navy); border-color: var(--navy); }
-.hero .tick-box { width: 28px; height: 28px; border-color: #8fa3c8; }
+.hero .tick-box { width: 28px; height: 28px; border-color: #6e6e73; }
 .hero .tick-box.on { background: #fff; border-color: #fff; color: #13264a; }
 .corner-tick { position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 12px; background: var(--navy); color: #fff; display: flex; align-items: center; justify-content: center; }
 .progress { height: 8px; border-radius: 4px; background: var(--line); position: relative; overflow: hidden; }
@@ -237,7 +259,7 @@ a { color: var(--accent-ink); }
   position: fixed; z-index: 10; left: 0; right: 0; bottom: 0;
   display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px;
   padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
-  background: var(--surface); border-top: 1px solid #d9e1ec;
+  background: var(--surface); border-top: 1px solid var(--rule);
 }
 .tabs button {
   position: relative; min-height: 56px; border: 0; background: none; color: var(--muted);
@@ -249,12 +271,12 @@ a { color: var(--accent-ink); }
 .tabs button.active .pill { background: var(--tint); }
 .tabs .dot { position: absolute; top: 4px; right: 14px; width: 8px; height: 8px; border-radius: 4px; background: var(--bad-dot); box-shadow: 0 0 0 2px var(--surface); }
 :root[data-theme='night'] .tabs button.active { color: #ffffff; }
-:root[data-theme='night'] .tabs button.active .pill { background: #22375f; }
+:root[data-theme='night'] .tabs button.active .pill { background: #2c2c2e; }
 
 /* ---------- pond card ---------- */
 .pond-card { background: var(--surface); border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 16px; border: 0; width: 100%; text-align: left; color: var(--ink); }
 .readings { background: var(--bg); border-radius: 16px; padding: 4px 16px; display: flex; flex-direction: column; }
-.reading { display: flex; align-items: center; gap: 12px; min-height: 44px; border-bottom: 1px solid #d9e1ec; }
+.reading { display: flex; align-items: center; gap: 12px; min-height: 44px; border-bottom: 1px solid var(--rule); }
 .reading:last-child { border-bottom: 0; }
 .reading .k { width: 3.2em; font-size: 0.875rem; color: var(--muted); }
 .reading .v { flex: 1; font-size: 1.125rem; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -296,7 +318,7 @@ details.more[open] > summary svg { transform: rotate(180deg); }
   min-height: 72px; border-radius: 16px; background: var(--surface); border: 3px solid #fff;
   display: flex; align-items: center; gap: 12px; padding: 0 16px 0 8px; text-align: left; width: 100%;
 }
-.picker-btn.open, .picker-btn.chosen { border-color: var(--navy); }
+.picker-btn.open, .picker-btn.chosen { border-color: var(--navy-ink); }
 .picker-btn.empty { background: var(--soft); border: 3px dashed #b7c4d9; }
 .picker-menu {
   position: absolute; top: calc(100% + 8px); left: 0; right: 0; z-index: 8;
@@ -327,7 +349,7 @@ details.more[open] > summary svg { transform: rotate(180deg); }
 .talk.rec { background: var(--bad); }
 .talk.rec .mic { background: var(--bad-dot); box-shadow: 0 0 0 8px rgba(255, 255, 255, 0.2); }
 .type-tile { position: relative; min-height: 120px; border-radius: 16px; border: 2px solid var(--line-2); background: var(--surface); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 0 4px; text-align: center; font-size: 0.875rem; font-weight: 600; line-height: 1.2; }
-.type-tile.on { border: 3px solid var(--navy); }
+.type-tile.on { border: 3px solid var(--navy-ink); }
 
 /* Segmented control (Ringkas / Teknis, Suhu / pH / TDS). */
 .segmented { background: var(--surface); border-radius: 16px; padding: 4px; display: grid; gap: 4px; }
@@ -409,7 +431,7 @@ a.note, button.note { text-decoration: none; border: 0; width: 100%; text-align:
 
 /* Compact buttons inside cards (44px tall, e.g. "Catat" next to a pond). */
 .btn.compact { min-height: 44px; padding: 0 16px; font-size: 0.875rem; flex: none; }
-.btn.tint { background: var(--tint); color: var(--navy); }
+.btn.tint { background: var(--tint); color: var(--navy-ink); }
 /* A full-width row that opens another screen: title, one muted line, arrow. */
 .go-row {
   min-height: 56px; width: 100%; border-radius: 16px; border: 2px solid var(--line-2); background: var(--surface); color: var(--ink);
@@ -447,3 +469,53 @@ a.note, button.note { text-decoration: none; border: 0; width: 100%; text-align:
 .field input.accent-border { border-color: var(--accent); }
 .link-btn { min-height: 44px; border: 0; background: transparent; padding: 0; font-weight: 600; color: var(--accent-ink); }
 .inline-link { border: 0; background: none; padding: 0; font: inherit; font-weight: 800; color: var(--accent-ink); cursor: pointer; }
+
+/* ---------- Dark theme: filled and selected parts ----------
+ * Navy fills read as one more grey on near-black, so in the dark theme the main button and anything
+ * chosen turn light (#f5f5f5, #101010 text), like the white buttons on the dark heroes and the alarm.
+ * Heroes stay a raised panel with a thin border. Light mode is untouched: every rule is scoped. */
+:root[data-theme='night'] .hero,
+:root[data-theme='night'] .talk { background: #2c2c2e; border: 1px solid #3a3a3c; }
+:root[data-theme='night'] .hero .tick-box.on { color: #101010; }
+:root[data-theme='night'] .btn.primary { background: #f5f5f5; color: #101010; }
+:root[data-theme='night'] .btn.light { background: #f5f5f5; color: #101010; }
+:root[data-theme='night'] .btn.danger { background: var(--bad); color: #2a0d0d; }
+:root[data-theme='night'] .btn.blue { color: #101010; }
+:root[data-theme='night'] .btn:disabled { background: #2c2c2e; border-color: #2c2c2e; color: #b3b3b8; }
+:root[data-theme='night'] .chip.on,
+:root[data-theme='night'] .segmented.pills button.on { background: #f5f5f5; border-color: #f5f5f5; color: #101010; }
+:root[data-theme='night'] .tick-box.on,
+:root[data-theme='night'] .check-box.on { background: #f5f5f5; border-color: #f5f5f5; color: #101010; }
+:root[data-theme='night'] .check-box { border-color: var(--line-2); }
+:root[data-theme='night'] .corner-tick { background: #f5f5f5; color: #101010; }
+:root[data-theme='night'] .tile.on { background: #2c2c2e; border-color: #f5f5f5; color: var(--ink); }
+:root[data-theme='night'] .tile.on .icon-box { background: #f5f5f5; color: #101010; }
+:root[data-theme='night'] .tile.on .tick-box { background: #f5f5f5; border-color: #f5f5f5; color: #101010; }
+:root[data-theme='night'] .switch[aria-checked='true'] span { background: #f5f5f5; }
+:root[data-theme='night'] .card.dashed,
+:root[data-theme='night'] .picker-btn.empty { border-color: var(--line-2); }
+:root[data-theme='night'] .picker-btn { border-color: var(--surface); }
+:root[data-theme='night'] .picker-btn.open,
+:root[data-theme='night'] .picker-btn.chosen { border-color: #f5f5f5; }
+:root[data-theme='night'] .talk .mic { background: #f5f5f5; color: #101010; box-shadow: 0 0 0 8px rgba(255, 255, 255, 0.12); }
+:root[data-theme='night'] .talk .meta { color: #b3b3b8; }
+:root[data-theme='night'] .talk.rec { background: var(--bad-bg); border-color: var(--bad-dot); }
+:root[data-theme='night'] .talk.rec .mic { background: var(--bad-dot); color: #fff; box-shadow: 0 0 0 8px rgba(240, 68, 56, 0.25); }
+/* Charts: navy marks become light grey, so they stay visible on the dark cards. */
+:root[data-theme='night'] .band-chart .bars span { background: #8e8e93; }
+:root[data-theme='night'] .ruler { background: #3a3a3c; }
+:root[data-theme='night'] .ruler .mark { background: #f5f5f5; border-color: #1c1c1e; }
+:root[data-theme='night'] .factor .track span { background: #b3b3b8; }
+:root[data-theme='night'] .chart .measured { fill: #f5f5f5; stroke: #1c1c1e; }
+:root[data-theme='night'] .chart .cross-dot { stroke: #1c1c1e; }
+:root[data-theme='night'] .key-dot { background: #f5f5f5; }
+:root[data-theme='night'] .conn-banner { color: var(--warn); }
+:root[data-theme='night'] .conn-banner button { border-color: #6b5a2e; color: var(--warn); }
+/* Line art drawn in navy for the light pages (Sambutan, Masuk, Siapkan tambak). */
+:root[data-theme='night'] .art-water { fill: #3a3a3c; }
+:root[data-theme='night'] .art-wave { stroke: #545456; }
+:root[data-theme='night'] .art-moon { fill: #d1d1d6; }
+:root[data-theme='night'] .art-shadow { fill: #232325; }
+:root[data-theme='night'] .art-ring { stroke: #6e6e73; }
+:root[data-theme='night'] .art-plus { fill: #f5f5f5; }
+:root[data-theme='night'] .art-plus-line { stroke: #101010; }

@@ -232,7 +232,7 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
           </span>
           <span class="stack-xs">
             <span class="title num">{rec ? `${t('Selesai', 'Done')} · ${fmtDur(elapsed)}` : t('Bicara', 'Speak')}</span>
-            <span class="label" style={{ color: '#e4eaf5' }}>
+            <span class="label" style={{ color: 'var(--on-hero-pale)' }}>
               {rec ? t('Ketuk kalau sudah selesai keliling', 'Tap when you finish your round') : t('Sambil keliling: “Kolam A suhu 27, pH 7,4…”', 'As you walk: “Pond A, 27 degrees, pH 7.4…”')}
             </span>
           </span>
