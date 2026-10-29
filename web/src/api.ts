@@ -154,6 +154,8 @@ export const api = {
   join: (code: string, name: string, phone: string, pin: string) => call<Me>('POST', '/auth/join', { code, name, phone, pin }),
   logout: () => call<void>('POST', '/auth/logout'),
   switchFarm: (farmId: number) => call<Me>('POST', '/auth/switch', { farmId }),
+  /** Signed in: join the farm of an invite code (after the person saw its name) and switch to it. */
+  joinFarm: (code: string) => call<Me>('POST', '/farm/join', { code }),
   changePin: (pin: string, newPin: string) => call<void>('PUT', '/auth/pin', { pin, newPin }),
   members: () => call<{ members: Member[] }>('GET', '/farm/members'),
   createInvite: (role: Role) => call<{ code: string; role: Role; expiresInDays: number }>('POST', '/farm/invites', { role }),

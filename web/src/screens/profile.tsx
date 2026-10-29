@@ -9,6 +9,7 @@ import { ChangePin, Members } from './members.tsx';
 import { MediaDone, QuotaBar } from './quota.tsx';
 import { LocateButton, useLocate } from './setup.tsx';
 import './profile.css';
+import { JoinByCode } from '../join.tsx';
 
 /** A tappable white row: icon, title and one line under it, chevron. */
 function LinkCard({ icon, title, sub, onClick, children }: { icon: ComponentChildren; title: string; sub: ComponentChildren; onClick: () => void; children?: ComponentChildren }) {
@@ -179,6 +180,7 @@ export function Profile({
   onSwitch,
   onLogout,
   onFarmChanged,
+  onJoined,
 }: {
   state: FarmState;
   me: Me;
@@ -189,6 +191,8 @@ export function Profile({
   onLogout: () => void;
   /** After the owner changes the farm location: refresh the weather. */
   onFarmChanged?: () => void;
+  /** Joined another farm with an invite code. */
+  onJoined?: (m: Me) => void;
 }) {
   const prefs = usePrefs();
   const owner = state.role === 'owner';
@@ -356,6 +360,16 @@ export function Profile({
               {error}
             </p>
           )}
+        </section>
+      )}
+
+      {onJoined && (
+        <section class="card stack">
+          <div class="stack-xs">
+            <h2>Gabung tambak lain</h2>
+            <span class="meta">Pakai kode undangan dari pemilik tambak. Tambak ini tetap ada di daftar.</span>
+          </div>
+          <JoinByCode onJoined={onJoined} />
         </section>
       )}
 

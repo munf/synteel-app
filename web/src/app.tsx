@@ -240,6 +240,10 @@ export function App() {
           loadMe();
         }}
         onLogout={() => api.logout().catch(() => {}).then(signedOut)}
+        onJoined={(m) => {
+          setNewPin(null);
+          signedIn(m);
+        }}
       />
     );
   } else if (route.name === 'add-pond' && owner) {
@@ -259,7 +263,7 @@ export function App() {
       />
     );
   } else if (route.name === 'profile') {
-    body = <Profile key={farmId} state={state} me={me} go={go} invite={route.invite} onSwitch={switchFarm} onLogout={signedOut} onFarmChanged={refresh} />;
+    body = <Profile key={farmId} state={state} me={me} go={go} invite={route.invite} onSwitch={switchFarm} onJoined={signedIn} onLogout={signedOut} onFarmChanged={refresh} />;
   } else if (state.ponds.length === 0) {
     body = <NoPonds farm={state.farm} userName={me.user.name} onAdd={owner ? () => go({ name: 'add-pond' }) : undefined} onProfile={() => go({ name: 'profile' })} />;
   } else if (route.name === 'pond') {

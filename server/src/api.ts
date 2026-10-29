@@ -639,6 +639,18 @@ export function createApi(
     return c.json(me(c.get('userId'), farmId));
   });
 
+  // Signed in already (e.g. a new account still on "Siapkan tambak", or a worker of another farm): add the farm of an
+  // owner's invite code to this account and switch to it. The person confirms the farm name before calling this.
+  api.post('/farm/join', async (c) => {
+    const code = String((await c.req.json()).code ?? '').trim().toUpperCase();
+    const invite = validInvite(code);
+    const userId = c.get('userId');
+    if (store.role(userId, invite.farmId) !== 'owner') store.addMember(userId, invite.farmId, invite.role);
+    store.useInvite(code, userId);
+    store.setSessionFarm(c.get('tokenHash'), invite.farmId);
+    return c.json(me(userId, invite.farmId));
+  });
+
   api.put('/auth/pin', async (c) => {
     const body = await c.req.json();
     const user = store.userByPhone(store.user(c.get('userId'))!.phone)!;

@@ -312,3 +312,36 @@ test('a spoken help message becomes text and does not use the farm quota', async
     assert.equal(res.json.text, 'kolam B tidak terbaca');
   }
 });
+
+test('a signed-in account joins another farm with a code from Profil or "Siapkan tambak", after seeing its name', async () => {
+  const { client } = server();
+  const owner = client();
+  await owner('POST', '/auth/register', { name: 'Pemilik', phone: '081111111111', pin: '246810' });
+  await owner('PUT', '/farm', { name: 'Tambak Mitra' });
+  const { code } = (await owner('POST', '/farm/invites', { role: 'worker' })).json;
+
+  // A new account with no farm yet joins instead of making its own.
+  const fresh = client();
+  await fresh('POST', '/auth/register', { name: 'Pak Slamet', phone: '082222222222', pin: '135790' });
+  assert.equal((await fresh('GET', '/auth/me')).json.farm, null);
+  assert.equal((await fresh('GET', `/auth/invite/${code}`)).json.farmName, 'Tambak Mitra');
+  const joined = await fresh('POST', '/farm/join', { code: code.toLowerCase() });
+  assert.equal(joined.status, 200);
+  assert.equal(joined.json.farm.role, 'worker');
+  assert.equal((await fresh('GET', '/auth/me')).json.farm.name, 'Tambak Mitra');
+
+  // The code is spent; signed out it is refused.
+  assert.equal((await client()('POST', '/farm/join', { code })).status, 401);
+  const again = await fresh('POST', '/farm/join', { code });
+  assert.equal(again.status, 410);
+  assert.equal(again.json.code, 'invite_invalid');
+
+  // An owner joining another farm keeps their own farm and stays owner there.
+  const second = (await owner('POST', '/farm/invites', { role: 'worker' })).json.code;
+  const other = client();
+  await other('POST', '/auth/register', { name: 'Pemilik Dua', phone: '083333333333', pin: '135790' });
+  await other('PUT', '/farm', { name: 'Tambak Dua' });
+  const both = await other('POST', '/farm/join', { code: second });
+  assert.equal(both.json.farm.name, 'Tambak Mitra');
+  assert.equal(both.json.farms.length, 2);
+});

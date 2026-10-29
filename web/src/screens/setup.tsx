@@ -1,7 +1,8 @@
 import { useState } from 'preact/hooks';
-import { api, type Aeration, type Farm, type Phase, type PondSummary, type Setting } from '../api.ts';
+import { api, type Aeration, type Farm, type Me, type Phase, type PondSummary, type Setting } from '../api.ts';
 import { aerationLabel, phaseLabel, settingLabel } from '../labels.ts';
 import { Chips, Field, Icon, initialOf, Soon, tankPath, Tick, Wordmark } from '../ui.tsx';
+import { JoinByCode } from '../join.tsx';
 
 /** The phone's GPS position, rounded to about 10 m; enough for the hourly weather. */
 export function useLocate() {
@@ -51,7 +52,7 @@ export function LocateButton({ gps }: { gps: ReturnType<typeof useLocate> }) {
   );
 }
 
-export function FarmSetup({ onDone, onLogout, newPin }: { onDone: () => void; onLogout?: () => void; /** Right after Daftar: the PIN just made, shown once. */ newPin?: string }) {
+export function FarmSetup({ onDone, onLogout, onJoined, newPin }: { onDone: () => void; onLogout?: () => void; /** Joined another farm with an invite code instead. */ onJoined?: (m: Me) => void; /** Right after Daftar: the PIN just made, shown once. */ newPin?: string }) {
   const [name, setName] = useState('');
   const [locationName, setLocationName] = useState('');
   const gps = useLocate();
@@ -106,15 +107,18 @@ export function FarmSetup({ onDone, onLogout, newPin }: { onDone: () => void; on
       <button class="btn primary" disabled={busy}>
         Simpan
       </button>
-      {onLogout && (
+      {onJoined && (
         <div class="stack-sm">
           <p class="meta center" style={{ textWrap: 'balance' }}>
-            Diundang ke tambak orang lain? Keluar dulu, lalu pilih “Punya kode undangan”.
+            Diundang ke tambak orang lain? Masukkan kodenya, tidak perlu membuat tambak sendiri.
           </p>
-          <button type="button" class="btn secondary" onClick={onLogout}>
-            <Icon name="logout" size={20} /> Keluar
-          </button>
+          <JoinByCode onJoined={onJoined} />
         </div>
+      )}
+      {onLogout && (
+        <button type="button" class="link-row label" style={{ justifyContent: 'center' }} onClick={onLogout}>
+          <Icon name="logout" size={20} /> Keluar
+        </button>
       )}
     </form>
   );
