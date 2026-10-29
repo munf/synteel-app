@@ -738,24 +738,38 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
         <button type="button" class="icon-btn" aria-label="Kembali ke daftar kolam" onClick={() => go({ name: 'record' })}>
           <Icon name="back" />
         </button>
-        <PondThumb kind={pond.kind} size={48} />
-        <div class="grow" style={{ display: 'flex', flexDirection: 'column' }}>
-          <h1>Catat {pond.name}</h1>
-          <span class="label ink2">
-            {pond.batch && pond.program
-              ? [
-                  `${phaseLabel[pond.batch.phase]} · minggu ${pond.program.week}`,
-                  pond.program.estimatedAlive !== null ? `sekitar ${pond.program.estimatedAlive.toLocaleString('id-ID')} ekor` : '',
-                ]
-                  .filter(Boolean)
-                  .join(' · ')
-              : 'Belum ada batch'}
-          </span>
-          <button type="button" class="link-btn label row" style={{ alignSelf: 'flex-start', gap: 4, fontWeight: 800 }} onClick={() => go({ name: 'pond', id: pond.id })}>
-            Detail kolam <Icon name="next" size={16} stroke={2.5} />
-          </button>
-        </div>
+        <h1 class="grow">Catat kondisi</h1>
       </header>
+
+      {/* The pond being recorded: its own card, so the pond picture never reads as part of the back button. */}
+      <section class="card" aria-label="Kolam yang dicatat" style={{ padding: '16px 20px 4px', gap: 12 }}>
+        <div class="row">
+          <PondThumb kind={pond.kind} size={56} />
+          <div class="grow stack-xs" style={{ gap: 2 }}>
+            <div class="row between" style={{ gap: 8 }}>
+              <span style={{ fontSize: '1.5rem', fontWeight: 800, lineHeight: 1.25 }}>{pond.name}</span>
+              <StatusPill level={pond.level} />
+            </div>
+            <span class="label ink2">
+              {pond.batch && pond.program ? `${phaseLabel[pond.batch.phase]} · minggu ${Math.max(1, pond.program.week)}` : 'Belum ada batch'}
+              {pond.program?.estimatedAlive != null && (
+                <>
+                  {' · '}
+                  <span style={{ whiteSpace: 'nowrap' }}>sekitar {pond.program.estimatedAlive.toLocaleString('id-ID')} ekor</span>
+                </>
+              )}
+            </span>
+          </div>
+        </div>
+        <button
+          type="button"
+          class="link-row label"
+          style={{ minHeight: 48, borderTop: '1px solid var(--line)', fontWeight: 800 }}
+          onClick={() => go({ name: 'pond', id: pond.id })}
+        >
+          Lihat detail kolam <Icon name="next" size={18} stroke={2.5} />
+        </button>
+      </section>
 
       {aiMode === 'mock' && (
         <p class="note info">

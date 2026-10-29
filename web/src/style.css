@@ -214,6 +214,7 @@ a { color: var(--accent-ink); }
 .avatar.lg { width: 72px; height: 72px; font-size: 1.5rem; box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.15); }
 .thumb { flex: none; border-radius: 16px; background: var(--surface); color: var(--ink-2); overflow: hidden; display: inline-flex; align-items: center; justify-content: center; }
 .thumb.sm { border-radius: 12px; }
+.card .thumb, .list-row .thumb { background: var(--bg); }
 /* Checkboxes are rounded squares (radius 8): circles, squares and triangles are reserved for status. */
 .tick-box {
   width: 28px; height: 28px; flex: none; border-radius: 8px;
