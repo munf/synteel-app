@@ -80,6 +80,7 @@ export function fmtClock(t: number, withDay = false): string {
 
 export function fmtAgo(at: number, now = Date.now()): string {
   const min = Math.max(0, Math.round((now - at) / 60_000));
+  if (min < 1) return t('baru saja', 'just now');
   if (min < 60) return t(`${min} menit lalu`, `${min} ${min === 1 ? 'minute' : 'minutes'} ago`);
   const h = Math.floor(min / 60);
   const d = Math.floor(h / 24);

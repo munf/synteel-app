@@ -61,7 +61,9 @@ const SOURCE_EN: Record<string, string> = {
 };
 const en = () => currentLang() === 'en';
 /** A threshold's name, action and source in the asked language. */
-export const thresholdName = (t: Threshold) => (en() ? (NAME_EN[t.id] ?? t.name) : t.name);
+// Farmers read these titles: no abbreviations in brackets ("Oksigen terlarut (DO) kolam" → "Oksigen terlarut kolam").
+const plainName = (s: string) => s.replace(/\s*\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
+export const thresholdName = (t: Threshold) => plainName(en() ? (NAME_EN[t.id] ?? t.name) : t.name);
 const thresholdAction = (t: Threshold) => (en() ? (ACTION_EN[t.id] ?? t.operator_action) : t.operator_action);
 export const sourceText = (s: string) => (en() ? (SOURCE_EN[s] ?? s) : s);
 
