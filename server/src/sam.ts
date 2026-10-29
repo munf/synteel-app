@@ -46,6 +46,8 @@ export interface CountResult {
   high: number;
   /** One outline per eel body found (sure ones first in reading order, then doubtful ones). */
   eels: (CountedEel & { sure: boolean })[];
+  /** Only heads were found (no sure body): the eels are piled up and the count is a floor. */
+  atLeast: boolean;
   /** One point per head (a pair of eyes, or a single eye). */
   heads: { x: number; y: number }[];
   /** Ask the farmer to check: a range, doubtful outlines, or eels touching. */
@@ -162,12 +164,13 @@ export function combine(bodyLists: CountedEel[][], eyes: CountedEel[]): Omit<Cou
   // Sure bodies and heads agree: that is the count, doubtful extras aside.
   if (heads.length > 0 && heads.length === sure) high = low;
   if (low === 0 && high > 0) low = 1;
+  const atLeast = sure === 0 && heads.length > 0;
   const count = Math.round((low + high) / 2);
-  const review = low !== high || eels.some((e) => !e.sure) || eels.some((a, i) => eels.some((b, j) => j > i && overlap(a, b)));
+  const review = low !== high || atLeast || eels.some((e) => !e.sure) || eels.some((a, i) => eels.some((b, j) => j > i && overlap(a, b)));
 
   // Reading order: sure ones top to bottom, then left to right, so the numbers are easy to follow.
   eels.sort((a, b) => Number(b.sure) - Number(a.sure) || a.top - b.top || a.left - b.left);
-  return { count, low, high, eels, heads, review, model: 'meta/sam-3.1' };
+  return { count, low, high, atLeast, eels, heads, review, model: 'meta/sam-3.1' };
 }
 
 /** One prompt's output as a count (kept for the recorded fixture and older callers). */

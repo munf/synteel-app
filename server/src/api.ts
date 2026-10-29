@@ -1083,7 +1083,7 @@ export function createApi(
     const image = form.image instanceof File ? form.image : null;
     if (!image) throw new BadRequest(tx('Foto belum ada', 'No photo yet'));
     if (image.size > MAX_IMAGE_BYTES) throw new BadRequest(tx('Foto terlalu besar', 'The photo is too large'));
-    if (ai?.mode === 'mock') return c.json({ result: { count: 0, low: 0, high: 0, eels: [], heads: [], review: true, model: 'mock', ms: 0 }, mock: true });
+    if (ai?.mode === 'mock') return c.json({ result: { count: 0, low: 0, high: 0, atLeast: false, eels: [], heads: [], review: true, model: 'mock', ms: 0 }, mock: true });
     if (ai?.mode !== 'meta' || !sam?.apiKey) throw new AiUnavailable(tx('Hitung otomatis belum aktif. Hitung manual dulu.', 'Automatic counting is not on yet. Count by hand for now.'));
     // Part of an emergency report: it does not use the farm's daily AI quota (the app promises that).
     const result = await countDeadEels(image, sam, r.activeBatch(pond.id)?.phase ?? 'glass_eel');

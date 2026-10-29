@@ -30,6 +30,7 @@ const deadCounted = (n: number) => t(`${n} sidat mati terhitung`, `${n} dead ${n
 const countText = (r: CountResult) => {
   const low = r.low ?? r.count;
   const high = r.high ?? r.count;
+  if (r.atLeast) return t(`Paling sedikit ${low} sidat mati`, `At least ${low} dead eels`);
   return low === high ? deadCounted(low) : t(`Sekitar ${low}–${high} sidat mati`, `About ${low}–${high} dead eels`);
 };
 
@@ -562,7 +563,8 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
     setManual(false);
     let url: string | null = null;
     try {
-      const { blob } = await prepareImage(file, 1280);
+      // Sharper than other photos: glass eel eyes are a few pixels, and JPEG at 82% wipes out half of them.
+      const { blob } = await prepareImage(file, 1600, 0.92);
       url = URL.createObjectURL(blob);
       const img = new Image();
       img.src = url;
@@ -712,7 +714,9 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
                 <>
                   <p>
                     <strong>{countText(counted.result)}.</strong>{' '}
-                    {(counted.result.low ?? counted.result.count) === (counted.result.high ?? counted.result.count)
+                    {counted.result.atLeast
+                      ? t(`Sidat menumpuk, jadi hanya kepala yang terlihat yang terhitung. ${counted.result.count} sudah diisi; tambah kalau lebih banyak.`, `The eels are piled up, so only the heads in view are counted. ${counted.result.count} is filled in; add more if there are more.`)
+                      : (counted.result.low ?? counted.result.count) === (counted.result.high ?? counted.result.count)
                       ? t('Jumlah di atas sudah diisi. Ubah kalau berbeda.', 'The number above is filled in. Change it if it is wrong.')
                       : t(`Angka tengah ${counted.result.count} sudah diisi. Cek fotonya, lalu ubah kalau berbeda.`, `The middle, ${counted.result.count}, is filled in. Check the photo, then change it if it is wrong.`)}
                   </p>

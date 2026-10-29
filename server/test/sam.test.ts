@@ -45,12 +45,15 @@ test('sure bodies and heads agree: one number, doubtful extras aside', async () 
   const bodies = [eel(0, 0, 0.9), eel(0, 100, 0.91), eel(0, 200, 0.86), eel(300, 300, 0.6)];
   const r = combine([bodies], [eye(0, 0), eye(5, 0), eye(0, 100), eye(5, 100), eye(0, 200), eye(5, 200)]);
   assert.deepEqual([r.low, r.high, r.count], [3, 3, 3]);
+  assert.equal(r.atLeast, false);
 });
 
 test('bodies and heads disagree: a range, the middle filled in, and the farmer is asked to check', async () => {
   const heads = Array.from({ length: 15 }, (_, i) => [eye(i * 50, 0), eye(i * 50 + 5, 0)]).flat();
   const r = combine([Array.from({ length: 10 }, (_, i) => eel(i * 60, 100, 0.55))], heads);
   assert.deepEqual([r.low, r.high, r.count], [15, 15, 15]);
+  assert.equal(r.atLeast, true); // heads only, no sure body: a floor, not an exact count
+  assert.equal(r.review, true);
   const r2 = combine([[eel(0, 0, 0.9), eel(0, 50, 0.9), eel(0, 100, 0.6), eel(0, 150, 0.6)]], []);
   assert.deepEqual([r2.low, r2.high, r2.count], [2, 4, 3]);
   assert.equal(r2.review, true);

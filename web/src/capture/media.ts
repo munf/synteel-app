@@ -73,12 +73,12 @@ export function photoIssues(source: CanvasImageSource, w: number, h: number): st
   return issues;
 }
 
-export async function prepareImage(file: Blob, maxSide = 1280): Promise<PreparedImage> {
+export async function prepareImage(file: Blob, maxSide = 1280, quality = 0.82): Promise<PreparedImage> {
   const bitmap = await loadBitmap(file);
   const w = 'naturalWidth' in bitmap ? bitmap.naturalWidth : bitmap.width;
   const h = 'naturalHeight' in bitmap ? bitmap.naturalHeight : bitmap.height;
   const canvas = draw(bitmap, w, h, maxSide);
-  return { blob: await toBlob(canvas, 0.82), issues: photoIssues(bitmap, w, h) };
+  return { blob: await toBlob(canvas, quality), issues: photoIssues(bitmap, w, h) };
 }
 
 // ---------- video ----------
