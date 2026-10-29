@@ -22,7 +22,10 @@ const SRC: Record<LogSource, { short: string; long: string; icon: IconName; ai: 
   video: { short: 'Video', long: t('Video harian, dibaca AI lalu dicek', 'Daily video, read by the AI then checked'), icon: 'video', ai: true },
   manual: { short: t('Ketik', 'Typed'), long: t('Diketik manual', 'Typed in'), icon: 'pencil', ai: false },
   sensor: { short: 'Sensor', long: t('Diukur oleh sensor alat Synteel', 'Measured by a Synteel device sensor'), icon: 'wifi', ai: false },
+  notebook: { short: t('Buku', 'Notebook'), long: t('Buku catatan, disalin AI lalu dicek', 'Notebook, copied by the AI then checked'), icon: 'book', ai: true },
 };
+/** "Lihat catatan lebih lama": 14 days → 90 → about a year. */
+const FURTHER = [14, 90, 400];
 
 const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 const unitOf = (k: ReadingKey) => (k === 'temperature' ? '°C' : readingLabel[k].unit);
@@ -134,7 +137,7 @@ const parseNum = (s: string) => Number(s.trim().replace(/\s/g, '').replace(',', 
 type Mode = 'lihat' | 'ubah' | 'pindah' | 'hapus';
 type Notice = { kind: 'moved' | 'deleted'; log: HistoryLog; to?: string };
 
-export function History({ ponds, pondId, role, onChanged, go }: { ponds: PondSummary[]; pondId: number; role: Role | null; onChanged: () => void; go: Go }) {
+export function History({ ponds, pondId, days: initialDays, role, onChanged, go }: { ponds: PondSummary[]; pondId: number; days?: number; role: Role | null; onChanged: () => void; go: Go }) {
   const pond = ponds.find((p) => p.id === pondId);
   const [logs, setLogs] = useState<HistoryLog[] | null>(null);
   const [me, setMe] = useState<{ id: number; name: string } | null>(null);
@@ -148,11 +151,18 @@ export function History({ ponds, pondId, role, onChanged, go }: { ponds: PondSum
   // Records just moved or deleted stay in place as a line with "Batalkan".
   const [notices, setNotices] = useState<Record<number, Notice>>({});
 
-  const load = () => api.history(pondId).then((r) => setLogs(r.logs), (e) => setError(e.message));
+  const [days, setDays] = useState(Math.max(14, initialDays ?? 14));
+  const load = (d = days) => api.history(pondId, d === 14 ? undefined : d).then((r) => setLogs(r.logs), (e) => setError(e.message));
   useEffect(() => {
     load();
     api.me().then((m) => setMe(m.user), () => {});
   }, [pondId]);
+  const further = FURTHER.find((d) => d > days);
+  const showFurther = () => {
+    if (!further) return;
+    setDays(further);
+    load(further);
+  };
 
   const close = () => {
     setOpen(null);
@@ -325,7 +335,7 @@ export function History({ ponds, pondId, role, onChanged, go }: { ponds: PondSum
       {!logs && !error && <p class="muted">{t('Memuat…', 'Loading…')}</p>}
       {logs && shown.length === 0 && (
         <div class="card">
-          <p>{t('Belum ada catatan 14 hari terakhir.', 'No records in the last 14 days.')}</p>
+          <p>{t(`Belum ada catatan ${days} hari terakhir.`, `No records in the last ${days} days.`)}</p>
           <button class="btn primary" onClick={() => go({ name: 'record-pond', pondId })}>
             <Icon name="pencil" size={20} /> {t('Catat sekarang', 'Record now')}
           </button>
@@ -559,6 +569,25 @@ export function History({ ponds, pondId, role, onChanged, go }: { ponds: PondSum
           </div>
         </section>
       ))}
+
+      {logs && further && (
+        <button type="button" class="btn secondary" onClick={showFurther}>
+          <Icon name="clock" size={20} /> {t(`Lihat catatan sampai ${further} hari lalu`, `Show records up to ${further} days ago`)}
+        </button>
+      )}
+
+      {logs && (
+        <button type="button" class="card history-row" onClick={() => go({ name: 'notebook', pondId })}>
+          <span class="icon-box">
+            <Icon name="book" />
+          </span>
+          <span class="grow stack-xs" style={{ gap: 2 }}>
+            <span class="strong">{t('Ada catatan lama di buku?', 'Old records in a notebook?')}</span>
+            <span class="meta">{t('Foto halamannya, AI menyalin ke riwayat ini. Dicek dulu sebelum disimpan.', 'Take a photo of the page; the AI copies it into this history. Checked before saving.')}</span>
+          </span>
+          <Icon name="next" size={20} />
+        </button>
+      )}
     </div>
   );
 }

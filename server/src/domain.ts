@@ -50,8 +50,11 @@ export interface LogData {
   note?: string;
 }
 
-/** 'sensor': written by a linked Synteel device (devices.ts), never sent by the app. */
-export type LogSource = 'manual' | 'voice' | 'photo' | 'video' | 'sensor';
+/**
+ * 'sensor': written by a linked Synteel device (devices.ts), never sent by the app.
+ * 'notebook': copied from a photo of the farmer's handwritten notebook (notebook.ts), checked row by row.
+ */
+export type LogSource = 'manual' | 'voice' | 'photo' | 'video' | 'sensor' | 'notebook';
 /** What the app may send as a log's source. */
 export const LOG_SOURCES: LogSource[] = ['manual', 'voice', 'photo', 'video'];
 

@@ -1,7 +1,7 @@
 
 // Uploads with progress. On weak signal a video or a long round recording can take minutes:
 // the farmer sees how far it got instead of a frozen screen. Same errors as api.ts (ApiError).
-import { API, ApiError, api, type Draft, type RoundResult } from './api.ts';
+import { API, ApiError, api, type Draft, type NotebookPage, type RoundResult } from './api.ts';
 import { lang, t } from './i18n.ts';
 import { Retryable, type Job } from './capture/queue.ts';
 
@@ -73,4 +73,14 @@ export async function sendCapture(job: Job, onProgress?: (p: Progress) => void):
     if (err instanceof ApiError && (err.status >= 500 || err.status === 408)) throw new Retryable(err.message);
     return { ...job, status: 'failed', error: (err as Error).message };
   }
+}
+
+/** One notebook page photo → rows to check. Nothing is saved. `pondId`: the pond the import started from. */
+export function sendNotebook(image: Blob, page: number, pondId: number | undefined, onProgress?: (p: Progress) => void) {
+  if (!navigator.onLine) return Promise.reject(new Offline(t('Belum ada sinyal', 'No signal yet')));
+  const form = new FormData();
+  form.append('image', image, 'page.jpg');
+  form.append('page', String(page));
+  if (pondId) form.append('pondId', String(pondId));
+  return post<{ page: NotebookPage }>('/notebook/read', form, onProgress);
 }

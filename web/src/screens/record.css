@@ -106,3 +106,5 @@
 :root[data-theme='night'] .rs-radio.on .rs-radio-dot { border-color: #f5f5f5; background: #f5f5f5; color: #101010; }
 :root[data-theme='night'] .talk.rp-talk .mic { box-shadow: 0 0 0 10px rgba(255, 255, 255, 0.12); }
 :root[data-theme='night'] .talk.rp-talk.rec .mic { box-shadow: 0 0 0 10px rgba(240, 68, 56, 0.25); }
+/* Foto buku catatan: the tile spans the row, icon beside the words. */
+.capture-tile.nb-tile { flex-direction: row; align-items: center; width: 100%; }

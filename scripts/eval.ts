@@ -8,6 +8,7 @@ import { toDraft } from '../server/src/ai.ts';
 import { DAY_MS, type Log } from '../server/src/domain.ts';
 import { knowledge } from '../server/src/knowledge.ts';
 import { checkReading, guardRound, matchPond, type RoundPond } from '../server/src/round.ts';
+import { guardDate, guardNotebook } from '../server/src/notebook.ts';
 import { assessPond, type Threshold } from '../server/src/rules.ts';
 import { combine, pairEyes, parseCount, type CountedEel } from '../server/src/sam.ts';
 
@@ -56,6 +57,16 @@ const draft = toDraft({ temperature: 28.5, ph: 72, tds: 160, behavior: ['surfaci
 check(meter, 'plausible readings kept, pH 72 dropped', { temperature: 28.5, tds: 160 }, draft.data.readings);
 check(meter, 'unknown behaviour and leftover words dropped', [['surfacing'], undefined], [draft.data.behavior, draft.data.feeding]);
 check(meter, 'unsure field flagged for the farmer', ['tds'], draft.lowConfidence);
+
+// ---------- Notebook page guard (after Muse Spark vision) ----------
+const book = 'Notebook';
+const cellOf = (written: string | null, value: number | null) => ({ written, value });
+const nbRow = (over: Record<string, unknown>) => ({ date: { written: '12/10', day: 12, month: 10, year: null }, time: null, pond: 'Kolam A', temperature: cellOf('27,5', 27.5), ph: cellOf('7,4', 7.4), tds: cellOf('140', 140), dead: cellOf(null, null), feed: null, note: null, unsure: [], ...over });
+const nb = (over: Record<string, unknown>) => guardNotebook({ page_pond: null, page_year: null, rows: [nbRow(over)], problems: [] }, ponds, { today: '2026-10-29', page: 1 }).rows[0];
+check(book, 'blank TDS cell, model says 150: not used, asked', [undefined, 'unsure'], [nb({ tds: cellOf(null, 150) }).values.tds, nb({ tds: cellOf(null, 150) }).checks[0]?.kind]);
+check(book, 'pH written 74 (model says 7.4): empty, 7.4 offered', [undefined, 7.4], [nb({ ph: cellOf('74', 7.4) }).values.ph, nb({ ph: cellOf('74', 7.4) }).checks[0]?.suggestion]);
+check(book, '"30/12" without a year on 29 Oct 2026', '2025-12-30', guardDate({ written: '30/12', day: 30, month: 12, year: null }, null, '2026-10-29', false).date);
+check(book, 'pond written "kolam mburi": farmer picks', null, nb({ pond: 'kolam mburi' }).pondId);
 
 // ---------- Evening briefing agent guard and fallback ----------
 const agent = 'Briefing agent';

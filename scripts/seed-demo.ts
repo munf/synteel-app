@@ -66,10 +66,11 @@ for (const { pond, phase, stocked, count } of ponds) {
   const batch = r.startBatch({ pondId: pond.id, phase, stockedAt: daysAgo(stocked), initialCount: count }, daysAgo(stocked));
   for (let d = 14; d >= 0; d--) {
     for (const hour of [7, 17]) {
-      const at = new Date(now.getTime() - d * DAY_MS);
-      at.setUTCHours(hour - 7, 15, 0, 0); // farm-local hour in WIB
-      // Today's evening log may still be in the future: record it as "just now" instead.
-      if (at > now) at.setTime(now.getTime() - 20 * 60 * 1000);
+      // The farm's own (WIB) day, not the UTC one: seeded between 00:00 and 07:00 WIB the UTC date is
+      // still yesterday, which put "today's" dead eels on yesterday and turned the demo case to "Turun".
+      const at = new Date(`${daysAgo(d)}T${String(hour).padStart(2, '0')}:15:00+07:00`);
+      // Today's logs may still be in the future: record them as "just now", but never before today began.
+      if (at > now) at.setTime(Math.max(now.getTime() - 20 * 60 * 1000, Date.parse(`${daysAgo(0)}T00:00:00+07:00`)));
       const data: LogData = {
         readings: {
           // Glass eels follow the Blueprint range (27–28 °C); elvers the partner farm's (28–31 °C, pH 6.8–7.6).

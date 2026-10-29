@@ -598,6 +598,22 @@ export function PondDetail({
         </button>
       )}
 
+      {/* A new pond: its history can come from the farmer's notebook on day one. */}
+      {!tech && logs.length < 6 && (
+        <button class="card history-row" onClick={() => go({ name: 'notebook', pondId: pond.id })}>
+          <span class="icon-box">
+            <Icon name="book" />
+          </span>
+          <span class="grow stack-xs" style={{ gap: 2 }}>
+            <span class="strong">{t('Punya buku catatan kolam ini?', 'Have a notebook for this pond?')}</span>
+            <span class="meta">{t('Foto halamannya, riwayat dan perkiraan langsung punya data.', 'Take a photo of the pages; history and estimates get data right away.')}</span>
+          </span>
+          <span style={{ color: 'var(--muted)', display: 'inline-flex' }}>
+            <Icon name="next" size={20} />
+          </span>
+        </button>
+      )}
+
       {!tech && (
         <button class="btn secondary" onClick={() => go({ name: 'problem', pondId: pond.id })}>
           <Icon name="siren" size={20} /> {t('Lapor masalah di kolam ini', 'Report a problem in this pond')}

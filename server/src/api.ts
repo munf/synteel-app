@@ -2,7 +2,8 @@ import { Hono, type Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { batchWeek, DAY_MS, LOG_SOURCES, localDate, READING_LIMITS, type Aeration, type Behavior, type Level, type Log, type LogData, type Phase, type Pond, type Setting } from './domain.ts';
 import type { CaseRow, FarmRepo, LogRecord, Repo, Role } from './db.ts';
-import type { HistoryLog, QuotaState, SupportTopic } from './contract.ts';
+import type { HistoryLog, NotebookPage, NotebookSaveResult, QuotaState, SupportTopic } from './contract.ts';
+import { guardNotebook, localIso } from './notebook.ts';
 import type { SendMail } from './mail.ts';
 import { attemptLimiter, AuthError, checkPin, hashPin, hashToken, inviteCode, newToken, normalizePhone, tempPin, verifyPin } from './auth.ts';
 import { knowledge } from './knowledge.ts';
@@ -146,6 +147,10 @@ const MAX_AUDIO_BYTES = 15 * 1024 * 1024;
 const SESSION_DAYS = 90;
 const INVITE_DAYS = 7;
 const HISTORY_DAYS = 14;
+/** History can be opened further back (notebook pages from before the app), up to about a year. */
+const HISTORY_MAX_DAYS = 400;
+/** Rows saved from notebook pages in one go. */
+const MAX_NOTEBOOK_ROWS = 300;
 const MAX_NICKNAMES = 5;
 const MAX_NICKNAME_LENGTH = 30;
 const MAX_TRANSCRIPT = 5000;
@@ -1343,8 +1348,9 @@ export function createApi(
     const r = needFarm(c);
     const pond = r.getPond(Number(c.req.param('id')));
     if (!pond) return c.json({ error: tx('Kolam tidak ditemukan', 'Pond not found') }, 404);
-    const since = new Date(clock().getTime() - HISTORY_DAYS * DAY_MS).toISOString();
-    return c.json({ logs: r.historySince(pond.id, since).map((l) => historyLog(c, l)) });
+    const days = Math.min(HISTORY_MAX_DAYS, Math.max(1, Math.round(Number(c.req.query('days')) || HISTORY_DAYS)));
+    const since = new Date(clock().getTime() - days * DAY_MS).toISOString();
+    return c.json({ logs: r.historySince(pond.id, since).map((l) => historyLog(c, l)), days });
   });
 
   // New values replace the old; the old ones stay readable in the edit trail.
@@ -1379,6 +1385,97 @@ export function createApi(
     const { r, log } = editableLog(c, { deleted: true });
     if (log.deletedAt !== null) r.saveLog(edited(c, { ...log, deletedAt: null }, tx('dikembalikan', 'restored')));
     return c.json({ log: historyLog(c, r.getLog(log.id)!) });
+  });
+
+  // ---------- notebook import: photos of a handwritten notebook → rows the farmer checks ----------
+
+  /** Ponds that already have a record (sensor readings aside) on each of these farm-local dates. */
+  function recordedOn(r: FarmRepo, dates: string[]): Record<string, number[]> {
+    const out: Record<string, number[]> = {};
+    const wanted = new Set(dates);
+    if (!wanted.size) return out;
+    const tz = timezone(r);
+    const first = [...wanted].sort()[0];
+    const since = new Date(Date.parse(`${first}T00:00:00Z`) - DAY_MS).toISOString();
+    for (const l of r.farmLogsSince(since)) {
+      if (l.source === 'sensor') continue;
+      const day = localDate(new Date(l.loggedAt), tz);
+      if (!wanted.has(day)) continue;
+      const list = (out[day] ??= []);
+      if (!list.includes(l.pondId)) list.push(l.pondId);
+    }
+    return out;
+  }
+
+  // One page photo → rows to check. Nothing is saved here: the farmer checks the rows, then /notebook/save.
+  api.post('/notebook/read', async (c) => {
+    const r = needFarm(c);
+    const ponds = r.listPonds().map(({ id, name, nicknames }) => ({ id, name, nicknames }));
+    if (!ponds.length) throw new BadRequest(tx('Belum ada kolam', 'No ponds yet'));
+    const form = await c.req.parseBody();
+    const image = form.image instanceof File ? form.image : null;
+    if (!image) throw new BadRequest(tx('Foto belum ada', 'No photo yet'));
+    if (image.size > MAX_IMAGE_BYTES) throw new BadRequest(tx('Foto terlalu besar', 'The photo is too large'));
+    const page = Math.min(99, Math.max(1, Math.round(Number(form.page)) || 1));
+    const defaultPondId = ponds.find((p) => p.id === Number(form.pondId))?.id ?? null;
+    if (!ai || ai.mode === 'off' || typeof ai.notebook !== 'function') throw new AiUnavailable(tx('AI belum aktif. Isi manual dulu, atau coba lagi nanti.', 'The AI is not on yet. Type it in for now, or try again later.'));
+    useAi(r, c.get('userId'));
+    const today = localDate(clock(), timezone(r));
+    const started = Date.now();
+    const read = await ai.notebook({ image, ponds, today });
+    const { rows, problems } = guardNotebook(read.raw, ponds, { today, page, defaultPondId });
+    const dates = rows.flatMap((row) => [row.date, ...row.checks.map((ch) => (ch.field === 'date' && typeof ch.suggestion === 'string' ? ch.suggestion : null))]).filter((d): d is string => !!d);
+    const result: NotebookPage = { rows, problems, recorded: recordedOn(r, dates), model: read.model, mode: read.mode };
+    await saveCapture?.({ farmId: r.farmId, pondId: defaultPondId ?? 0, userId: c.get('userId'), kind: 'notebook', at: clock().toISOString(), ms: Date.now() - started, raw: read.raw, rows }, [{ name: 'image-0.jpg', blob: image }]).catch((err) =>
+      console.error('capture not stored:', err),
+    );
+    return c.json({ page: result });
+  });
+
+  // The rows the farmer checked and confirmed. A pond that already has a record that day is skipped
+  // unless the farmer chose to save the row too; the same row twice in one import is saved once.
+  api.post('/notebook/save', async (c) => {
+    const r = needFarm(c);
+    const body = await c.req.json();
+    const rows = Array.isArray(body.rows) ? body.rows : [];
+    if (!rows.length) throw new BadRequest(tx('Belum ada baris untuk disimpan', 'No rows to save yet'));
+    if (rows.length > MAX_NOTEBOOK_ROWS) throw new BadRequest(tx('Baris terlalu banyak. Simpan sebagian dulu.', 'Too many rows. Save part of them first.'));
+    const tz = timezone(r);
+    const now = clock();
+    const today = localDate(now, tz);
+    // Check every row before saving any, so a bad row does not leave half an import behind.
+    const checked = rows.map((row: Record<string, any>, i: number) => {
+      const pond = r.getPond(Number(row.pondId));
+      if (!pond) throw new BadRequest(tx(`Baris ${i + 1}: kolam tidak ditemukan`, `Row ${i + 1}: pond not found`));
+      const date = String(row.date ?? '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date))) throw new BadRequest(tx(`Baris ${i + 1}: tanggal tidak valid`, `Row ${i + 1}: the date is not valid`));
+      if (date > today) throw new BadRequest(tx(`Baris ${i + 1}: tanggal belum lewat`, `Row ${i + 1}: the date has not come yet`));
+      const time = typeof row.time === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(row.time) ? row.time : '12:00';
+      let at = localIso(date, time, tz);
+      if (Date.parse(at) > now.getTime()) at = now.toISOString();
+      const data = parseLogData(row.data ?? {});
+      return { key: String(row.key ?? i).slice(0, 40), pond, date, at, data, also: row.alsoIfRecorded === true };
+    });
+    const recorded = recordedOn(r, checked.map((x: { date: string }) => x.date));
+    const result: NotebookSaveResult = { saved: [], skipped: [] };
+    const seen = new Set<string>();
+    for (const x of checked) {
+      const same = `${x.pond.id}|${x.at}|${JSON.stringify(x.data)}`;
+      if (seen.has(same)) {
+        result.skipped.push({ key: x.key, reason: 'repeat' });
+        continue;
+      }
+      seen.add(same);
+      if (!x.also && recorded[x.date]?.includes(x.pond.id)) {
+        result.skipped.push({ key: x.key, reason: 'recorded' });
+        continue;
+      }
+      const batch = r.activeBatch(x.pond.id);
+      const log = r.addLog({ pondId: x.pond.id, batchId: batch && batch.stockedAt <= x.date ? batch.id : null, loggedAt: x.at, source: 'notebook', data: x.data }, c.get('userId'));
+      result.saved.push({ key: x.key, logId: log.id });
+    }
+    // Old pages do not open dead-eel cases or alarms: those follow what happens now.
+    return c.json(result, 201);
   });
 
   // ---------- AI quota ----------

@@ -6,6 +6,7 @@ import type { Nowcast, NowcastPoint, RiskFactor, RiskLevel, SuggestedCheck } fro
 import type { Limits } from '../../server/src/rules.ts';
 import type { Draft, DraftField } from '../../server/src/ai.ts';
 import type { AutoFix, HistoryLog, LogEdit, QuotaState, ReadingField, RoundDraft, RoundIssue, RoundResult, SupportRequest, SupportTopic } from '../../server/src/contract.ts';
+import type { NotebookCheck, NotebookField, NotebookPage, NotebookRow, NotebookSaveResult, NotebookSaveRow, NotebookValueField } from '../../server/src/contract.ts';
 import type { LogSource } from '../../server/src/domain.ts';
 import { lang, t } from './i18n.ts';
 
@@ -14,6 +15,7 @@ export type { Limits, Nowcast, NowcastPoint, RiskFactor, RiskLevel, SuggestedChe
 export type { Draft, DraftField, LogSource };
 export type { Briefing, BriefingCheck, CountResult };
 export type { CaseCheck, CaseQuestion, CaseRun, CaseView };
+export type { NotebookCheck, NotebookField, NotebookPage, NotebookRow, NotebookSaveResult, NotebookSaveRow, NotebookValueField };
 export type { AutoFix, HistoryLog, LogEdit, QuotaState, ReadingField, RoundDraft, RoundIssue, RoundResult, SupportRequest, SupportTopic };
 
 export type ReadingKey = keyof NonNullable<LogData['readings']>;
@@ -235,7 +237,10 @@ export const api = {
   addNickname: (pondId: number, nickname: string) => call<{ pond: PondSummary }>('POST', `/ponds/${pondId}/nicknames`, { nickname }),
 
   // Record history and corrections (within 24 hours by whoever made it; the owner always).
-  history: (pondId: number) => call<{ logs: HistoryLog[] }>('GET', `/ponds/${pondId}/history`),
+  /** `days`: how far back (14 by default; older notebook pages need more). */
+  history: (pondId: number, days?: number) => call<{ logs: HistoryLog[]; days: number }>('GET', `/ponds/${pondId}/history${days ? `?days=${days}` : ''}`),
+  /** Rows the farmer checked from notebook photos. Skips a pond+date that already has a record unless asked. */
+  saveNotebook: (rows: NotebookSaveRow[]) => call<NotebookSaveResult>('POST', '/notebook/save', { rows }),
   editLog: (logId: number, data: LogData) => call<{ log: HistoryLog }>('PUT', `/logs/${logId}`, data),
   moveLog: (logId: number, pondId: number) => call<{ log: HistoryLog }>('POST', `/logs/${logId}/move`, { pondId }),
   deleteLog: (logId: number) => call<void>('DELETE', `/logs/${logId}`),

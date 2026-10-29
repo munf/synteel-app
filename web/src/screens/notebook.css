@@ -1,0 +1,42 @@
+/* Foto buku catatan: one card per notebook row, four number cells side by side like the notebook's columns. */
+.nb-row { padding: 16px; gap: 12px; }
+/* A row with cells to check: a dashed outline all round (never a coloured side line). */
+.nb-row.flagged { outline: 2px dashed var(--warn-dot); outline-offset: -2px; }
+.nb-del {
+  width: 44px; height: 44px; flex: none; border: 0; border-radius: 12px;
+  background: var(--bg); color: var(--ink-2); display: inline-flex; align-items: center; justify-content: center;
+}
+.nb-date { border: 0; background: none; padding: 0; min-height: 44px; text-align: left; color: var(--ink); font-size: 1rem; }
+.nb-48 { min-height: 48px; }
+
+.nb-cells { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.nb-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.nb-cell-label { display: inline-flex; align-items: center; gap: 4px; font-size: 0.875rem; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
+.nb-cell input {
+  width: 100%; min-width: 0; min-height: 48px; padding: 0 4px; text-align: center;
+  border: 2px solid var(--line-2); border-radius: 12px; background: var(--surface); color: var(--ink);
+  font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.nb-cell input:focus { outline: 0; border-color: var(--accent); }
+/* "Cek lagi" cell: dashed border, a warning shape in the label, and the words below. */
+.nb-cell.open input { border-style: dashed; border-color: var(--warn-dot); background: var(--warn-bg); }
+.nb-cell.open .nb-cell-label { color: var(--warn); }
+.nb-unit { font-size: 0.875rem; color: var(--muted); text-align: center; min-height: 20px; }
+
+.nb-check { display: flex; flex-direction: column; gap: 8px; }
+.nb-check.open { background: var(--warn-bg); border-radius: 16px; padding: 12px; color: var(--ink); }
+.nb-flag-word { display: inline-flex; align-items: center; gap: 4px; font-size: 0.875rem; font-weight: 800; color: var(--warn); }
+.nb-check .btn { font-size: 1rem; padding: 0 12px; }
+
+.nb-note { display: flex; flex-direction: column; gap: 4px; }
+.nb-note .input { min-height: 48px; border-radius: 12px; }
+
+.nb-dup { display: flex; flex-direction: column; gap: 8px; background: var(--tint); border-radius: 16px; padding: 12px; color: var(--ink); align-items: flex-start; }
+.nb-removed { display: flex; align-items: center; gap: 8px; background: var(--surface); border-radius: 16px; padding: 8px 8px 8px 16px; }
+.nb-photo { width: 100%; border-radius: 16px; display: block; }
+.nb-tips { padding: 4px 0; }
+.nb-goto { align-self: flex-start; color: var(--warn); font-size: 0.875rem; }
+.nb-pond-link {
+  display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 16px; border: 0; border-radius: 16px;
+  background: var(--bg); color: var(--ink); text-align: left; font-size: 1rem;
+}

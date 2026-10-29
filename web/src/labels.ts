@@ -34,6 +34,7 @@ export const sourceLabel: Record<LogSource, string> = {
   photo: t('Foto alat · AI, dicek', 'Meter photo · AI, checked'),
   video: t('Video · AI, dicek', 'Video · AI, checked'),
   sensor: 'Sensor',
+  notebook: t('Buku catatan · AI, dicek', 'Notebook · AI, checked'),
 };
 
 const LOW = [t('Agak rendah', 'A bit low'), t('Terlalu rendah', 'Too low')];

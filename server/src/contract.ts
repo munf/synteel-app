@@ -112,3 +112,75 @@ export interface SupportRequest {
   /** Device and app version, only when the person ticked the box. */
   device?: string;
 }
+
+// ---------- Notebook import: a photo of a handwritten notebook page → rows the farmer checks ----------
+
+/** The cells of one notebook row that can be flagged. */
+export type NotebookField = 'date' | 'pond' | 'temperature' | 'ph' | 'tds' | 'dead';
+export type NotebookValueField = 'temperature' | 'ph' | 'tds' | 'dead';
+
+/** A cell the farmer must look at again ("cek lagi"). Its value is left empty until the farmer fills it. */
+export interface NotebookCheck {
+  field: NotebookField;
+  /**
+   * unsure: hard to read, or the AI gave a number for an empty cell (never used).
+   * odd: readable but not a plausible value (pH 74, temperature 9).
+   * unknown: the pond name is not one of the farm's ponds.
+   * future: the date written is after today.
+   */
+  kind: 'unsure' | 'odd' | 'unknown' | 'future';
+  /** The cell as written on the page ("7,?", "74", "kolam pojok"), '' when blank. */
+  written: string;
+  /** A value the farmer can accept with one tap: a number, or YYYY-MM-DD for a date. Never filled in by itself. */
+  suggestion: number | string | null;
+  /** Plain words: why this cell needs a look. */
+  note: string;
+}
+
+export interface NotebookRow {
+  key: string;
+  /** 1-based photo number in this import. */
+  page: number;
+  /** YYYY-MM-DD, farm-local; null until the farmer picks it. */
+  date: string | null;
+  dateWritten: string;
+  /** No year on the page: the most recent past date with that day and month was taken. */
+  yearGuessed: boolean;
+  /** HH:MM farm-local when the page has a time (or pagi/sore); null otherwise. */
+  time: string | null;
+  pondId: number | null;
+  pondWritten: string;
+  /** Ponds to offer when pondId is null, best first. */
+  suggestions: number[];
+  values: Partial<Record<NotebookValueField, number>>;
+  /** Feed and other notes as written. */
+  note: string | null;
+  checks: NotebookCheck[];
+}
+
+export interface NotebookPage {
+  rows: NotebookRow[];
+  /** Reading problems the model reported ("tulisan pudar"), in the farmer's language. */
+  problems: string[];
+  /** Ponds that already have records, by date (YYYY-MM-DD → pond ids), for the dates on this page. */
+  recorded: Record<string, number[]>;
+  model: string;
+  mode: 'meta' | 'mock';
+}
+
+/** One checked row the farmer confirmed. */
+export interface NotebookSaveRow {
+  key: string;
+  pondId: number;
+  date: string;
+  time: string | null;
+  data: LogData;
+  /** The pond already has a record on this date and the farmer chose to save this one too. */
+  alsoIfRecorded?: boolean;
+}
+
+export interface NotebookSaveResult {
+  saved: { key: string; logId: number }[];
+  /** recorded: the pond already has a record that day; repeat: the same row twice in this import. */
+  skipped: { key: string; reason: 'recorded' | 'repeat' }[];
+}

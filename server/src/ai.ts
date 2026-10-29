@@ -17,6 +17,7 @@ import { currentLang, tx } from './i18n.ts';
 import type { RoundResult } from './contract.ts';
 import { READING_LIMITS, type Behavior, type LogData, type Phase, type ReadingKey } from './domain.ts';
 import { guardRound, mockRound, ROUND_SCHEMA, roundInstructions, type RoundPond } from './round.ts';
+import { mockNotebook, NOTEBOOK_SCHEMA, notebookInstructions } from './notebook.ts';
 
 export type CaptureKind = 'photo' | 'voice' | 'video';
 export type DraftField = 'temperature' | 'ph' | 'tds' | 'mortality' | 'behavior' | 'leftover' | 'color' | 'smell' | 'aeration';
@@ -49,6 +50,21 @@ export interface RoundInput {
   ponds: RoundPond[];
 }
 
+/** One photo of a handwritten notebook page. */
+export interface NotebookInput {
+  image: Blob;
+  ponds: RoundPond[];
+  /** Farm-local YYYY-MM-DD, for the mock page's dates. */
+  today: string;
+}
+
+/** The model's copy of the page, unchecked: notebook.ts guardNotebook() turns it into rows. */
+export interface NotebookRaw {
+  raw: Record<string, unknown>;
+  model: string;
+  mode: 'meta' | 'mock';
+}
+
 export class AiUnavailable extends Error {}
 export class AiFailed extends Error {}
 
@@ -56,6 +72,8 @@ export interface Ai {
   mode: 'meta' | 'mock' | 'off';
   draft(input: CaptureInput): Promise<Draft>;
   round(input: RoundInput): Promise<RoundResult>;
+  /** A notebook page photo → its rows as written (checked later by guardNotebook). */
+  notebook(input: NotebookInput): Promise<NotebookRaw>;
   /** Speech to plain text (a help message said instead of typed). Free: not counted against the quota. */
   transcribe(audio: Blob): Promise<string>;
 }
@@ -267,6 +285,17 @@ function liveAi(chat: ChatProvider[], transcriber?: Transcriber): Ai {
         return guardRound(raw, input.ponds, transcript, { model: `${provider.name}/${provider.model}`, mode: 'meta' });
       });
     },
+    async notebook(input) {
+      const content = [
+        { type: 'text', text: 'Salin halaman buku catatan ini.' },
+        { type: 'image_url', image_url: { url: await blobToDataUrl(input.image) } },
+      ];
+      return firstAnswer(chat, async (provider) => ({
+        raw: await chatJson(provider, notebookInstructions(input.ponds), content, 'notebook_page', NOTEBOOK_SCHEMA, 12000),
+        model: `${provider.name}/${provider.model}`,
+        mode: 'meta' as const,
+      }));
+    },
   };
 }
 
@@ -307,6 +336,9 @@ function mockAi(): Ai {
     async round(input) {
       return mockRound(input.ponds);
     },
+    async notebook(input) {
+      return { raw: mockNotebook(input.ponds, input.today), model: 'mock', mode: 'mock' };
+    },
   };
 }
 
@@ -315,7 +347,7 @@ export function withDailyCap(ai: Ai, cap: number, now = () => new Date()): Ai {
   if (ai.mode !== 'meta' || !(cap > 0)) return ai;
   let day = '';
   let used = 0;
-  // Photos, voice notes and rounds share one count.
+  // Photos, voice notes, rounds and notebook pages share one count.
   const take = () => {
     const today = now().toISOString().slice(0, 10);
     if (today !== day) [day, used] = [today, 0];
@@ -333,6 +365,10 @@ export function withDailyCap(ai: Ai, cap: number, now = () => new Date()): Ai {
       take();
       return ai.round(input);
     },
+    async notebook(input) {
+      take();
+      return ai.notebook(input);
+    },
   };
 }
 
@@ -344,5 +380,5 @@ export function createAi(opts: { chat: ChatProvider[]; transcriber?: Transcriber
   const off = async (): Promise<never> => {
     throw new AiUnavailable(tx('AI belum aktif. Isi manual dulu, atau coba lagi nanti.', 'The AI is not on yet. Type it in for now, or try again later.'));
   };
-  return { mode: 'off', draft: off, round: off, transcribe: off };
+  return { mode: 'off', draft: off, round: off, notebook: off, transcribe: off };
 }

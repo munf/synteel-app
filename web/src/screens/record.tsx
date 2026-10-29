@@ -288,6 +288,18 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
             </button>
           </div>
         ))}
+      {!quota && !shot && (
+        <button type="button" class="capture-tile nb-tile" onClick={() => go({ name: 'notebook' })} disabled={!!rec}>
+          <span class="icon-box">
+            <Icon name="book" />
+          </span>
+          <span class="grow stack-xs">
+            <span class="strong">{t('Foto buku catatan', 'Notebook photo')}</span>
+            <span class="meta">{t('Salin catatan lama dari buku ke aplikasi', 'Copy old records from the notebook into the app')}</span>
+          </span>
+          <Icon name="next" size={20} />
+        </button>
+      )}
       <input ref={photoInput} type="file" accept="image/*" capture="environment" hidden onChange={(e) => pickFile(e, 'photo')} />
       <input ref={videoInput} type="file" accept="video/*" capture="environment" hidden onChange={(e) => pickFile(e, 'video')} />
 

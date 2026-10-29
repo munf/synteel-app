@@ -12,6 +12,7 @@ import { Watch } from './screens/watch.tsx';
 import { RecordPond } from './screens/record-pond.tsx';
 import { Round } from './screens/round.tsx';
 import { History } from './screens/history.tsx';
+import { Notebook } from './screens/notebook.tsx';
 import { Quota } from './screens/quota.tsx';
 import { Help } from './screens/help.tsx';
 import { Alarm } from './screens/alarm.tsx';
@@ -34,7 +35,10 @@ export type Route =
   | { name: 'record-pond'; pondId: number }
   /** Check what a voice round heard; `queued` = a recording read later (offline or out of quota). */
   | { name: 'round'; queued?: string }
-  | { name: 'history'; pondId: number }
+  /** `days`: how far back to show (notebook pages can be older than the usual 14 days). */
+  | { name: 'history'; pondId: number; days?: number }
+  /** Foto buku catatan: notebook page photos → rows to check; `pondId` when started from a pond. */
+  | { name: 'notebook'; pondId?: number }
   | { name: 'quota' }
   | { name: 'help' }
   /** The night-check alarm, full screen. */
@@ -53,7 +57,7 @@ const tabs: { name: 'today' | 'record' | 'watch' | 'problem'; label: string; ico
 
 const TAB_OF: Partial<Record<Route['name'], (typeof tabs)[number]['name']>> = {
   pond: 'today', 'add-pond': 'today', profile: 'today', rewards: 'today', history: 'today', quota: 'today', help: 'today',
-  'record-pond': 'record', round: 'record', device: 'record',
+  'record-pond': 'record', round: 'record', device: 'record', notebook: 'record',
 };
 
 /** The simulator's QR opens …/app/?device=CODE: kept until someone is signed in to a farm, then opened. */
@@ -339,7 +343,9 @@ export function App() {
   } else if (route.name === 'round') {
     body = <Round ponds={state.ponds} queued={route.queued} onSaved={refresh} go={go} />;
   } else if (route.name === 'history') {
-    body = <History key={route.pondId} ponds={state.ponds} pondId={route.pondId} role={role} onChanged={refresh} go={go} />;
+    body = <History key={`${route.pondId}:${route.days ?? 0}`} ponds={state.ponds} pondId={route.pondId} days={route.days} role={role} onChanged={refresh} go={go} />;
+  } else if (route.name === 'notebook') {
+    body = <Notebook ponds={state.ponds} pondId={route.pondId} onSaved={refresh} go={go} />;
   } else if (route.name === 'quota') {
     body = <Quota role={role} go={go} />;
   } else if (route.name === 'help') {

@@ -1,6 +1,6 @@
 # Evaluation
 
-What we measured for each Meta model use in Synt Eel, how, and where it falls short. All live numbers below are from runs on 29-30 October 2026 (WIB) against the current code. The offline part can be re-run by anyone with `npm run eval` (no keys, no network); `npm test` runs the full test suite (101 tests).
+What we measured for each Meta model use in Synt Eel, how, and where it falls short. All live numbers below are from runs on 29-30 October 2026 (WIB) against the current code. The offline part can be re-run by anyone with `npm run eval` (no keys, no network); `npm test` runs the full test suite (124 tests).
 
 The app gives decision support. A model never diagnoses, never doses medicine, and never saves anything by itself: every count, voice log and meter reading is a draft the farmer confirms, and alarms come from fixed rules.
 
@@ -12,6 +12,7 @@ The app gives decision support. A model never diagnoses, never doses medicine, a
 | Muse Spark, voice log extraction | 3 typed Javanese/Indonesian rounds, 12 fields | 12 of 12 fields right, e.g. "selawe koma wolu" read as 25.8. 4.2-5.2 s per round |
 | Muse Voice Transcribe (ASR) | Synthetic voice only | Robot voice gave cut-off text. Real farmer recordings not measured yet |
 | Muse Spark vision, meter photos | Offline guard tests only | No accuracy number yet |
+| Muse Spark vision, notebook pages | 2 synthetic handwritten pages (+1 degraded copy), 5 live reads, 216 cells | 200 right, 16 hard cells left empty and flagged as meant, 0 wrong. Synthetic pages only; real notebooks not measured yet |
 | Evening briefing agent (Muse Spark Open on Baseten, Muse Spark 1.3 on Meta) | 6 live runs on the seeded demo farm | 6 of 6 finished with tool calls, 7-8 steps, 9.3-13.3 s. All 12 rule checks kept in every run. 0 to 4 extra checks proposed per run |
 | Deterministic rules and alarms | `npm run eval`, `npm test` | No model in the path; agent failure or bad output falls back to the rules |
 
@@ -95,6 +96,22 @@ The farmer photographs a pH, TDS or thermometer display; Muse Spark 1.3 reads it
 - when the Meta API answers 503, Muse Spark Open on Fireworks reads the photo instead;
 - without keys or in mock mode, drafts are labelled as examples, and the daily cap stops real reads.
 
+## Notebook pages: Muse Spark vision
+
+Farmers keep handwritten notebooks (date, pond, temperature, pH, TDS, dead eels, feed). "Foto buku catatan" reads a photo of one page into rows the farmer checks and then saves as history ([`server/src/notebook.ts`](../server/src/notebook.ts)). Muse Spark 1.3 only copies each cell as written and says which cells it is unsure of. Code then decides: the number is parsed from the written text, never taken from the model's own reading; a number for a blank cell is dropped; ditto marks are not filled in from the row above; dates without a year get the most recent date that has passed; pond names are matched locally; pH 74 or temperature 9 are left empty with 7.4 or 29 offered, not filled in. Every row is checked by the farmer before anything is saved, and a pond that already has a record that day is skipped unless the farmer asks.
+
+**Live check on synthetic pages.** No real notebook photos yet (they come from a field visit). Two pages were drawn with handwriting fonts on lined paper (wobble, slight rotation, blur, grain, uneven light) and kept out of the repo. Page 1: 8 rows over ponds A and B written as letters, October without a year, with pH written "74", a crossed-out pH, a ditto mark for a temperature and an unknown pond "pojok". Page 2: one pond in the title, "Sept 2026", pagi/sore, a temperature written "9" and a crossed-out TDS. A third read used page 1 shrunk to 1000 px, rotated, blurred and darkened. Cells scored: date, pond, temperature, pH, TDS, dead (6 per row).
+
+| Page | Reads | Cells per read | Right | Flagged as meant (the hard cells) | Wrong | Time |
+|---|---|---|---|---|---|---|
+| Page 1, 8 rows | 2 | 48 | 44 | 4 of 4 | 0 | 8.4, 9.2 s |
+| Page 1, degraded copy | 1 | 48 | 44 | 4 of 4 | 0 | 5.8 s |
+| Page 2, 6 rows | 2 | 36 | 34 | 2 of 2 | 0 | 6.9, 9.3 s |
+
+Every flag carried the right offer: pH "74" → 7.4, temperature "9" → 29, "pojok" → pick the pond. The crossed-out cells came back flagged with the model's best guess shown, not filled in. Times on page 2 (pagi → 07.00, sore → 17.00) and the year from the title were right in both reads. These pages are clean compared with a real notebook (one hand, ruled lines, no stains), so treat this as a smoke test of the pipeline, not an accuracy figure.
+
+**What the tests cover** ([`server/test/notebook.test.ts`](../server/test/notebook.test.ts), notebook rows of `npm run eval`): invented values for blank cells, the model "correcting" what is written, unsure and ditto cells, plausibility offers, year inference and future dates, pond matching and the pond the import started from, reading saves nothing, the shared AI quota, duplicate and repeated rows on save, and a bad row stopping the whole save.
+
 ## Evening briefing agent
 
 The agent ([`server/src/agent.ts`](../server/src/agent.ts)) looks at the farm through read-only tools (ponds, recent history, the night's oxygen-risk forecast, weather, the knowledge base) and submits a short summary with extra checks. Providers are tried in order: Muse Spark Open on Baseten, Muse Spark 1.3 on the Meta API, Muse Spark Open on Fireworks, then a rules-only briefing. Code then guards the proposal: every rule check is kept, agent checks must name a real pond and fall within 18 hours, a check close to a rule check is dropped as a duplicate, and anything about medicine or doses is removed.
@@ -135,14 +152,14 @@ Thresholds, the oxygen-risk score, the check schedule and the night alarms are p
 - Small samples: 14 photos, 3 typed voice rounds, 6 agent runs. Treat them as spot checks.
 - The count photos are from the internet, mostly live eels in good light. Dead eels in a farmer's net at dusk will look different.
 - Most true counts above 10 are hand counts by us, and the dense ones are approximate.
-- No field validation yet: no partner-farm count photos, voice recordings or meter photos have been scored.
+- No field validation yet: no partner-farm count photos, voice recordings, meter photos or notebook pages have been scored. The notebook pages above are synthetic.
 - The voice check skipped ASR. Real speech, wind and pumps at the pond will add errors before the extraction step.
 - The agent was run at one time of day on one seeded farm.
 
 ## Reproduce
 
 ```sh
-npm run eval   # offline: SAM fixture and count rules, voice and meter guards, agent guard and fallback, rules
+npm run eval   # offline: SAM fixture and count rules, voice, meter and notebook guards, agent guard and fallback, rules
 npm test       # full test suite
 ```
 
