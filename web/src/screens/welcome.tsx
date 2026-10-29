@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { api, type Me } from '../api.ts';
-import { Glyph, GLYPH, Icon, type IconName } from '../ui.tsx';
+import { Eel, Glyph, GLYPH, Icon, type IconName } from '../ui.tsx';
 
 export type SignInMode = 'login' | 'register' | 'join';
 
@@ -30,14 +30,7 @@ function PondArt() {
       <ellipse cx="155" cy="68" rx="150" ry="48" fill="#1C3461" />
       <path d="M24 56c20-8 36-8 56 0s36 8 56 0 36-8 56 0 36 8 56 0" fill="none" stroke="#2C4A80" stroke-width="3" stroke-linecap="round" />
       <path d="M40 98c20-8 36-8 56 0s36 8 56 0 36-8 56 0 36 8 56 0" fill="none" stroke="#2C4A80" stroke-width="3" stroke-linecap="round" />
-      <g transform="translate(36 52) scale(1.6)">
-        <path d="M8 20c9-7 18-7 28 0" fill="none" stroke="#FBD38D" stroke-width="3.5" stroke-linecap="round" />
-        <path d="M36 20c11 9 23 9 34 0" fill="none" stroke="#FBD38D" stroke-width="6.5" stroke-linecap="round" />
-        <path d="M70 20c11-9 24-9 36-3" fill="none" stroke="#FBD38D" stroke-width="9" stroke-linecap="round" />
-        <ellipse cx="114" cy="18.5" rx="11" ry="7" transform="rotate(12 114 18.5)" fill="#FBD38D" />
-        <path d="M100 23l-6 7 9-3z" fill="#FBD38D" />
-        <circle cx="119" cy="16.5" r="1.6" fill="#13264A" />
-      </g>
+      <Eel x={45} y={38} scale={1.2} />
       <circle cx="246" cy="22" r="8" fill="#FBD38D" />
       <path d="M246 6v4M246 34v4M230 22h4M258 22h4M235 11l3 3M254 30l3 3M235 33l3-3M254 14l3-3" stroke="#FBD38D" stroke-width="2.2" stroke-linecap="round" />
       <path d="M284 12a11 11 0 1 0 12 14 9 9 0 0 1-12-14z" fill="#C9D4EA" />

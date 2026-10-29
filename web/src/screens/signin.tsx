@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { api, API, ApiError, type Me, type Role } from '../api.ts';
 import { fmtClock } from '../labels.ts';
-import { Field, fmtPhone, Glyph, GLYPH, Icon, Notice, PinBoxes, roleLabel } from '../ui.tsx';
+import { Eel, Field, fmtPhone, Glyph, GLYPH, Icon, Notice, PinBoxes, roleLabel } from '../ui.tsx';
 import type { SignInMode } from './welcome.tsx';
 
 type Mode = SignInMode;
@@ -58,12 +58,7 @@ function Header() {
         <span class="title">synteel</span>
         <svg width="150" height="36" viewBox="0 0 150 36" aria-hidden="true" style={{ marginLeft: 'auto', flex: 'none' }}>
           <path d="M0 30c12-5 22-5 34 0s22 5 34 0 22-5 34 0 22 5 34 0" fill="none" stroke="#2C4471" stroke-width="2.5" stroke-linecap="round" />
-          <path d="M8 20c9-7 18-7 28 0" fill="none" stroke="#FBD38D" stroke-width="3.5" stroke-linecap="round" />
-          <path d="M36 20c11 9 23 9 34 0" fill="none" stroke="#FBD38D" stroke-width="6.5" stroke-linecap="round" />
-          <path d="M70 20c11-9 24-9 36-3" fill="none" stroke="#FBD38D" stroke-width="9" stroke-linecap="round" />
-          <ellipse cx="114" cy="18.5" rx="11" ry="7" transform="rotate(12 114 18.5)" fill="#FBD38D" />
-          <path d="M100 23l-6 7 9-3z" fill="#FBD38D" />
-          <circle cx="119" cy="16.5" r="1.6" fill="#13264A" />
+          <Eel x={2} y={-3} scale={0.62} />
           <circle cx="134" cy="9" r="2.5" fill="none" stroke="#5E7BB0" stroke-width="1.8" />
           <circle cx="141" cy="3" r="1.6" fill="none" stroke="#5E7BB0" stroke-width="1.6" />
         </svg>
