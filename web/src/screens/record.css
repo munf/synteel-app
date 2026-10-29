@@ -92,3 +92,5 @@
 .rp-tip-icon { width: 40px; height: 40px; flex: none; border-radius: 12px; background: var(--tint); color: var(--accent-ink); display: flex; align-items: center; justify-content: center; }
 
 .rp-done { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; font-size: 0.875rem; font-weight: 600; color: var(--ok); font-variant-numeric: tabular-nums; }
+
+.rp-row-name .soon.sim { margin-left: 0; }

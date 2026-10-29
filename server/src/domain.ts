@@ -50,7 +50,9 @@ export interface LogData {
   note?: string;
 }
 
-export type LogSource = 'manual' | 'voice' | 'photo' | 'video';
+/** 'sensor': written by a linked Synteel device (devices.ts), never sent by the app. */
+export type LogSource = 'manual' | 'voice' | 'photo' | 'video' | 'sensor';
+/** What the app may send as a log's source. */
 export const LOG_SOURCES: LogSource[] = ['manual', 'voice', 'photo', 'video'];
 
 export type ReadingKey = keyof NonNullable<LogData['readings']>;

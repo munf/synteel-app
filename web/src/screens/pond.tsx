@@ -4,7 +4,7 @@ import { api, ApiError, type Limits, type Log, type NowcastState, type PondProfi
 import type { Go } from '../app.tsx';
 import { aerationLabel, fmtAgo, fmtNum, fmtTemp, fmtTime, phaseLabel, readingWord, settingLabel, sourceLabel, summarizeLog } from '../labels.ts';
 import { usePrefs } from '../prefs.ts';
-import { ActionBar, Icon, kindLabel, Shape, Soon, StatusPill, tankPath, toneOf } from '../ui.tsx';
+import { ActionBar, Icon, kindLabel, Notice, Shape, SimChip, Soon, StatusPill, tankPath, toneOf, type Tone } from '../ui.tsx';
 import { isEn, LOCALE, t } from '../i18n.ts';
 import './pond.css';
 
@@ -35,7 +35,11 @@ export const plainSource = (s: string) =>
 
 /** Program text in plain words: NO₂ is "nitrit" on the farm. */
 const plainWater = (s: string) =>
-  s.replace(/NO₂/g, t('nitrit', 'nitrite')).replace(/NO₃/g, t('nitrat', 'nitrate')).replace(/\bTAN\b/g, t('amonia', 'ammonia'));
+  s
+    .replace(/NO₂/g, t('nitrit', 'nitrite'))
+    .replace(/NO₃/g, t('nitrat', 'nitrate'))
+    .replace(/\bTAN\b/g, t('amonia', 'ammonia'))
+    .replace(/\bDO\b/g, t('oksigen', 'oxygen'));
 
 /** The kind of feed without portions: feed percentages belong in Teknis only. */
 const feedKind = (feed: string) =>
@@ -122,6 +126,162 @@ function MetricCard({ pond, logs }: { pond: PondSummary; logs: Log[] }) {
         </div>
       )}
       <p>{sentence}</p>
+    </section>
+  );
+}
+
+// Readings only a Synteel device sends (a farmer measures these with a test kit, rarely).
+// Limits from knowledge/thresholds.json: oxygen target at least 6, Perhatian below 5, Bahaya below 4;
+// ammonia Perhatian above 0.5, Bahaya above 1; nitrite Perhatian above 0.3, Bahaya above 0.5.
+type SensorKey = 'do' | 'tan' | 'no2';
+const SENSOR_ROWS: { key: SensorKey; label: string; low: boolean; warn: number; bad: number; limit: string }[] = [
+  { key: 'do', label: t('Oksigen', 'Oxygen'), low: true, warn: 5, bad: 4, limit: t('minimal 6', 'at least 6') },
+  { key: 'tan', label: t('Amonia', 'Ammonia'), low: false, warn: 0.5, bad: 1, limit: t('batas 0,5', 'limit 0.5') },
+  { key: 'no2', label: t('Nitrit', 'Nitrite'), low: false, warn: 0.3, bad: 0.5, limit: t('batas 0,3', 'limit 0.3') },
+];
+
+function sensorWord(row: (typeof SENSOR_ROWS)[number], v: number): { text: string; tone: Tone } {
+  const past = (limit: number) => (row.low ? v < limit : v > limit);
+  if (past(row.bad)) return { text: row.low ? t('Terlalu rendah', 'Too low') : t('Terlalu tinggi', 'Too high'), tone: 'bad' };
+  if (past(row.warn)) return { text: row.low ? t('Agak rendah', 'A bit low') : t('Agak tinggi', 'A bit high'), tone: 'warn' };
+  return { text: t('Baik', 'Good'), tone: 'ok' };
+}
+
+/** Oxygen, ammonia and nitrite from the device sensor, in the same word + shape pattern as the other readings. */
+function SensorCard({ pond }: { pond: PondSummary }) {
+  const rows = SENSOR_ROWS.filter((r) => pond.latest[r.key]);
+  if (rows.length === 0) return null;
+  const at = Math.max(...rows.map((r) => Date.parse(pond.latest[r.key]!.at)));
+  return (
+    <section class="card">
+      <div class="stack-xs">
+        <h2>{t('Ukuran sensor', 'Sensor readings')}</h2>
+        <span class="meta">{t(`Diukur oleh sensor · ${sinceText(at)}`, `Measured by the sensor · ${sinceText(at)}`)}</span>
+      </div>
+      <div class="readings">
+        {rows.map((r) => {
+          const v = pond.latest[r.key]!.value;
+          const w = sensorWord(r, v);
+          return (
+            <div class="reading" key={r.key}>
+              <span class="k sensor-k">{r.label}</span>
+              <span class="v">
+                {fmtNum(Math.round(v * 100) / 100)} <span class="label ink2" style={{ fontWeight: 600 }}>mg/L</span>
+              </span>
+              <span class={`word ${w.tone}`}>
+                <Shape tone={w.tone} />
+                {w.text}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <span class="meta">{rows.map((r) => `${r.label} ${r.limit} mg/L`).join(' · ')}</span>
+    </section>
+  );
+}
+
+/** "2 menit lalu", or "baru saja" within the first minute (sensor readings are that fresh). */
+const sinceText = (at: number) => (Date.now() - at < 60_000 ? t('baru saja', 'just now') : fmtAgo(at));
+
+/** "Alat Synteel": which device feeds this pond, or a way to connect one. */
+function DeviceCard({ pond, logs, ponds, role, go, onChanged }: { pond: PondSummary; logs: Log[]; ponds: PondSummary[]; role?: Role | null; go: Go; onChanged: () => unknown }) {
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const d = pond.device;
+  const owner = role === 'owner';
+
+  if (!d)
+    return (
+      <section class="card">
+        <div class="row">
+          <span class="icon-box grey">
+            <Icon name="wifi" />
+          </span>
+          <div class="stack-xs grow">
+            <h2>{t('Alat Synteel', 'Synteel device')}</h2>
+            <span class="label ink2">{t('Belum ada alat yang mengirim angka ke kolam ini.', 'No device sends readings to this pond yet.')}</span>
+          </div>
+        </div>
+        <p class="label ink2">
+          {t(
+            'Alat simulasi membuat kolam simulasi baru sendiri, jadi kolam ini tidak berubah.',
+            'A simulated device makes new simulation ponds of its own, so this pond does not change.',
+          )}
+        </p>
+        <button type="button" class="btn secondary" onClick={() => go({ name: 'device' })}>
+          <Icon name="wifi" /> {t('Hubungkan alat', 'Connect a device')}
+        </button>
+      </section>
+    );
+
+  const lastSensor = logs.find((l) => l.source === 'sensor');
+  const siblings = ponds.filter((p) => p.device?.code === d.code);
+  const names = (siblings.length ? siblings : [pond]).map((p) => p.name);
+  const nameList = names.length > 1 ? `${names.slice(0, -1).join(', ')} ${t('dan', 'and')} ${names.at(-1)}` : names[0];
+
+  const unlink = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      await api.unlinkDevice(d.code);
+      await onChanged();
+      go({ name: 'record' });
+    } catch (err) {
+      setError((err as Error).message);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section class="card">
+      <div class="row top">
+        <span class="icon-box">
+          <Icon name="wifi" />
+        </span>
+        <div class="stack-xs grow">
+          <span class="meta">{t('Alat Synteel', 'Synteel device')}</span>
+          <span class="strong">
+            {t(`Terhubung ke ${d.name} · ${d.unitName}`, `Connected to ${d.name} · ${d.unitName}`)}
+            {d.simulated && <SimChip pond={d} />}
+          </span>
+          <span class="label ink2 num">
+            {t('Kode', 'Code')} {d.code}
+          </span>
+          <span class="label ink2">
+            {lastSensor
+              ? t(`Angka terakhir dari sensor ${sinceText(Date.parse(lastSensor.loggedAt))}`, `Last sensor reading ${sinceText(Date.parse(lastSensor.loggedAt))}`)
+              : t('Belum ada angka dari sensor', 'No sensor readings yet')}
+          </span>
+        </div>
+      </div>
+      {owner && !asking && (
+        <button type="button" class="btn secondary" onClick={() => setAsking(true)}>
+          {t('Putuskan alat', 'Disconnect the device')}
+        </button>
+      )}
+      {owner && asking && (
+        <div class="stack">
+          <Notice tone="bad" icon="alert" title={t('Putuskan alat ini?', 'Disconnect this device?')}>
+            {d.simulated
+              ? t(
+                  `Kolam simulasi dari alat ini dihapus dari daftar: ${nameList}. Catatannya ikut hilang. Kolam lain tidak berubah.`,
+                  `The simulation ponds of this device are removed from the list: ${nameList}. Their records go with them. Other ponds do not change.`,
+                )
+              : t('Angka dari alat berhenti masuk. Kolam dan catatannya tetap ada.', 'Readings from the device stop coming in. The pond and its records stay.')}
+          </Notice>
+          {error && <p class="error">{error}</p>}
+          <div class="grid2" style={{ gap: 8 }}>
+            <button type="button" class="btn danger" disabled={busy} onClick={unlink}>
+              {busy ? t('Memutus…', 'Disconnecting…') : t('Putuskan', 'Disconnect')}
+            </button>
+            <button type="button" class="btn secondary" disabled={busy} onClick={() => setAsking(false)}>
+              {t('Batal', 'Cancel')}
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -222,7 +382,23 @@ function Nicknames({ pond, role, onSaved }: { pond: PondSummary; role?: Role | n
   );
 }
 
-export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: NowcastState | null; role?: Role | null; go: Go }) {
+export function PondDetail({
+  id,
+  nowcast,
+  role,
+  ponds = [],
+  onChanged = () => {},
+  go,
+}: {
+  id: number;
+  nowcast: NowcastState | null;
+  role?: Role | null;
+  /** The farm's ponds, to name a device's other ponds before disconnecting it. */
+  ponds?: PondSummary[];
+  /** The farm changed here (device disconnected): reload it. */
+  onChanged?: () => unknown;
+  go: Go;
+}) {
   const prefs = usePrefs();
   const [data, setData] = useState<{ pond: PondSummary; logs: Log[] } | null>(null);
   const [error, setError] = useState('');
@@ -232,6 +408,16 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
   useEffect(() => {
     api.pond(id).then(setData, (e) => setError(e.message));
   }, [id]);
+
+  // A pond fed by a device gets new readings by itself: reload every 30 seconds while the app is in front.
+  const hasDevice = Boolean(data?.pond.device);
+  useEffect(() => {
+    if (!hasDevice) return;
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') api.pond(id).then(setData, () => {});
+    }, 30_000);
+    return () => clearInterval(timer);
+  }, [id, hasDevice]);
 
   if (error)
     return (
@@ -276,7 +462,10 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
 
       <header class="row top between">
         <div class="stack-xs">
-          <h1>{pond.name}</h1>
+          <h1>
+            {pond.name}
+            <SimChip pond={pond} />
+          </h1>
           <span class="meta">
             {[pond.kind && (kindLabel[pond.kind] ?? pond.kind), pond.batch && phaseLabel[pond.batch.phase], pond.program && `${t('minggu', 'week')} ${pond.program.week}`].filter(Boolean).join(' · ') ||
               t('Belum ada batch', 'No batch yet')}
@@ -383,6 +572,8 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
       )}
 
       <MetricCard pond={pond} logs={logs} />
+
+      <SensorCard pond={pond} />
 
       {!tech && (
         <button class="card history-row" onClick={() => go({ name: 'history', pondId: pond.id })}>
@@ -516,6 +707,8 @@ export function PondDetail({ id, nowcast, role, go }: { id: number; nowcast: Now
           </section>
         </>
       )}
+
+      <DeviceCard pond={pond} logs={logs} ponds={ponds} role={role} go={go} onChanged={onChanged} />
 
       <ActionBar>
         <button class="btn primary" onClick={() => go({ name: 'record-pond', pondId: pond.id })}>

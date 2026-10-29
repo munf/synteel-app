@@ -14,7 +14,7 @@ export const readingLabel: Record<ReadingKey, { name: string; unit: string }> = 
   temperature: { name: t('Suhu', 'Temperature'), unit: '°C' },
   ph: { name: 'pH', unit: '' },
   tds: { name: 'TDS', unit: 'ppm' },
-  do: { name: 'DO', unit: 'mg/L' },
+  do: { name: t('Oksigen', 'Oxygen'), unit: 'mg/L' },
   tan: { name: t('Amonia', 'Ammonia'), unit: 'mg/L' },
   no2: { name: t('Nitrit', 'Nitrite'), unit: 'mg/L' },
 };
@@ -33,6 +33,7 @@ export const sourceLabel: Record<LogSource, string> = {
   voice: t('Suara · AI, dicek', 'Voice · AI, checked'),
   photo: t('Foto alat · AI, dicek', 'Meter photo · AI, checked'),
   video: t('Video · AI, dicek', 'Video · AI, checked'),
+  sensor: 'Sensor',
 };
 
 const LOW = [t('Agak rendah', 'A bit low'), t('Terlalu rendah', 'Too low')];

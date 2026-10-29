@@ -5,7 +5,7 @@ import { canRecordAudio, startRecording, voiceToWav } from '../capture/media.ts'
 import { queue as captures, type Job } from '../capture/queue.ts';
 import { fmtAgo, fmtClock, phaseLabel } from '../labels.ts';
 import { clips, joinWav, newId, onClips, retryAll, type Clip } from '../queue.ts';
-import { Icon, PondPicker, PondThumb, pondMeta, Shape, toneOf } from '../ui.tsx';
+import { Icon, PondPicker, PondThumb, pondMeta, Shape, SimChip, toneOf } from '../ui.tsx';
 import { fmtDur, Glyph, handToPond, isDenied, MicAsk, MicDenied, MicGranted, recordedToday, RecordPond, sortForRecording, useMic, useTick } from './record-pond.tsx';
 import { t } from '../i18n.ts';
 import './record.css';
@@ -329,9 +329,14 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
         </div>
 
         {state.role === 'owner' && (
-          <button type="button" class="btn dashed" onClick={() => go({ name: 'add-pond' })}>
-            <Icon name="plus" /> {t('Tambah kolam', 'Add a pond')}
-          </button>
+          <div class="stack-sm" style={{ gap: 12 }}>
+            <button type="button" class="btn dashed" onClick={() => go({ name: 'add-pond' })}>
+              <Icon name="plus" /> {t('Tambah kolam', 'Add a pond')}
+            </button>
+            <button type="button" class="btn secondary" onClick={() => go({ name: 'device' })}>
+              <Icon name="wifi" /> {t('Hubungkan alat Synteel', 'Connect a Synteel device')}
+            </button>
+          </div>
         )}
       </section>
     </div>
@@ -356,6 +361,7 @@ function PondRow({ pond: p, today, go }: { pond: PondSummary; today: boolean; go
         <span class="grow stack-xs" style={{ gap: 2 }}>
           <span class="rp-row-name">
             {p.name}
+            <SimChip pond={p} />
             {needsAttention(p) && (
               <span class={`word ${tone}`} style={{ gap: 6 }}>
                 <Shape tone={tone} />

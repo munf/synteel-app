@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
+import { deviceStore } from './devices.ts';
 import type { Aeration, Batch, Farm, Log, LogData, Phase, Pond, Setting } from './domain.ts';
 
 const defaultPath = fileURLToPath(new URL('../../data/synteel.sqlite', import.meta.url));
@@ -368,6 +369,7 @@ export function repo(db: Db) {
   const now = () => new Date().toISOString();
   return {
     farm: (farmId: number) => farmRepo(db, farmId),
+    devices: deviceStore(db),
 
     createFarm(f: Farm, ownerId: number): number {
       const { lastInsertRowid } = db

@@ -6,6 +6,7 @@ import type { HistoryLog, QuotaState, SupportTopic } from './contract.ts';
 import type { SendMail } from './mail.ts';
 import { attemptLimiter, AuthError, checkPin, hashPin, hashToken, inviteCode, newToken, normalizePhone, tempPin, verifyPin } from './auth.ts';
 import { knowledge } from './knowledge.ts';
+import { KINDS, SCENARIOS, sendEveryMs, simulate, toLogData, type Device, type DeviceKind, type Scenario } from './devices.ts';
 import { currentLang, parseLang, tx, withLang } from './i18n.ts';
 import { AiFailed, AiUnavailable, type Ai, type CaptureKind, type ChatProvider } from './ai.ts';
 import { rulesBriefing, runBriefing, type Briefing, type BriefingInput } from './agent.ts';
@@ -308,7 +309,14 @@ export function createApi(
     }
 
     const lastLogAt = logs[0]?.loggedAt ?? null;
-    return { ...pond, batch, program, latest, limits, status, lastLogAt, findings, level: overallLevel(findings) };
+    const link = store.devices.forPond(pond.id);
+    // Someone is looking at the pond: keep its simulated device sending.
+    if (link) store.devices.seen(link.code, now.getTime());
+    const device = link
+      ? { code: link.code, kind: link.device.kind, name: KINDS[link.device.kind].name(), unit: link.unit, unitName: KINDS[link.device.kind].units.find((u) => u.id === link.unit)?.name() ?? link.unit, simulated: link.device.simulated }
+      : null;
+    // A pond fed by a simulated device holds simulated data only (it was made for the device).
+    return { ...pond, batch, program, latest, limits, status, lastLogAt, findings, level: overallLevel(findings), device, simulated: device?.simulated ?? false };
   }
 
   /** Days in a row with at least one measured reading on any pond, counting today or, if not yet, yesterday. */
@@ -653,6 +661,75 @@ export function createApi(
     }
   }
 
+  // ---------- device simulator (eel.synt.fun/sim): no account needed, the code is the key ----------
+
+  const simLimiter = attemptLimiter(20, 60 * 60_000, undefined, () => tx('Terlalu banyak alat simulasi. Coba lagi 1 jam lagi.', 'Too many simulated devices. Try again in 1 hour.'));
+
+  function deviceView(d: Device, now: number) {
+    const spec = KINDS[d.kind];
+    return {
+      code: d.code,
+      kind: d.kind,
+      name: spec.name(),
+      simulated: d.simulated,
+      scenario: d.scenario,
+      scenarioAt: d.scenarioAt,
+      units: spec.units.map((u) => ({ id: u.id, name: u.name() })),
+      sensors: spec.sensors(),
+      state: simulate(d, now),
+      linked: store.devices.links(d.code).length > 0,
+    };
+  }
+  const findDevice = (code: string) => {
+    const d = store.devices.get(code);
+    if (!d) throw new NotFound(tx('Kode alat tidak dikenal. Periksa lagi hurufnya.', 'Unknown device code. Check the letters again.'));
+    return d;
+  };
+
+  api.post('/sim/devices', async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const kind = (oneOf<DeviceKind>(body.kind, Object.keys(KINDS) as DeviceKind[], 'jenis alat') ?? 'gen5') as DeviceKind;
+    const key = `ip:${clientIp(c)}`;
+    simLimiter.check(key);
+    simLimiter.fail(key);
+    const d = store.devices.create(kind, clock().getTime());
+    return c.json({ device: deviceView(d, clock().getTime()) }, 201);
+  });
+
+  api.get('/sim/devices/:code', (c) => {
+    const d = findDevice(c.req.param('code'));
+    const now = clock().getTime();
+    store.devices.seen(d.code, now);
+    return c.json({ device: deviceView(d, now) });
+  });
+
+  api.post('/sim/devices/:code/scenario', async (c) => {
+    const d = findDevice(c.req.param('code'));
+    const scenario = oneOf<Scenario>((await c.req.json()).scenario, SCENARIOS, 'skenario');
+    if (!scenario) throw new BadRequest(tx('Skenario wajib dipilih', 'Choose a scenario'));
+    const now = clock().getTime();
+    store.devices.setScenario(d.code, scenario, now);
+    store.devices.resend(d.code);
+    sendDeviceLogs();
+    return c.json({ device: deviceView(store.devices.get(d.code)!, now) });
+  });
+
+  /** Writes a log for every linked device that is due (called every minute by the server, and after a scenario change). */
+  function sendDeviceLogs() {
+    const now = clock().getTime();
+    let sent = 0;
+    for (const l of store.devices.active(now)) {
+      if (l.lastSentAt !== null && now - l.lastSentAt < sendEveryMs(l.device, now) - 5_000) continue;
+      const r = store.farm(l.farmId);
+      const pond = r.getPond(l.pondId);
+      if (!pond) continue;
+      r.addLog({ pondId: pond.id, batchId: r.activeBatch(pond.id)?.id ?? null, loggedAt: new Date(now).toISOString(), source: 'sensor', data: toLogData(simulate(l.device, now), l.unit) });
+      store.devices.sent(l.code, l.unit, now);
+      sent++;
+    }
+    return sent;
+  }
+
   // ---------- everything below needs a session ----------
 
   api.use('*', async (c, next) => {
@@ -752,6 +829,59 @@ export function createApi(
     const r = needOwner(c);
     r.saveFarm(farm);
     return c.json({ farm: r.getFarm() });
+  });
+
+  // ---------- Synteel devices: "Hubungkan alat" in the app ----------
+
+  api.get('/devices/:code', (c) => {
+    const r = needFarm(c);
+    const d = findDevice(c.req.param('code'));
+    const now = clock().getTime();
+    store.devices.seen(d.code, now);
+    const links = store.devices.links(d.code);
+    return c.json({
+      device: {
+        ...deviceView(d, now),
+        linkedHere: links.some((l) => l.farmId === r.farmId),
+        linkedElsewhere: links.some((l) => l.farmId !== r.farmId),
+        ponds: links.filter((l) => l.farmId === r.farmId).map((l) => r.getPond(l.pondId)).filter(Boolean),
+      },
+    });
+  });
+
+  // Links every unit of the device. A simulated device gets new ponds of its own, marked as simulation.
+  api.post('/devices/:code/link', (c) => {
+    const r = needOwner(c);
+    const d = findDevice(c.req.param('code'));
+    const now = clock();
+    store.devices.seen(d.code, now.getTime());
+    const links = store.devices.links(d.code);
+    if (links.some((l) => l.farmId !== r.farmId)) throw new BadRequest(tx('Alat ini sudah terhubung ke tambak lain.', 'This device is already connected to another farm.'));
+    if (!links.length) {
+      if (!d.simulated) throw new BadRequest(tx('Alat asli belum bisa dihubungkan.', 'Real devices cannot be connected yet.'));
+      const spec = KINDS[d.kind];
+      const today = localDate(now, timezone(r));
+      for (const u of spec.units) {
+        const pond = r.addPond({ name: `Gen5 ${u.name()}`, kind: 'gen5', volumeL: null, areaM2: null, setting: 'indoor', shaded: null, aeration: 'full', depthCm: null });
+        // A glass eel batch in week 3, so the program, the rules and the forecast have something to work with.
+        r.startBatch({ pondId: pond.id, phase: 'glass_eel', stockedAt: localDate(new Date(now.getTime() - 17 * DAY_MS), timezone(r)), initialCount: 3000 }, today);
+        store.devices.link({ code: d.code, farmId: r.farmId, unit: u.id, pondId: pond.id }, now.getTime());
+      }
+      sendDeviceLogs();
+    }
+    const ponds = store.devices.links(d.code).map((l) => r.getPond(l.pondId)).filter((p): p is Pond => p !== null);
+    return c.json({ ponds: ponds.map((p) => pondSummary(r, p)) }, 201);
+  });
+
+  // Unlinking a simulated device also removes its simulated ponds.
+  api.post('/devices/:code/unlink', (c) => {
+    const r = needOwner(c);
+    const d = findDevice(c.req.param('code'));
+    const links = store.devices.links(d.code).filter((l) => l.farmId === r.farmId);
+    if (!links.length) throw new BadRequest(tx('Alat ini tidak terhubung ke tambak ini.', 'This device is not connected to this farm.'));
+    if (d.simulated) for (const l of links) r.archivePond(l.pondId);
+    store.devices.unlink(d.code);
+    return c.body(null, 204);
   });
 
   api.get('/briefing', async (c) => {
@@ -1128,6 +1258,8 @@ export function createApi(
   // For the server's own background monitor, which has no session.
   return Object.assign(api, {
     nowcastFarm: (farmId: number) => nowcastAll(store.farm(farmId)),
+    /** Linked Synteel devices: write the logs that are due. Called every minute. */
+    sendDeviceLogs,
     /** The evening run: a briefing for every farm with ponds that has none yet today, from `hour` local time. */
     async briefFarms(hour = 17) {
       for (const id of store.farmIds()) {

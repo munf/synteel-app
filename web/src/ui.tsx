@@ -107,6 +107,9 @@ export function StatusPill({ level, children }: { level: Level; children?: Compo
 /** Marks a part of the design that is not live yet. */
 export const Soon = ({ children = t('Belum tersedia', 'Not available yet') }: { children?: ComponentChildren }) => <span class="soon">{children}</span>;
 
+/** A pond fed by a simulated Synteel device: grey like "Belum tersedia", no shape (it is not a status). */
+export const SimChip = ({ pond }: { pond: { simulated?: boolean } }) => (pond.simulated ? <span class="soon sim">{t('Simulasi', 'Simulation')}</span> : null);
+
 // ---------- pond thumbnail: the farmer's photo later; a line drawing of the pond type for now ----------
 // Line drawings, never a plain circle or square: those shapes mean Aman and Perhatian.
 
@@ -114,6 +117,8 @@ const TANK: Record<string, string> = {
   bulat: 'M5 7c0-1.7 3.1-3 7-3s7 1.3 7 3v10c0 1.7-3.1 3-7 3s-7-1.3-7-3zM5 7c0 1.7 3.1 3 7 3s7-1.3 7-3M5 13c2 .8 4.3 1.2 7 1.2s5-.4 7-1.2',
   terpal: 'M3 8h18l-2 11H5zM6.5 12.5c1.4-.9 2.8-.9 4.2 0s2.8.9 4.2 0 2.4-.8 3.1-.4',
   fiber: 'M4 6h16v3H4zM5 9l1 10h12l1-10M8 14c1.3-.8 2.7-.8 4 0s2.7.8 4 0',
+  // A Synteel Nursery tank with its sensor probe.
+  gen5: 'M4 8h16v12H4zM4 13c2.7-1 5.3-1 8 0s5.3 1 8 0M15 3v9M13 3h4',
 };
 export const tankPath = (kind: string | null) => TANK[kind === 'beton' ? 'terpal' : (kind ?? 'terpal')] ?? TANK.terpal;
 export const kindLabel: Record<string, string> = {
@@ -121,6 +126,7 @@ export const kindLabel: Record<string, string> = {
   terpal: t('Terpal', 'Tarp'),
   beton: t('Beton', 'Concrete'),
   fiber: t('Bak fiber', 'Fiber tub'),
+  gen5: 'Synteel Nursery Gen5',
 };
 
 export function PondThumb({ kind, size = 56 }: { kind: string | null; size?: number }) {
@@ -186,7 +192,10 @@ export function PondPicker({
           </span>
         )}
         <span class="grow stack-xs">
-          <span class="h2">{cur ? cur.name : (placeholder ?? t('Pilih kolam', 'Choose a pond'))}</span>
+          <span class="h2">
+            {cur ? cur.name : (placeholder ?? t('Pilih kolam', 'Choose a pond'))}
+            {cur && <SimChip pond={cur} />}
+          </span>
           <span class="meta">{cur ? pondMeta(cur) : t('Belum dipilih', 'Not chosen yet')}</span>
         </span>
         <Icon name="down" />
@@ -215,7 +224,9 @@ export function PondPicker({
               >
                 <PondThumb kind={p.kind} size={40} />
                 <span class="grow stack-xs">
-                  <span class="strong">{p.name}</span>
+                  <span class="strong">
+                    {p.name} <SimChip pond={p} />
+                  </span>
                   <span class="meta">{pondMeta(p)}</span>
                 </span>
                 <span class={`word ${toneOf(p.level)}`}>

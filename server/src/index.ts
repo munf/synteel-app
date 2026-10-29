@@ -37,6 +37,15 @@ const monitor = startMonitor(
   (change) => console.log(`risk up: pond ${change.pondId} ${change.from} → ${change.to}: ${change.reasons.join('; ')}`),
 );
 
+// Linked Synteel devices (today: simulated ones from eel.synt.fun/sim) send their readings.
+setInterval(() => {
+  try {
+    api.sendDeviceLogs();
+  } catch (err) {
+    console.error('device logs:', err);
+  }
+}, 60_000);
+
 // Evening briefing: check every 10 minutes; each farm gets one from 17.00 local time.
 setInterval(() => api.briefFarms().catch((err) => console.error('briefings:', err)), 10 * 60_000);
 

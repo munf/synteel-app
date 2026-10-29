@@ -21,6 +21,7 @@ const SRC: Record<LogSource, { short: string; long: string; icon: IconName; ai: 
   photo: { short: t('Foto', 'Photo'), long: t('Foto alat ukur, dibaca AI lalu dicek', 'Photo of a meter, read by the AI then checked'), icon: 'camera', ai: true },
   video: { short: 'Video', long: t('Video harian, dibaca AI lalu dicek', 'Daily video, read by the AI then checked'), icon: 'video', ai: true },
   manual: { short: t('Ketik', 'Typed'), long: t('Diketik manual', 'Typed in'), icon: 'pencil', ai: false },
+  sensor: { short: 'Sensor', long: t('Diukur oleh sensor alat Synteel', 'Measured by a Synteel device sensor'), icon: 'wifi', ai: false },
 };
 
 const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
@@ -380,7 +381,7 @@ export function History({ ponds, pondId, role, onChanged, go }: { ponds: PondSum
                         <Icon name={src.icon} size={16} />
                         {src.short}
                       </span>
-                      <span class="h-who">· {l.by ? `${l.by.name}, ${roleLabel[l.by.role].toLowerCase()}` : t('sebelum ada akun', 'before accounts')}</span>
+                      <span class="h-who">· {l.by ? `${l.by.name}, ${roleLabel[l.by.role].toLowerCase()}` : l.source === 'sensor' ? t('alat Synteel', 'Synteel device') : t('sebelum ada akun', 'before accounts')}</span>
                       {!l.canEdit && (
                         <span class="h-ico" aria-label={t('terkunci', 'locked')}>
                           <LockIcon />

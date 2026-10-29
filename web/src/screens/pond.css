@@ -1,3 +1,4 @@
 /* Pond detail: parts not in the shared stylesheet. */
 .card.history-row { flex-direction: row; align-items: center; gap: 12px; padding: 16px 20px; border: 0; width: 100%; text-align: left; color: var(--ink); }
 .nick-btn { min-height: 44px; flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border: 0; border-radius: 12px; background: var(--surface); color: var(--ink); font-size: 0.875rem; font-weight: 800; }
+.reading .k.sensor-k { width: 5.5em; }

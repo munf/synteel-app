@@ -1,3 +1,6 @@
 /* Beranda: parts not in the shared stylesheet. */
 /* Pond glyph on a white card sits in a neutral tile (FAKTA: #EEF2F7, radius 12). */
 .pond-card .thumb { background: var(--bg); border-radius: 12px; }
+.sensor-alarm { font-size: 1rem; }
+.sensor-alarm .btn.secondary { background: var(--surface); }
+:root[data-theme='night'] .sensor-alarm .btn.danger { color: #2a0d0d; }

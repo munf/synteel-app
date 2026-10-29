@@ -15,8 +15,10 @@ import { History } from './screens/history.tsx';
 import { Quota } from './screens/quota.tsx';
 import { Help } from './screens/help.tsx';
 import { Alarm } from './screens/alarm.tsx';
+import { ConnectDevice, formatCode } from './screens/device.tsx';
+import { checkSensorAlarms } from './sensor-alarm.ts';
 import { useAlarms, useWatchDot } from './alarms.ts';
-import { ConnectionBanner, Icon, type IconName } from './ui.tsx';
+import { ConnectionBanner, Icon, Notice, type IconName } from './ui.tsx';
 import { t } from './i18n.ts';
 
 export type Route =
@@ -36,7 +38,9 @@ export type Route =
   | { name: 'quota' }
   | { name: 'help' }
   /** The night-check alarm, full screen. */
-  | { name: 'alarm'; at: number; pondId: number };
+  | { name: 'alarm'; at: number; pondId: number }
+  /** Hubungkan alat: link a Synteel device by its code (typed, scanned, or from a ?device= link). */
+  | { name: 'device'; code?: string };
 
 export type Go = (r: Route) => void;
 
@@ -49,8 +53,18 @@ const tabs: { name: 'today' | 'record' | 'watch' | 'problem'; label: string; ico
 
 const TAB_OF: Partial<Record<Route['name'], (typeof tabs)[number]['name']>> = {
   pond: 'today', 'add-pond': 'today', profile: 'today', rewards: 'today', history: 'today', quota: 'today', help: 'today',
-  'record-pond': 'record', round: 'record',
+  'record-pond': 'record', round: 'record', device: 'record',
 };
+
+/** The simulator's QR opens …/app/?device=CODE: kept until someone is signed in to a farm, then opened. */
+const linkedDevice = new URLSearchParams(location.search).get('device');
+
+/** Drop ?device= from the address once used, so a reload does not open it again. */
+function forgetDeviceParam() {
+  const u = new URL(location.href);
+  u.searchParams.delete('device');
+  history.replaceState(history.state, '', u.pathname + u.search + u.hash);
+}
 const tabOf = (r: Route) => TAB_OF[r.name] ?? (r.name as (typeof tabs)[number]['name']);
 
 export function App() {
@@ -72,6 +86,8 @@ export function App() {
   const [signinMode, setSigninMode] = useState<SignInMode>('login');
   /** The PIN just created on Daftar, shown once on Siapkan tambak. Kept in memory only. */
   const [newPin, setNewPin] = useState<string | null>(null);
+  /** A device code from the link that opened the app, waiting for a signed-in farm. */
+  const [pendingDevice, setPendingDevice] = useState<string | null>(linkedDevice);
   const meRef = useRef(me);
   meRef.current = me;
 
@@ -187,6 +203,44 @@ export function App() {
     signedIn(m);
   };
 
+  // Opened from a device QR link: once signed in to a farm, go straight to Hubungkan alat with the code filled in.
+  const hasFarm = Boolean(me && state?.farm);
+  useEffect(() => {
+    if (!hasFarm || !pendingDevice) return;
+    setRoute({ name: 'device', code: pendingDevice });
+    setPendingDevice(null);
+    forgetDeviceParam();
+  }, [hasFarm, pendingDevice]);
+
+  // Ponds fed by a Synteel device change by themselves: while one is linked and the app is in front,
+  // reload the farm every 30 seconds (and at once when the app comes back to the front).
+  const hasDevice = Boolean(state?.ponds.some((p) => p.device));
+  useEffect(() => {
+    if (!hasDevice || farmId === undefined) return;
+    let live = true;
+    const poll = () => {
+      if (document.visibilityState !== 'visible') return;
+      api.farm().then(
+        (s) => {
+          if (!live) return;
+          setState(s);
+          setSyncedAt(Date.now());
+        },
+        () => {},
+      );
+    };
+    const timer = setInterval(poll, 30_000);
+    document.addEventListener('visibilitychange', poll);
+    return () => {
+      live = false;
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', poll);
+    };
+  }, [hasDevice, farmId]);
+
+  // A device pond that turns Bahaya rings once (alarms on) and shows on Beranda.
+  useEffect(() => checkSensorAlarms(state?.ponds), [state]);
+
   const role = state?.role ?? null;
   // Night-check alarms ring from app start, on any screen, while the app is open.
   useAlarms(go, nowcast, state?.ponds);
@@ -263,12 +317,15 @@ export function App() {
         onCancel={() => go({ name: 'today' })}
       />
     );
+  } else if (route.name === 'device') {
+    // Before the no-ponds screen: linking a simulated device is a way to get ponds.
+    body = <ConnectDevice key={route.code ?? ''} initialCode={route.code} role={role} onLinked={refresh} go={go} />;
   } else if (route.name === 'profile') {
     body = <Profile key={farmId} state={state} me={me} go={go} invite={route.invite} onSwitch={switchFarm} onJoined={signedIn} onLogout={signedOut} onFarmChanged={refresh} />;
   } else if (state.ponds.length === 0) {
     body = <NoPonds farm={state.farm} userName={me.user.name} onAdd={owner ? () => go({ name: 'add-pond' }) : undefined} onProfile={() => go({ name: 'profile' })} />;
   } else if (route.name === 'pond') {
-    body = <PondDetail key={route.id} id={route.id} nowcast={nowcast} role={role} go={go} />;
+    body = <PondDetail key={route.id} id={route.id} nowcast={nowcast} role={role} ponds={state.ponds} onChanged={refresh} go={go} />;
   } else if (route.name === 'record') {
     body = <Record key={route.pondId ?? 0} state={state} initialPondId={route.pondId} onSaved={refresh} go={go} />;
   } else if (route.name === 'watch') {
@@ -300,6 +357,13 @@ export function App() {
   return (
     <div class="shell">
       <main>
+        {me === null && pendingDevice && (
+          <div class="conn-wrap">
+            <Notice tone="info" icon="wifi" title={t(`Alat ${formatCode(pendingDevice)}`, `Device ${formatCode(pendingDevice)}`)}>
+              {t('Masuk dulu. Sesudah itu alat ini langsung siap dihubungkan.', 'Sign in first. The device is then ready to connect.')}
+            </Notice>
+          </div>
+        )}
         {offline && (
           <div class="conn-wrap">
             <ConnectionBanner since={syncedAt} retrying={retrying} stillOff={retried} onRetry={retry} />

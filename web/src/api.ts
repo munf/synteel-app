@@ -40,6 +40,37 @@ export interface PondSummary extends Pond {
   lastLogAt: string | null;
   findings: Finding[];
   level: Level;
+  /** The Synteel device that sends this pond's readings, if one is linked. */
+  device: PondDevice | null;
+  /** Made for a simulated device: holds simulated data only. */
+  simulated: boolean;
+}
+
+export interface PondDevice {
+  code: string;
+  kind: string;
+  name: string;
+  /** Which part of the device feeds this pond ("tank1"), and its name ("Tangki 1"). */
+  unit: string;
+  unitName: string;
+  simulated: boolean;
+}
+
+/** A device looked up by its code, before or after linking. */
+export interface DeviceInfo {
+  code: string;
+  kind: string;
+  name: string;
+  simulated: boolean;
+  scenario: string;
+  units: { id: string; name: string }[];
+  /** What it measures, in words. */
+  sensors: string[];
+  state: unknown;
+  linked: boolean;
+  linkedHere: boolean;
+  linkedElsewhere: boolean;
+  ponds: Pond[];
 }
 
 export interface NowcastState {
@@ -207,6 +238,11 @@ export const api = {
     form.append('audio', audio, audio.type.includes('wav') ? 'pesan.wav' : 'pesan.webm');
     return upload<{ text: string }>('/transcribe', form);
   },
+  // Synteel devices ("Hubungkan alat"): look up a code, link it (owner), unlink it (owner).
+  device: (code: string) => call<{ device: DeviceInfo }>('GET', `/devices/${encodeURIComponent(code)}`),
+  linkDevice: (code: string) => call<{ ponds: PondSummary[] }>('POST', `/devices/${encodeURIComponent(code)}/link`),
+  unlinkDevice: (code: string) => call<void>('POST', `/devices/${encodeURIComponent(code)}/unlink`),
+
   /** Works signed in or out (an owner who forgot the PIN). */
   support: (req: SupportRequest) => call<{ ticket: string }>('POST', '/support', req),
 };

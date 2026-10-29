@@ -2,7 +2,8 @@ import type { FarmState, Nowcast, NowcastState, PondSummary } from '../api.ts';
 import type { Go } from '../app.tsx';
 import { useState } from 'preact/hooks';
 import { fmtAgo, fmtClock, fmtNum, fmtTemp, greeting, phaseLabel, readingWord } from '../labels.ts';
-import { EmptyState, Icon, initialOf, PondThumb, pondMeta, Shape, StatusPill, type IconName } from '../ui.tsx';
+import { EmptyState, Icon, initialOf, PondThumb, pondMeta, Shape, SimChip, StatusPill, type IconName } from '../ui.tsx';
+import { alarmReason, sensorCritical, silenceSensorAlarm, useSensorRinging } from '../sensor-alarm.ts';
 import { DueRechecks, useRechecks } from './recheck.tsx';
 import { LOCALE, t } from '../i18n.ts';
 import './today.css';
@@ -44,7 +45,10 @@ function AttentionCard({ pond, go, today }: { pond: PondSummary; go: Go; today: 
       <div class="row top">
         <PondThumb kind={pond.kind} />
         <div class="grow stack-xs">
-          <span class="h2">{pond.name}</span>
+          <span class="h2">
+            {pond.name}
+            <SimChip pond={pond} />
+          </span>
           <span class="meta num" style={{ display: 'flex', flexDirection: 'column' }}>
             <span>{pond.batch && pond.program ? `${phaseLabel[pond.batch.phase]} · ${t('minggu', 'week')} ${pond.program.week}` : pondMeta(pond)}</span>
             {alive != null && <span>{t(`sekitar ${alive.toLocaleString(LOCALE)} ekor`, `about ${alive.toLocaleString(LOCALE)} ${alive === 1 ? 'eel' : 'eels'}`)}</span>}
@@ -80,7 +84,10 @@ function UnrecordedCard({ pond, go }: { pond: PondSummary; go: Go }) {
         <PondThumb kind={pond.kind} />
         <div class="grow stack-xs">
           <div class="row between" style={{ gap: 8 }}>
-            <span class="h2">{pond.name}</span>
+            <span class="h2">
+              {pond.name}
+              <SimChip pond={pond} />
+            </span>
             <span class="label ink2" style={{ whiteSpace: 'nowrap', fontWeight: 400 }}>
               {t('Belum dicatat hari ini', 'Not recorded today')}
             </span>
@@ -132,6 +139,51 @@ function SafeCard({ ponds, go, now }: { ponds: PondSummary[]; go: Go; now: numbe
           {t('Catat', 'Record')}
         </button>
       </div>
+    </section>
+  );
+}
+
+/** A pond fed by a Synteel device is Bahaya: say which and why, at the top of Beranda, until it recovers. */
+function SensorAlarms({ ponds, go, now }: { ponds: PondSummary[]; go: Go; now: number }) {
+  const ringing = useSensorRinging();
+  const bad = sensorCritical(ponds);
+  if (bad.length === 0) return null;
+  return (
+    <section class="stack-sm" aria-label={t('Alarm sensor', 'Sensor alarm')}>
+      {bad.map((p, i) => (
+        <div key={p.id} class="note bad sensor-alarm" role="alert">
+          <Icon name="siren" />
+          <span class="stack-sm grow">
+            <span class="note-title">
+              {t('Alarm sensor', 'Sensor alarm')}: {p.name} — {alarmReason(p)}
+            </span>
+            {p.lastLogAt && (
+              <span>
+                {now - Date.parse(p.lastLogAt) < 60_000
+                  ? t('Diukur oleh sensor · baru saja', 'Measured by the sensor · just now')
+                  : t(`Diukur oleh sensor · ${fmtAgo(Date.parse(p.lastLogAt), now)}`, `Measured by the sensor · ${fmtAgo(Date.parse(p.lastLogAt), now)}`)}
+              </span>
+            )}
+            <span class="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                class="btn compact danger"
+                onClick={() => {
+                  silenceSensorAlarm();
+                  go({ name: 'pond', id: p.id });
+                }}
+              >
+                {t('Lihat kolam', 'View pond')} <Icon name="arrow" size={18} />
+              </button>
+              {ringing && i === 0 && (
+                <button type="button" class="btn compact secondary" onClick={silenceSensorAlarm}>
+                  {t('Matikan bunyi', 'Stop the sound')}
+                </button>
+              )}
+            </span>
+          </span>
+        </div>
+      ))}
     </section>
   );
 }
@@ -377,6 +429,8 @@ export function Today({
           </span>
         </button>
       </header>
+
+      <SensorAlarms ponds={ponds} go={go} now={now} />
 
       <DueRechecks due={rechecks.due} update={rechecks.update} go={go} />
 
