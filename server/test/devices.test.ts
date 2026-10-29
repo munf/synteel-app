@@ -16,6 +16,20 @@ test('a stopped blower: oxygen falls into Danger, the backup valve opens, oxygen
   assert.equal(d(5).blower, false);
 });
 
+test('RDF Gen0: one tank; a jammed drum lets dirty water past, ammonia climbs into Danger; no backup oxygen', () => {
+  const at = Date.parse('2026-10-29T10:00:00Z');
+  const jam = (min: number) => simulate({ kind: 'rdf0', scenario: 'drum_jam', scenarioAt: at }, at + min * 60_000);
+  assert.deepEqual(Object.keys(jam(0).units), ['tank']);
+  assert.equal(jam(1).drum, false);
+  assert.ok(jam(5).units.tank.tan > 0.5 && jam(5).units.tank.tan < 1);
+  assert.ok(jam(12).units.tank.tan > 1);
+  assert.ok(jam(10).units.tank.turbidity! > 15 && jam(10).units.tank.dirtyLevel! > 120);
+  const cut = (min: number) => simulate({ kind: 'rdf0', scenario: 'power_cut', scenarioAt: at }, at + min * 60_000);
+  assert.equal(cut(5).power.ups, false);
+  assert.equal(cut(20).oxygenValve, false);
+  assert.ok(cut(20).units.tank.do < 4);
+});
+
 test('codes are typed by hand: spaces, case and dashes do not matter', () => {
   assert.equal(normalizeCode('g5 7kq2m4'), 'G5-7KQ2-M4');
   assert.equal(normalizeCode('G5-7KQ2-M4'), 'G5-7KQ2-M4');
@@ -76,4 +90,25 @@ test('simulator device: create, link in the app as new simulation ponds, reading
   // Another farm cannot take it; unlinking removes the simulation ponds.
   assert.equal((await call('POST', `/devices/${code}/unlink`)).status, 204);
   assert.equal((await call('GET', '/farm')).json.ponds.length, 1);
+});
+
+test('an RDF Gen0 links as one simulation pond; Gen5-only events are refused for it', async () => {
+  const store = repo(openDb(':memory:'));
+  const api = createApi(store, { clock: () => new Date('2026-10-29T03:00:00Z'), getWeather: async () => ({ hours: [], fetchedAt: 0 }), geocode: async () => null });
+  let cookie = '';
+  const call = async (method: string, path: string, body?: unknown) => {
+    const res = await api.request(path, { method, headers: { ...(body !== undefined && { 'content-type': 'application/json' }), ...(cookie && { cookie }), 'x-lang': 'en' }, body: body === undefined ? undefined : JSON.stringify(body) });
+    const set = res.headers.get('set-cookie');
+    if (set) cookie = set.split(';')[0];
+    return { status: res.status, json: res.status === 204 ? null : await res.json() };
+  };
+  const d = (await call('POST', '/sim/devices', { kind: 'rdf0' })).json.device;
+  assert.match(d.code, /^R0-/);
+  assert.equal(d.short, 'RDF Gen0');
+  assert.deepEqual(d.scenarios, ['normal', 'power_cut', 'blower_fail', 'drum_jam']);
+  assert.equal((await call('POST', `/sim/devices/${d.code}/scenario`, { scenario: 'heat' })).status, 400);
+  await call('POST', '/auth/register', { name: 'Judge', phone: '0812 3456 7890', pin: '246810' });
+  await call('PUT', '/farm', { name: 'T' });
+  const ponds = (await call('POST', `/devices/${d.code}/link`)).json.ponds;
+  assert.deepEqual(ponds.map((p: { name: string }) => p.name), ['RDF Gen0 Tank']);
 });

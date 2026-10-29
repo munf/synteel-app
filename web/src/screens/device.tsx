@@ -171,7 +171,7 @@ export function ConnectDevice({ initialCode, role, onLinked, go }: { initialCode
   };
 
   const sim = t('Simulasi', 'Simulation');
-  const newNames = device ? device.units.map((u) => `Gen5 ${u.name}`) : [];
+  const newNames = device ? device.units.map((u) => `${device.short} ${u.name}`) : [];
   const joinNames = (names: string[]) => (names.length > 1 ? `${names.slice(0, -1).join(', ')} ${t('dan', 'and')} ${names.at(-1)}` : (names[0] ?? ''));
 
   return (

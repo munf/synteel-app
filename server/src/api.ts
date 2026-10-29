@@ -671,6 +671,8 @@ export function createApi(
       code: d.code,
       kind: d.kind,
       name: spec.name(),
+      short: spec.short,
+      scenarios: spec.scenarios,
       simulated: d.simulated,
       scenario: d.scenario,
       scenarioAt: d.scenarioAt,
@@ -707,6 +709,7 @@ export function createApi(
     const d = findDevice(c.req.param('code'));
     const scenario = oneOf<Scenario>((await c.req.json()).scenario, SCENARIOS, 'skenario');
     if (!scenario) throw new BadRequest(tx('Skenario wajib dipilih', 'Choose a scenario'));
+    if (!KINDS[d.kind].scenarios.includes(scenario)) throw new BadRequest(tx('Skenario ini tidak ada untuk alat ini', 'This scenario does not exist for this device'));
     const now = clock().getTime();
     store.devices.setScenario(d.code, scenario, now);
     store.devices.resend(d.code);
@@ -862,7 +865,7 @@ export function createApi(
       const spec = KINDS[d.kind];
       const today = localDate(now, timezone(r));
       for (const u of spec.units) {
-        const pond = r.addPond({ name: `Gen5 ${u.name()}`, kind: 'gen5', volumeL: null, areaM2: null, setting: 'indoor', shaded: null, aeration: 'full', depthCm: null });
+        const pond = r.addPond({ name: `${spec.short} ${u.name()}`, kind: 'gen5', volumeL: null, areaM2: null, setting: 'indoor', shaded: null, aeration: 'full', depthCm: null });
         // A glass eel batch in week 3, so the program, the rules and the forecast have something to work with.
         r.startBatch({ pondId: pond.id, phase: 'glass_eel', stockedAt: localDate(new Date(now.getTime() - 17 * DAY_MS), timezone(r)), initialCount: 3000 }, today);
         store.devices.link({ code: d.code, farmId: r.farmId, unit: u.id, pondId: pond.id }, now.getTime());

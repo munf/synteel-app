@@ -61,6 +61,8 @@ export interface DeviceInfo {
   code: string;
   kind: string;
   name: string;
+  /** Start of the pond names it creates: "Gen5", "RDF Gen0". */
+  short: string;
   simulated: boolean;
   scenario: string;
   units: { id: string; name: string }[];
