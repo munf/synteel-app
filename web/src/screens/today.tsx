@@ -53,10 +53,7 @@ function AttentionCard({ pond, go, today }: { pond: PondSummary; go: Go; today: 
             {pond.name}
             <SimChip pond={pond} />
           </span>
-          <span class="meta num" style={{ display: 'flex', flexDirection: 'column' }}>
-            <span>{pond.batch && pond.program ? `${phaseLabel[pond.batch.phase]} · ${t('minggu', 'week')} ${pond.program.week}` : pondMeta(pond)}</span>
-            {alive != null && <span>{t(`sekitar ${alive.toLocaleString(LOCALE)} ekor`, `about ${alive.toLocaleString(LOCALE)} ${alive === 1 ? 'eel' : 'eels'}`)}</span>}
-          </span>
+          <span class="meta num">{pond.batch && pond.program ? `${phaseLabel[pond.batch.phase]} · ${t('minggu', 'week')} ${pond.program.week}` : pondMeta(pond)}</span>
         </div>
         <StatusPill level={pond.level} />
       </div>
@@ -75,7 +72,11 @@ function AttentionCard({ pond, go, today }: { pond: PondSummary; go: Go; today: 
           ))}
         </div>
       )}
-      <span class="label ink2">{loggedLine(lastAt, today)}</span>
+      {/* The head stays as tall as the thumbnail; the eel count sits with the recording time at the foot. */}
+      <div class="row between label ink2 num" style={{ width: '100%' }}>
+        <span>{loggedLine(lastAt, today)}</span>
+        {alive != null && <span>{t(`sekitar ${alive.toLocaleString(LOCALE)} ekor`, `about ${alive.toLocaleString(LOCALE)} ${alive === 1 ? 'eel' : 'eels'}`)}</span>}
+      </div>
     </button>
   );
 }
@@ -606,7 +607,7 @@ export function Today({
         </span>
         <span class="grow" style={{ display: 'flex', flexDirection: 'column' }}>
           <span class="strong">{t('Hubungi bantuan', 'Contact support')}</span>
-          <span class="label ink2">{t('Ada kendala? Tim Synteel membalas lewat WhatsApp', 'Having trouble? The Synteel team replies on WhatsApp')}</span>
+          <span class="label ink2">{t('Ada kendala? Tim Synteel membalas lewat email', 'Having trouble? The Synteel team replies by e-mail')}</span>
         </span>
         <span class="muted" style={{ display: 'flex' }}>
           <Icon name="next" size={20} />

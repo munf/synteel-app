@@ -158,7 +158,7 @@ export interface FarmRef {
 }
 
 export interface Me {
-  user: { id: number; phone: string; name: string };
+  user: { id: number; phone: string; name: string; email?: string | null };
   farm: FarmRef | null;
   farms: FarmRef[];
   demo: boolean;

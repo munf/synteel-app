@@ -165,7 +165,7 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
     <div class="screen">
       <section class="stack-sm">
         <h1>{t('Catat kondisi kolam', 'Record pond conditions')}</h1>
-        <p class="ink2">{t('Sebut nama kolam lalu kondisinya. Boleh beberapa kolam sekaligus.', 'Say the pond name, then its conditions. Several ponds in one go is fine.')}</p>
+        <p class="ink2">{t('Sebut nama kolam lalu kondisinya. Bisa beberapa kolam sekaligus.', 'Say the pond name, then its conditions. Several ponds in one go works.')}</p>
       </section>
 
       {cut && !rec && (

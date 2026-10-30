@@ -4,7 +4,7 @@ import { useState } from 'preact/hooks';
 import { api, type Me, type SupportTopic } from '../api.ts';
 import type { Go } from '../app.tsx';
 import { isEn, t } from '../i18n.ts';
-import { Field, fmtPhone, Icon, roleLabel, Tick } from '../ui.tsx';
+import { Field, Icon, roleLabel, Tick } from '../ui.tsx';
 import { canRecordAudio, startRecording, voiceToWav } from '../capture/media.ts';
 import './help.css';
 
@@ -31,7 +31,7 @@ export function deviceInfo(ua = navigator.userAgent): string {
   return [os, name, `Synteel ${APP_VERSION}`].filter(Boolean).join(' · ');
 }
 
-/** "SE-000123": what the team asks for on WhatsApp. */
+/** "SE-000123": what the team asks for in a reply. */
 export const userCode = (id: number) => `SE-${String(id).padStart(6, '0')}`;
 
 /**
@@ -99,7 +99,8 @@ export function Help({ me, go }: { me: Me | null; go: Go }) {
   const signedIn = me !== null;
   const [topic, setTopic] = useState<SupportTopic>(signedIn ? 'catat' : 'pin');
   const [message, setMessage] = useState('');
-  const [replyPhone, setReplyPhone] = useState(me && !me.demo ? fmtPhone(me.user.phone) : '');
+  // Replies go by e-mail until Synteel has its own WhatsApp number.
+  const [replyEmail, setReplyEmail] = useState(me && !me.demo ? (me.user.email ?? '') : '');
   const [accountPhone, setAccountPhone] = useState('');
   const [withDevice, setWithDevice] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -113,7 +114,7 @@ export function Help({ me, go }: { me: Me | null; go: Go }) {
   const send = async (e: Event) => {
     e.preventDefault();
     if (!message.trim()) return setError(t('Ceritakan dulu masalahnya.', 'Describe the problem first.'));
-    if (replyPhone.replace(/\D/g, '').length < 9) return setError(t('Isi nomor WhatsApp untuk balasan.', 'Enter a WhatsApp number for the reply.'));
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(replyEmail.trim())) return setError(t('Isi email untuk balasan.', 'Enter an e-mail address for the reply.'));
     if (!signedIn && accountPhone.replace(/\D/g, '').length < 9) return setError(t('Isi nomor HP akun Synteel.', 'Enter the phone number of the Synteel account.'));
     setBusy(true);
     setError('');
@@ -121,7 +122,7 @@ export function Help({ me, go }: { me: Me | null; go: Go }) {
       const res = await api.support({
         topic,
         message: message.trim(),
-        replyPhone,
+        replyEmail: replyEmail.trim(),
         accountPhone: signedIn ? undefined : accountPhone,
         device: withDevice ? deviceInfo() : undefined,
       });
@@ -144,7 +145,7 @@ export function Help({ me, go }: { me: Me | null; go: Go }) {
         </button>
         <div class="grow" style={{ display: 'flex', flexDirection: 'column' }}>
           <h1>{t('Hubungi bantuan', 'Contact support')}</h1>
-          <span class="meta">{t('Tim Synteel membalas lewat WhatsApp', 'The Synteel team replies on WhatsApp')}</span>
+          <span class="meta">{t('Tim Synteel membalas lewat email', 'The Synteel team replies by e-mail')}</span>
         </div>
       </header>
 
@@ -163,12 +164,12 @@ export function Help({ me, go }: { me: Me | null; go: Go }) {
           </div>
           {isEn ? (
             <p class="ink2">
-              The reply comes on WhatsApp to <b class="num" style={{ whiteSpace: 'nowrap' }}>{fmtPhone(replyPhone.replace(/\D/g, ''))}</b>, usually within{' '}
+              The reply comes by e-mail to <b style={{ overflowWrap: 'anywhere' }}>{replyEmail.trim()}</b>, usually within{' '}
               <span style={{ whiteSpace: 'nowrap' }}>24 hours</span>. Mention the ticket number when you reply.
             </p>
           ) : (
             <p class="ink2">
-              Balasan dikirim lewat WhatsApp ke <b class="num" style={{ whiteSpace: 'nowrap' }}>{fmtPhone(replyPhone.replace(/\D/g, ''))}</b>, biasanya dalam{' '}
+              Balasan dikirim lewat email ke <b style={{ overflowWrap: 'anywhere' }}>{replyEmail.trim()}</b>, biasanya dalam{' '}
               <span style={{ whiteSpace: 'nowrap' }}>1×24 jam</span>. Sebut nomor tiket kalau membalas.
             </p>
           )}
@@ -210,8 +211,8 @@ export function Help({ me, go }: { me: Me | null; go: Go }) {
               <textarea rows={4} placeholder={hint} value={message} onInput={(e) => setMessage(e.currentTarget.value)} style={{ resize: 'none' }} />
             </Field>
             {signedIn && <SpeakToText onText={(text) => setMessage((m) => (m.trim() ? `${m.trim()} ${text}` : text))} />}
-            <Field label={t('Nomor WhatsApp untuk balasan', 'WhatsApp number for the reply')}>
-              <input type="tel" inputMode="tel" autoComplete="tel" placeholder={t('contoh: 0812 3456 7890', 'example: 0812 3456 7890')} value={replyPhone} onInput={(e) => setReplyPhone(e.currentTarget.value)} />
+            <Field label={t('Email untuk balasan', 'E-mail for the reply')}>
+              <input type="email" inputMode="email" autoComplete="email" autoCapitalize="off" spellcheck={false} placeholder={t('contoh: nama@gmail.com', 'example: name@gmail.com')} value={replyEmail} onInput={(e) => setReplyEmail(e.currentTarget.value)} />
             </Field>
             {me ? (
               <div class="field">
@@ -226,8 +227,8 @@ export function Help({ me, go }: { me: Me | null; go: Go }) {
               <Field
                 label={t('Nomor HP akun Synteel', 'Phone number of the Synteel account')}
                 hint={t(
-                  'Untuk lupa PIN pemilik: tim akan memastikan pemilik akun lewat WhatsApp sebelum mengatur ulang PIN.',
-                  'For a forgotten owner PIN: the team confirms the account owner on WhatsApp before resetting the PIN.',
+                  'Untuk lupa PIN pemilik: tim akan memastikan pemilik akun sebelum mengatur ulang PIN.',
+                  'For a forgotten owner PIN: the team confirms the account owner before resetting the PIN.',
                 )}
               >
                 <input type="tel" inputMode="tel" placeholder={t('Nomor yang dipakai untuk masuk', 'The number you sign in with')} value={accountPhone} onInput={(e) => setAccountPhone(e.currentTarget.value)} />

@@ -516,7 +516,7 @@ export function Profile({
           <span class="strong" style={{ color: 'var(--ink)' }}>
             {t('Hubungi bantuan', 'Contact support')}
           </span>
-          <span class="meta">{t('Ada kendala? Tim Synteel membalas lewat WhatsApp', 'Having trouble? The Synteel team replies on WhatsApp')}</span>
+          <span class="meta">{t('Ada kendala? Tim Synteel membalas lewat email', 'Having trouble? The Synteel team replies by e-mail')}</span>
         </span>
         <span style={{ color: 'var(--muted)', display: 'flex' }}>
           <Icon name="next" size={20} />

@@ -807,7 +807,9 @@ export function createApi(
 
   function me(userId: number, farmId: number | null) {
     const farms = store.farmsOf(userId);
-    return { user: store.user(userId), farm: farms.find((f) => f.id === farmId) ?? null, farms, demo: isDemoUser(userId) };
+    const user = store.user(userId);
+    // The e-mail fills "Email untuk balasan" in Hubungi bantuan; accounts from before e-mail codes have none.
+    return { user: user && { ...user, email: store.userByPhone(user.phone)?.email ?? null }, farm: farms.find((f) => f.id === farmId) ?? null, farms, demo: isDemoUser(userId) };
   }
 
   const isDemoUser = (userId: number) => store.user(userId)?.phone === demoPhone || store.demo.isDemoUser(userId);
