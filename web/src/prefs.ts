@@ -2,8 +2,8 @@
 import { useEffect, useState } from 'preact/hooks';
 
 export interface Prefs {
-  /** 0 Normal (default), 1 Besar, 2 Sangat besar. */
-  textSize: 0 | 1 | 2;
+  /** -1 Kecil, 0 Normal (default), 1 Besar, 2 Sangat besar. */
+  textSize: TextSize;
   /** Owners who always want charts and numbers open. */
   techOpen: boolean;
   /** Opt-in: photos, videos and saved numbers may be used to improve the AI. */
@@ -18,7 +18,8 @@ export interface Prefs {
 
 const KEY = 'synteel.prefs';
 const DEFAULTS: Prefs = { textSize: 0, techOpen: false, shareData: false, theme: 'light', alarms: true, lang: 'id' };
-export const TEXT_PX = [16, 18, 20] as const;
+export type TextSize = -1 | 0 | 1 | 2;
+export const TEXT_PX: Record<TextSize, number> = { [-1]: 14, 0: 16, 1: 18, 2: 20 };
 
 export type Theme = 'light' | 'dark' | 'system';
 
@@ -47,7 +48,7 @@ const phoneDark = typeof matchMedia === 'function' ? matchMedia('(prefers-color-
 export const isDark = (p = current) => forcedNight || p.theme === 'dark' || (p.theme === 'system' && !!phoneDark?.matches);
 
 export function applyTextSize(p = current) {
-  document.documentElement.style.fontSize = `${TEXT_PX[p.textSize]}px`;
+  document.documentElement.style.fontSize = `${TEXT_PX[p.textSize] ?? 16}px`;
   const dark = isDark(p);
   if (dark) document.documentElement.dataset.theme = 'night';
   else delete document.documentElement.dataset.theme;

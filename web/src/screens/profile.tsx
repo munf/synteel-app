@@ -243,10 +243,11 @@ export function Profile({
     { label: t('Detail teknis terbuka', 'Show technical details'), sub: t('Grafik dan angka langsung tampil', 'Charts and numbers show right away'), checked: prefs.techOpen, onChange: (v) => setPrefs({ techOpen: v }) },
   ];
   // On the type scale: the "Aa" sample grows 16 → 18 → 24.
-  const sizes: { label: string; px: number }[] = [
-    { label: 'Normal', px: 16 },
-    { label: t('Besar', 'Large'), px: 18 },
-    { label: t('Sangat besar', 'Very large'), px: 24 },
+  const sizes: { size: Prefs['textSize']; label: string; px: number }[] = [
+    { size: -1, label: t('Kecil', 'Small'), px: 13 },
+    { size: 0, label: 'Normal', px: 16 },
+    { size: 1, label: t('Besar', 'Large'), px: 18 },
+    { size: 2, label: t('Sangat besar', 'Very large'), px: 24 },
   ];
   // Language names are never translated.
   const themes: { id: Theme; label: string; icon: ComponentChild }[] = [
@@ -313,16 +314,16 @@ export function Profile({
       <section class="card">
         <h2>{t('Tampilan', 'Display')}</h2>
         <span class="strong">{t('Ukuran huruf', 'Text size')}</span>
-        <div role="radiogroup" aria-label={t('Ukuran huruf', 'Text size')} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr)', gap: 8 }}>
-          {sizes.map((s, i) => {
-            const on = prefs.textSize === i;
+        <div role="radiogroup" aria-label={t('Ukuran huruf', 'Text size')} style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+          {sizes.map((s) => {
+            const on = prefs.textSize === s.size;
             return (
               <button
                 key={s.label}
                 role="radio"
                 aria-checked={on}
                 class={`size-opt${on ? ' on' : ''}`}
-                onClick={() => setPrefs({ textSize: i as Prefs['textSize'] })}
+                onClick={() => setPrefs({ textSize: s.size })}
               >
                 <span style={{ height: 32, display: 'flex', alignItems: 'flex-end', fontSize: s.px, fontWeight: 800, lineHeight: 1 }}>Aa</span>
                 <span class="label semi" style={{ whiteSpace: 'nowrap', textAlign: 'center' }}>
