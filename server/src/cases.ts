@@ -24,6 +24,8 @@ const WINDOW_H = 18;
 const MAX_ROUNDS = 10;
 const MAX_QUESTIONS = 2;
 const MAX_AGENT_CHECKS = 3;
+/** An agent check this close to a rule check is not added: the rule check already has the farmer at the pond. */
+const CHECK_GAP = 30 * 60_000;
 /** The re-check is due an hour after a report; unanswered half an hour after that, it escalates. */
 export const RECHECK_AFTER = HOUR;
 export const RECHECK_GRACE = 30 * 60_000;
@@ -279,7 +281,7 @@ const TOOLS = [
   ),
   fn(
     'add_check',
-    'Tambah cek di luar cek dari aturan (cek aturan tidak bisa dihapus atau digeser). Maksimal 3.',
+    'Tambah cek di luar cek dari aturan (cek aturan tidak bisa dihapus atau digeser). Tidak di jam yang sama (selisih kurang dari 30 menit) dengan cek aturan. Maksimal 3.',
     {
       time: { type: 'string', description: 'Jam lokal HH:MM dalam 18 jam ke depan' },
       action: { type: 'string', description: 'Tindakan singkat yang bisa dilakukan petani, maks 80 karakter' },
@@ -308,6 +310,8 @@ const SYSTEM = (input: CaseInput) =>
     '- Ini pendukung keputusan, bukan diagnosis. Jangan menyebut nama penyakit, kuman atau parasit sebagai penyebab. Jangan sebut obat, dosis, garam atau pengobatan apa pun.',
     '- Angka kematian, naik/turun, cek ulang, kirim ke pemilik dan tutup kasus diputuskan aturan aplikasi; jangan mengubahnya. Cek dari aturan tidak boleh dihapus atau digeser.',
     '- Tindakan harus bisa dilakukan petani dengan alat yang ada: aerator, termometer, alat ukur pH dan TDS, mata dan tangan.',
+    '- Cek ulang dari aturan sudah menanyakan apakah sidat sudah turun dan berenang normal; jangan tanyakan itu lagi lewat ask_farmer.',
+    '- Jawaban petani dan ukuran dari hari sebelumnya bisa sudah berubah: sebut harinya (kemarin, Kamis), jangan tulis sebagai keadaan sekarang. Suhu ditulis dengan °C.',
     ...wordingRules(input.now, input.timezone),
     currentLang() === 'en'
       ? '- Write the summary, questions, quick answers, watch items, checks and the owner line in clear, plain English: short sentences, everyday farm words (aerator, water temperature, leftover feed, eels), no abbreviations except pH and TDS. Pond names stay exactly as they are.'
@@ -324,6 +328,9 @@ interface Collected {
 export async function runCaseAgent(input: CaseInput, providers: ChatProvider[]): Promise<CaseRun> {
   const facts = caseFacts(input);
   const end = input.now + WINDOW_H * HOUR;
+  const rules = ruleChecks(input, facts);
+  // Dates as the farmer says them ("Kemarin 09.00"), so an old answer is not read as today's.
+  const when = (t: number) => `${dayName(localDate(new Date(t), input.timezone), input.now, input.timezone)} ${clock(t, input.timezone)}`;
   const read = (name: string, args: Record<string, any>): unknown => {
     switch (name) {
       case 'get_case':
@@ -331,14 +338,14 @@ export async function runCaseAgent(input: CaseInput, providers: ChatProvider[]):
           pond: input.pondName,
           phase: input.phase,
           week: input.week,
-          opened: clock(input.openedAt, input.timezone) + ' ' + localDate(new Date(input.openedAt), input.timezone),
+          opened: when(input.openedAt),
           today: localDate(new Date(input.now), input.timezone),
           // "day" names the date as the farmer says it, so the summary never calls today "kemarin".
           dead_per_day: facts.days.map((d) => ({ date: d.date, day: dayName(d.date, input.now, input.timezone), dead: d.dead, recorded: d.recorded })),
           total_dead: facts.total,
           trend: facts.trend,
-          recheck: facts.recheck && { due: clock(facts.recheck.dueAt, input.timezone), answered: facts.recheck.answered, better: facts.recheck.better, missed: facts.recheck.missed },
-          farmer_answers: answersOf(input.events).map((a) => ({ time: clock(Date.parse(a.at), input.timezone), question: a.q, answer: a.a })),
+          recheck: facts.recheck && { due: when(facts.recheck.dueAt), answered: facts.recheck.answered, better: facts.recheck.better, missed: facts.recheck.missed },
+          farmer_answers: answersOf(input.events).map((a) => ({ time: when(Date.parse(a.at)), question: a.q, answer: a.a })),
           rule_warnings: input.findings,
           latest: Object.fromEntries(Object.entries(input.latest).map(([k, v]) => [k, { value: v.value, hours_ago: Math.round((input.now - Date.parse(v.at)) / HOUR) }])),
         };
@@ -351,7 +358,7 @@ export async function runCaseAgent(input: CaseInput, providers: ChatProvider[]):
             ? {
                 peak: { time: clock(nc.peak.t, input.timezone), level: nc.peak.level, reasons: nc.peak.factors.map((f) => f.label) },
                 hours: nc.hours.filter((h) => h.t >= input.now && h.t <= end && (h.t / HOUR) % 2 === 0).map((h) => ({ time: clock(h.t, input.timezone), water_temp: h.temp, risk: h.level })),
-                rule_checks: ruleChecks(input, facts).map((c) => ({ time: clock(c.t, input.timezone), action: c.action })),
+                rule_checks: rules.map((c) => ({ time: clock(c.t, input.timezone), action: c.action })),
               }
             : null,
           weather: input.weather.filter((h) => h.t >= input.now && h.t <= end && (h.t / HOUR) % 3 === 0).map((h) => ({ time: clock(h.t, input.timezone), air_temp: h.airTemp, rain_mm: h.rain, cloud: h.cloud })),
@@ -382,6 +389,11 @@ export async function runCaseAgent(input: CaseInput, providers: ChatProvider[]):
           }
           if (name === 'add_check') {
             if (got.checks.length >= MAX_AGENT_CHECKS) return { error: 'Sudah 3 cek tambahan.' };
+            // Said back at once, so the model can pick another time instead of losing the check in the guard.
+            const t = nextTime(String(args.time ?? ''), input.now);
+            if (t === null || t > end) return { error: 'Jam harus HH:MM dalam 18 jam ke depan.' };
+            const taken = rules.find((r) => Math.abs(r.t - t) < CHECK_GAP);
+            if (taken) return { error: `Jam ${clock(taken.t, input.timezone)} sudah ada cek aturan: "${taken.action}". Pilih jam lain (selisih minimal 30 menit) atau masukkan ke ringkasan.` };
             got.checks.push({ time: String(args.time ?? ''), action: String(args.action ?? ''), why: String(args.why ?? '') });
             return { ok: true };
           }
@@ -424,7 +436,7 @@ export function guardCase(input: CaseInput, p: Partial<Collected> & { summary?: 
     const action = c.action.trim().slice(0, 80);
     if (t === null || t > end || !fits(action, 3, 80) || unsafeText(c.why) || overstated(c.why, input.weather)) continue;
     // A rule check at nearly the same time already covers it; rule checks are never moved.
-    if (base.checks.some((r) => Math.abs(r.t - t) < 30 * 60_000)) continue;
+    if (base.checks.some((r) => Math.abs(r.t - t) < CHECK_GAP)) continue;
     extra.push({ t, action, source: 'agent', alarm: false, why: c.why.trim().slice(0, 140) || undefined });
   }
 

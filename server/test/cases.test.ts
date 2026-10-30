@@ -213,7 +213,8 @@ test('the first provider out of credits: the next one runs the case agent; extra
   const answers = [
     { tool_calls: [call('a', 'get_case', {}), call('b', 'get_pond_logs', { days: 2 })] },
     { tool_calls: [call('c', 'ask_farmer', { question: 'Aerator semalam nyala?', answers: ['Nyala', 'Mati'] }), call('d', 'ask_farmer', { question: 'Sisa pakan banyak?', answers: ['Banyak', 'Habis'] }), call('e', 'ask_farmer', { question: 'Air bau?', answers: ['Ya', 'Tidak'] })] },
-    { tool_calls: [call('f', 'add_check', { time: '15:00', action: 'Lihat sidat di permukaan', why: 'Kematian naik' }), call('g', 'draft_owner_message', { text: 'Kematian naik, aerator sedang dicek.' })] },
+    // 10.15 is next to the rule re-check at 10.00: refused at once, so the model can move it.
+    { tool_calls: [call('f0', 'add_check', { time: '10:15', action: 'Angkat sisa pakan', why: 'Sisa pakan banyak' }), call('f', 'add_check', { time: '15:00', action: 'Lihat sidat di permukaan', why: 'Kematian naik' }), call('g', 'draft_owner_message', { text: 'Kematian naik, aerator sedang dicek.' })] },
     { tool_calls: [call('h', 'submit_case_update', { summary: 'Kematian di Kolam B naik dari 3 ke 7. Aerator dan sisa pakan sedang ditanyakan.', watch: ['Sidat di permukaan'] })] },
   ];
   const toolAnswers: string[] = [];
@@ -228,7 +229,9 @@ test('the first provider out of credits: the next one runs the case agent; extra
   });
   const [spentBase, workingBase] = [await listen(spent), await listen(working)];
   try {
-    const run = await runCaseAgent(input(), [
+    // An answer from yesterday morning: get_case names the day, so it is not read as today's.
+    const withAnswer = { ...input(), events: [...input().events, { id: 2, at: new Date(NOW - DAY - H).toISOString(), kind: 'answer' as const, userId: 1, data: { answers: [{ q: 'Aerator semalam nyala terus?', a: 'Nyala terus' }] } }] };
+    const run = await runCaseAgent(withAnswer, [
       { name: 'baseten', apiKey: 'k', base: spentBase, model: 'open' },
       { name: 'meta', apiKey: 'k', base: workingBase, model: 'm' },
     ]);
@@ -237,9 +240,13 @@ test('the first provider out of credits: the next one runs the case agent; extra
     assert.equal(run.questions.length, 2);
     assert.ok(toolAnswers.some((t) => /Sudah 2 pertanyaan/.test(t)));
     assert.ok(toolAnswers.some((t) => /dead_per_day/.test(t)));
-    assert.deepEqual(run.steps.map((s) => s.tool), ['get_case', 'get_pond_logs', 'ask_farmer', 'ask_farmer', 'ask_farmer', 'add_check', 'draft_owner_message', 'submit_case_update']);
+    const got = JSON.parse(toolAnswers.find((t) => /dead_per_day/.test(t))!);
+    assert.deepEqual(got.farmer_answers.map((a: any) => a.time), ['Kemarin 09.00']);
+    assert.equal(got.recheck.due, 'Hari ini 10.00');
+    assert.ok(toolAnswers.some((t) => /10\.00 sudah ada cek aturan/.test(t)));
+    assert.deepEqual(run.steps.map((s) => s.tool), ['get_case', 'get_pond_logs', 'ask_farmer', 'ask_farmer', 'ask_farmer', 'add_check', 'add_check', 'draft_owner_message', 'submit_case_update']);
     assert.equal(run.ownerNote, 'Kematian naik, aerator sedang dicek.');
-    assert.ok(run.checks.some((c) => c.source === 'agent' && c.action === 'Lihat sidat di permukaan'));
+    assert.deepEqual(run.checks.filter((c) => c.source === 'agent').map((c) => c.action), ['Lihat sidat di permukaan']);
   } finally {
     spent.close();
     working.close();
