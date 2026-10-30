@@ -100,7 +100,7 @@ function FarmLocation({ farm, onSaved }: { farm: Farm; onSaved: (f: Farm) => voi
   }
   return (
     <form class="card" id="lokasi" onSubmit={save}>
-      <Field label={t('Lokasi tambak', 'Farm location')} hint={t('Dipakai untuk cuaca per jam, supaya suhu air bisa diperkirakan.', 'Used for the hourly weather, so the water temperature can be estimated.')}>
+      <Field label={t('Lokasi tambak', 'Farm location')} hint={t('Untuk perkiraan suhu air dari cuaca setempat.', 'For estimating the water temperature from the local weather.')}>
         <input value={place} onInput={(e) => setPlace(e.currentTarget.value)} placeholder={t('contoh: Sleman, Yogyakarta', 'example: Sleman, Yogyakarta')} />
       </Field>
       <LocateButton gps={gps} />

@@ -83,7 +83,6 @@ export function FarmSetup({ onDone, onLogout, onJoined, newPin }: { onDone: () =
       <Wordmark />
       <section class="stack-sm">
         <h1>{t('Siapkan tambak', 'Set up your farm')}</h1>
-        <p class="ink2">{t('Cukup sekali. Setelah ini, tambahkan kolam.', 'Only once. After this, add your ponds.')}</p>
       </section>
       {newPin && (
         <div class="note ok" role="status" style={{ alignItems: 'center' }}>
@@ -103,7 +102,7 @@ export function FarmSetup({ onDone, onLogout, onJoined, newPin }: { onDone: () =
         <Field label={t('Nama tambak', 'Farm name')}>
           <input value={name} onInput={(e) => setName(e.currentTarget.value)} placeholder={t('contoh: Tambak Sidat Mitra', 'example: Mitra Eel Farm')} required />
         </Field>
-        <Field label={t('Lokasi', 'Location')} hint={t('Dipakai untuk cuaca per jam, supaya suhu air bisa diperkirakan.', 'Used for hourly weather, so the water temperature can be estimated.')}>
+        <Field label={t('Lokasi', 'Location')} hint={t('Untuk perkiraan suhu air dari cuaca setempat.', 'For estimating the water temperature from the local weather.')}>
           <input value={locationName} onInput={(e) => setLocationName(e.currentTarget.value)} placeholder={t('contoh: Sleman, Yogyakarta', 'example: Sleman, Yogyakarta')} />
         </Field>
         <LocateButton gps={gps} />
