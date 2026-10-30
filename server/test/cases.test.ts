@@ -241,8 +241,8 @@ test('the first provider out of credits: the next one runs the case agent; extra
     assert.ok(toolAnswers.some((t) => /Sudah 2 pertanyaan/.test(t)));
     assert.ok(toolAnswers.some((t) => /dead_per_day/.test(t)));
     const got = JSON.parse(toolAnswers.find((t) => /dead_per_day/.test(t))!);
-    assert.deepEqual(got.farmer_answers.map((a: any) => a.time), ['Kemarin 09.00']);
-    assert.equal(got.recheck.due, 'Hari ini 10.00');
+    assert.deepEqual(got.farmer_answers.map((a: any) => a.time), ['kemarin 09.00']);
+    assert.equal(got.recheck.due, 'hari ini 10.00');
     assert.ok(toolAnswers.some((t) => /10\.00 sudah ada cek aturan/.test(t)));
     assert.deepEqual(run.steps.map((s) => s.tool), ['get_case', 'get_pond_logs', 'ask_farmer', 'ask_farmer', 'ask_farmer', 'add_check', 'add_check', 'draft_owner_message', 'submit_case_update']);
     assert.equal(run.ownerNote, 'Kematian naik, aerator sedang dicek.');

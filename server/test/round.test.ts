@@ -21,6 +21,8 @@ test('pond names match as spoken: letters, Javanese numbers, nicknames', () => {
   assert.equal(pondKey('kolam ce siji'), 'c1');
   assert.equal(matchPond('kolam be', PONDS).pondId, 2);
   assert.equal(matchPond('B', PONDS).pondId, 2);
+  // Speech-to-text often writes "kolam" as "kolom".
+  assert.equal(matchPond('kolom B', PONDS).pondId, 2);
   assert.equal(matchPond('Kolam C satu', PONDS).pondId, 3);
   assert.equal(matchPond('kolam pojok', PONDS).pondId, 4);
   assert.equal(matchPond('pojok', PONDS).pondId, 4);

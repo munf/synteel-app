@@ -10,7 +10,7 @@ import './help.css';
 
 const TOPICS: { key: SupportTopic; label: string; hint: string }[] = [
   { key: 'pin', label: t('Masuk dan PIN', 'Sign in and PIN'), hint: t('contoh: pemilik lupa PIN dan tidak bisa masuk', 'example: the owner forgot the PIN and cannot sign in') },
-  { key: 'catat', label: t('Catat dan suara', 'Recording and voice'), hint: t('contoh: suara di Kolam B tidak terbaca sejak kemarin', 'example: voice for Pond B not understood since yesterday') },
+  { key: 'catat', label: t('Catat dan suara', 'Recording and voice'), hint: t('contoh: suara di Kolam B tidak terbaca sejak kemarin', 'example: voice for Kolam B not understood since yesterday') },
   { key: 'waspada', label: t('Waspada dan alarm', 'Watch and alarm'), hint: t('contoh: alarm jam 23.30 tidak bunyi', 'example: the 23:30 alarm did not ring') },
   { key: 'jatah', label: t('Jatah AI', 'AI reads'), hint: t('contoh: jatah habis padahal baru dipakai sedikit', 'example: reads ran out after only a little use') },
   { key: 'lain', label: t('Lainnya', 'Other'), hint: t('Ceritakan singkat saja', 'Keep it short') },

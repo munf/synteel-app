@@ -339,7 +339,7 @@ export function Profile({
         <div class="box stack-sm">
           <span class="row strong" style={{ gap: 8, lineHeight: 1.25 }}>
             <Shape tone="bad" />
-            {t('Kolam B · Bahaya', 'Pond B · Danger')}
+            {t('Kolam B · Bahaya', 'Kolam B · Danger')}
           </span>
           <span class="ink2">{t('Sidat naik ke permukaan. Cek aerator sekarang.', 'Eels are coming up to the surface. Check the aerator now.')}</span>
         </div>

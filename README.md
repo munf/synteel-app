@@ -29,9 +29,9 @@ Then try:
 | Screen | What to do | Model behind it |
 |---|---|---|
 | Home | Kolam B has an open dead-eel case: 3 dead yesterday, 6 today. Tap **See the full case**, answer a question and tap **Send answers**. The case agent runs again with your answer and lists what it looked at. | Muse Spark Open (agent) |
-| Watch | See each pond's 36-hour water temperature and oxygen-risk estimate and tonight's check times. Tap **Write the night summary now** (or **Redo**) to run the evening briefing agent. | Muse Spark Open (agent) |
+| Watch | See each pond's 36-hour water temperature and oxygen-risk estimate and tonight's check times. Tap **Why?** to read tonight's summary from the evening briefing agent and what it looked at; checks marked **From the AI** were added by it. **Redo** runs the agent again. | Muse Spark Open (agent) |
 | Record | Tap **Speak** and say something like "Pond A, 27 degrees, pH 7.4. Pond B, two dead." Indonesian and Javanese work too. Or try **Notebook photo** with a handwritten page. You review a draft before anything is saved. | Muse Voice Transcribe, Muse Spark 1.3 |
-| Problem | Pick a pond and **Dead eels**, then **Photo for an AI count** with a photo of dead glass eels from above. Then **See what to do**. | SAM 3.1 |
+| Problem | Pick a pond and **Dead eels**, then **Photo for an AI count** with a photo of dead glass eels from above. Then **See what to do**. A dead-eel report opens a case on that pond too. | SAM 3.1 |
 
 The preview calls the real Meta models. Photos, voice and notebook pages share a daily AI quota for each demo farm (Profil, **Daily AI reads**). Dead-eel counts and emergency reports do not use it. When the quota is used up or a model is down, the app says so and manual entry still works.
 

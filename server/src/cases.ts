@@ -332,7 +332,9 @@ export async function runCaseAgent(input: CaseInput, providers: ChatProvider[]):
   const end = input.now + WINDOW_H * HOUR;
   const rules = ruleChecks(input, facts);
   // Dates as the farmer says them ("Kemarin 09.00"), so an old answer is not read as today's.
-  const when = (t: number) => `${dayName(localDate(new Date(t), input.timezone), input.now, input.timezone)} ${clock(t, input.timezone)}`;
+  // Lower case ("kemarin 09.00", "yesterday"): the model copies these words into sentences.
+  const day = (date: string) => dayName(date, input.now, input.timezone).replace(/^(Hari ini|Kemarin|Today|Yesterday)\b/, (w) => w.toLowerCase());
+  const when = (t: number) => `${day(localDate(new Date(t), input.timezone))} ${clock(t, input.timezone)}`;
   const read = (name: string, args: Record<string, any>): unknown => {
     switch (name) {
       case 'get_case':
@@ -343,7 +345,7 @@ export async function runCaseAgent(input: CaseInput, providers: ChatProvider[]):
           opened: when(input.openedAt),
           today: localDate(new Date(input.now), input.timezone),
           // "day" names the date as the farmer says it, so the summary never calls today "kemarin".
-          dead_per_day: facts.days.map((d) => ({ date: d.date, day: dayName(d.date, input.now, input.timezone), dead: d.dead, recorded: d.recorded })),
+          dead_per_day: facts.days.map((d) => ({ date: d.date, day: day(d.date), dead: d.dead, recorded: d.recorded })),
           total_dead: facts.total,
           trend: facts.trend,
           recheck: facts.recheck && { due: when(facts.recheck.dueAt), answered: facts.recheck.answered, better: facts.recheck.better, missed: facts.recheck.missed },

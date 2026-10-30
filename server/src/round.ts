@@ -87,7 +87,8 @@ export function roundInstructions(ponds: RoundPond[]): string {
 
 // Words around a pond's name that carry no identity: "kolam", "bak", "nomor" ...
 const FILLER = new Set([
-  'kolam', 'kolame', 'bak', 'bake', 'tambak', 'empang', 'blumbang', 'nomor', 'nomer', 'no', 'sing', 'yang',
+  // "kolom": how speech-to-text often writes "kolam" (heard in a live round).
+  'kolam', 'kolame', 'kolom', 'bak', 'bake', 'tambak', 'empang', 'blumbang', 'nomor', 'nomer', 'no', 'sing', 'yang',
   'lagi', 'maneh', 'meneh', 'ini', 'itu', 'iki', 'kuwi', // "Kolam B maneh" = Kolam B again
   'pond', 'tank', 'number', 'the', 'again', 'this', // English: "pond B again"
 ]);
