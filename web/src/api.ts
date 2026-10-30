@@ -185,6 +185,9 @@ export class ApiError extends Error {
   }
 }
 
+/** The pond's cover picture, or null for the pond icon. The key in the address makes a new picture a new address. */
+export const coverUrl = (p: { id: number; cover?: string | null }) => (p.cover ? `${API}/ponds/${p.id}/cover?v=${encodeURIComponent(p.cover)}` : null);
+
 export const isAuthError = (e: unknown) => e instanceof ApiError && e.status === 401;
 
 // Sign-in routes answer 401 for a wrong PIN; that is not a lost session.
@@ -249,6 +252,13 @@ export const api = {
     if (pondId) form.append('pondId', String(pondId));
     return upload<{ draft: PondPhotoDraft }>('/pond-photo', form);
   },
+  /** The pond photo kept as the pond's cover; only called when the farmer taps Simpan. Owners only. */
+  setPondCover: (id: number, image: Blob) => {
+    const form = new FormData();
+    form.append('image', image, 'cover.jpg');
+    return upload<{ pond: PondSummary }>(`/ponds/${id}/cover`, form);
+  },
+  removePondCover: (id: number) => call<{ pond: PondSummary }>('DELETE', `/ponds/${id}/cover`),
   pondTemperature: (id: number) => call<PondTemperature>('GET', `/ponds/${id}/temperature`),
   /** The pattern agent for this pond now, in the viewer's language. */
   pondPattern: (id: number) => call<{ pattern: PondPattern; left: number }>('POST', `/ponds/${id}/pattern`),

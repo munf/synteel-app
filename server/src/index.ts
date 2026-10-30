@@ -2,7 +2,7 @@ import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { createAi, withDailyCap } from './ai.ts';
 import { createApi } from './api.ts';
-import { captureStore, removeFarmCaptures } from './captures.ts';
+import { captureStore, coverStore, removeFarmCaptures } from './captures.ts';
 import { openDb, repo } from './db.ts';
 import { DEMO_MAX_LIVE, DEMO_PER_IP_PER_DAY } from './demo.ts';
 import { env } from './env.ts';
@@ -26,7 +26,7 @@ const chain = env.aiChat.filter((p) => p.apiKey).map((p) => p.name).join(' → '
 console.log(`AI mode: ${ai.mode}${ai.mode === 'meta' ? ` (${chain}${env.aiTranscriber.apiKey ? ', voice: meta' : ', no voice'}${env.aiDailyCap ? `, cap ${env.aiDailyCap}/day` : ''})` : ''}`);
 if (ai.mode === 'meta') console.log(`Briefing and case agent: ${env.agentChat.filter((p) => p.apiKey).map((p) => p.name).join(' → ')}`);
 const store = repo(openDb());
-const api = createApi(store, { ai, saveCapture: captureStore(), cookieName: env.cookieName, demoPhone: env.demoPhone, farmAiCap: env.farmAiCap, agentProviders: env.agentChat.filter((p) => p.apiKey), sam: env.aiTranscriber.apiKey ? { apiKey: env.aiTranscriber.apiKey, base: env.aiTranscriber.base } : null, mail: mailer(env.smtp), removeFarmFiles: (farmId) => removeFarmCaptures(farmId), demoLimits: { perIp: env.demoPerIp ?? DEMO_PER_IP_PER_DAY, maxLive: env.demoMaxLive ?? DEMO_MAX_LIVE } });
+const api = createApi(store, { ai, saveCapture: captureStore(), cookieName: env.cookieName, demoPhone: env.demoPhone, farmAiCap: env.farmAiCap, agentProviders: env.agentChat.filter((p) => p.apiKey), sam: env.aiTranscriber.apiKey ? { apiKey: env.aiTranscriber.apiKey, base: env.aiTranscriber.base } : null, mail: mailer(env.smtp), removeFarmFiles: (farmId) => removeFarmCaptures(farmId), covers: coverStore(), demoLimits: { perIp: env.demoPerIp ?? DEMO_PER_IP_PER_DAY, maxLive: env.demoMaxLive ?? DEMO_MAX_LIVE } });
 console.log(`Support mail: ${env.smtp ? `${env.smtp.host}:${env.smtp.port}` : 'not configured (tickets only stored)'}`);
 app.route('/', api);
 

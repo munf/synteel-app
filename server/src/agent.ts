@@ -9,7 +9,7 @@ import { currentLang, tx, type Lang } from './i18n.ts';
 import type { ChatProvider } from './ai.ts';
 import { clock, fn, overstated, searchGuidance, toolLoop, unsafeText, wordingRules } from './agentloop.ts';
 import type { Nowcast } from './nowcast.ts';
-import type { PowerNight } from './power.ts';
+import { powerBackupLabel, type PowerNight } from './power.ts';
 
 const HOUR = 3600_000;
 const WINDOW_H = 18;
@@ -103,7 +103,7 @@ export function rulesBriefing(input: BriefingInput, steps: Briefing['steps'] = [
       ? p.backup === 'genset'
         ? tx(' Malam ini rawan listrik padam: siapkan genset dan bahan bakar.', ' Tonight is at risk of a power cut: get the generator and fuel ready.')
         : p.backup === 'battery'
-          ? tx(' Malam ini rawan listrik padam: pastikan aki atau UPS terisi penuh.', ' Tonight is at risk of a power cut: make sure the battery backup is fully charged.')
+          ? tx(' Malam ini rawan listrik padam: pastikan aki atau baterai cadangan terisi penuh.', ' Tonight is at risk of a power cut: make sure the battery backup is fully charged.')
           : tx(' Malam ini rawan listrik padam: kurangi pakan dan tentukan siapa yang cek aerator.', ' Tonight is at risk of a power cut: feed less and decide who checks the aerator.')
       : '';
   return { summary: summary + power, checks: ruleChecks(input), source: 'rules', model: null, steps, generatedAt: input.now, lang: currentLang() };
@@ -152,7 +152,7 @@ const SYSTEM = (input: BriefingInput) =>
     `Kamu agen briefing sore Synteel untuk tambak sidat "${input.farmName}". Sekarang ${clock(input.now, input.timezone)} waktu tambak.`,
     'Tugasmu: lihat data dengan alat, lalu kirim briefing malam ini lewat submit_briefing.',
     'Langkah: get_ponds dulu, lalu get_night_forecast untuk kolam yang berstatus perhatian/bahaya atau berisiko, get_weather, get_bmkg_forecast, dan bila perlu get_pond_history serta search_guidance.',
-    '- Listrik padam di malam hari mematikan aerator. Bila get_bmkg_forecast menilai malam ini rawan listrik padam, sebut itu dan persiapannya (genset, aki, atau tanpa cadangan: kurangi pakan dan tentukan siapa yang cek aerator). Bila BMKG dan Open-Meteo berbeda soal petir malam ini, katakan terus terang bahwa kedua prakiraan berbeda, lalu sarankan persiapan yang lebih aman. Sebut BMKG sebagai sumber bila memakai datanya.',
+    '- Listrik padam di malam hari mematikan aerator. Bila get_bmkg_forecast menilai malam ini rawan listrik padam, sebut itu dan persiapannya (genset, aki atau baterai cadangan, atau tanpa cadangan: kurangi pakan dan tentukan siapa yang cek aerator). Bila BMKG dan Open-Meteo berbeda soal petir malam ini, katakan terus terang bahwa kedua prakiraan berbeda, lalu sarankan persiapan yang lebih aman. Sebut BMKG sebagai sumber bila memakai datanya.',
     'Aturan:',
     '- Ini pendukung keputusan, bukan diagnosis. Jangan sebut obat, dosis, atau pengobatan.',
     '- Cek dari aturan sudah otomatis ada; jangan mengulanginya. Tambahkan cek hanya bila data memberi alasan jelas (mis. hujan deras, suhu turun, sisa pakan, kolam lama tidak diukur).',
@@ -208,7 +208,7 @@ export async function runBriefing(input: BriefingInput, providers: ChatProvider[
                 thunder_open_meteo: p.thunder.openMeteo,
                 sources_disagree: p.thunder.disagree,
                 note: p.note,
-                power_backup: p.backup ?? 'belum diisi',
+                power_backup: powerBackupLabel(p.backup),
                 power_out_now: p.outage ? { since: clock(Date.parse(p.outage.startedAt), input.timezone) } : null,
                 rule_checks: p.checks.map((c) => ({ time: clock(c.t, input.timezone), action: c.reason })),
               }

@@ -422,6 +422,7 @@ details.plain > summary { cursor: pointer; color: var(--accent-ink); font-weight
 .cover > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .cover .icon-btn { position: absolute; top: 12px; left: 12px; }
 .cover .cover-action { position: absolute; right: 12px; bottom: 12px; }
+.cover > img.cover-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 
 /* ---------- round 2: shared parts ---------- */
 .note.bad { background: var(--bad-bg); color: var(--bad); }

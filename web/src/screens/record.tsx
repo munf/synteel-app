@@ -369,7 +369,7 @@ function PondRow({ pond: p, today, go }: { pond: PondSummary; today: boolean; go
   return (
     <div class="rp-row">
       <button type="button" class="rp-row-main" aria-label={t(`Catat ${p.name}`, `Record ${p.name}`)} onClick={() => go({ name: 'record-pond', pondId: p.id })}>
-        <PondThumb kind={p.kind} size={48} />
+        <PondThumb kind={p.kind} pond={p} size={48} />
         <span class="grow stack-xs" style={{ gap: 2 }}>
           <span class="rp-row-name">
             {p.name}

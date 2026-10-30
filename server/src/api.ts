@@ -14,7 +14,7 @@ import { AiFailed, AiUnavailable, type Ai, type CaptureKind, type ChatProvider }
 import { rulesBriefing, runBriefing, type Briefing, type BriefingInput } from './agent.ts';
 import { countDeadEels, type SamProvider } from './sam.ts';
 import { caseView, MAX_AGENT_RUNS_PER_DAY, MAX_LANG_RUNS_PER_DAY, RECHECK_AFTER, RECHECK_GRACE, mockCaseRun, rulesCaseRun, runCaseAgent, type CaseEvent, type CaseInput, type CaseRun, type CaseTrigger, type CaseView } from './cases.ts';
-import type { SaveCapture } from './captures.ts';
+import type { CoverStore, SaveCapture } from './captures.ts';
 import { computeNowcast } from './nowcast.ts';
 import { assessPond, classifyReading, limitsFor, overallLevel, type Limits, type Threshold } from './rules.ts';
 import { geocode as defaultGeocode, getWeather as defaultGetWeather } from './weather.ts';
@@ -162,8 +162,10 @@ export interface ApiDeps {
   mail?: SendMail | null;
   /** Abuse limits for "Coba demo": new copies per address per day, and copies alive at once. */
   demoLimits?: { perIp: number; maxLive: number };
-  /** Deletes what a demo farm left on disk (captures) once it expires. */
+  /** Deletes what a demo farm left on disk (captures and pond cover pictures) once it expires. */
   removeFarmFiles?: (farmId: number) => void;
+  /** Where pond cover pictures are kept (captures.ts coverStore); null = covers cannot be saved. */
+  covers?: CoverStore | null;
 }
 
 /** Briefings made in another language for the same evening (the viewer's language had none yet), per farm per day. */
@@ -171,6 +173,8 @@ export const MAX_LANG_BRIEFINGS_PER_DAY = 2;
 
 const MAX_IMAGES = 24;
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+/** A pond cover picture, already made smaller on the phone (about 1000 px on the long side). */
+const MAX_COVER_BYTES = 2 * 1024 * 1024;
 const MAX_AUDIO_BYTES = 15 * 1024 * 1024;
 const SESSION_DAYS = 90;
 const INVITE_DAYS = 7;
@@ -268,7 +272,7 @@ type Env = { Variables: { userId: number; farmId: number | null; tokenHash: stri
 
 export function createApi(
   store: Repo,
-  { clock = () => new Date(), getWeather = defaultGetWeather, geocode = defaultGeocode, ai, saveCapture, cookieName = 'synteel_session', demoPhone = null, farmAiCap = 0, agentProviders = [], sam = null, getBmkg = getBmkgForecast, getStorm = getStormHours, mail = null, demoLimits = { perIp: DEMO_PER_IP_PER_DAY, maxLive: DEMO_MAX_LIVE }, removeFarmFiles, fetchArchive }: ApiDeps = {},
+  { clock = () => new Date(), getWeather = defaultGetWeather, geocode = defaultGeocode, ai, saveCapture, cookieName = 'synteel_session', demoPhone = null, farmAiCap = 0, agentProviders = [], sam = null, getBmkg = getBmkgForecast, getStorm = getStormHours, mail = null, demoLimits = { perIp: DEMO_PER_IP_PER_DAY, maxLive: DEMO_MAX_LIVE }, removeFarmFiles, fetchArchive, covers = null }: ApiDeps = {},
 ) {
   const api = new Hono<Env>();
   // Every handler below answers in the language the app asked for (i18n.ts).
@@ -352,7 +356,7 @@ export function createApi(
       ? { code: link.code, kind: link.device.kind, name: KINDS[link.device.kind].name(), unit: link.unit, unitName: KINDS[link.device.kind].units.find((u) => u.id === link.unit)?.name() ?? link.unit, simulated: link.device.simulated }
       : null;
     // A pond fed by a simulated device holds simulated data only (it was made for the device).
-    return { ...pond, batch, program, latest, limits, status, lastLogAt, findings, level: overallLevel(findings), device, simulated: device?.simulated ?? false };
+    return { ...pond, cover: pond.cover ?? null, batch, program, latest, limits, status, lastLogAt, findings, level: overallLevel(findings), device, simulated: device?.simulated ?? false };
   }
 
   /** Days in a row with at least one measured reading on any pond, counting today or, if not yet, yesterday. */
@@ -1441,6 +1445,47 @@ export function createApi(
       console.error('capture not stored:', err),
     );
     return c.json({ draft });
+  });
+
+  // ---------- the pond's cover picture ----------
+
+  // The pond photo becomes the pond's cover when the farmer taps Simpan (add pond, or the pond profile).
+  // Owners only, like the rest of the profile; a new picture replaces the old one.
+  api.post('/ponds/:id/cover', async (c) => {
+    const r = needOwner(c);
+    const pond = r.getPond(Number(c.req.param('id')));
+    if (!pond) return c.json({ error: tx('Kolam tidak ditemukan', 'Pond not found') }, 404);
+    if (!covers) throw new BadRequest(tx('Foto sampul belum bisa disimpan di server ini', 'Cover photos cannot be saved on this server yet'));
+    const form = await c.req.parseBody();
+    const image = form.image instanceof File ? form.image : null;
+    if (!image) throw new BadRequest(tx('Foto belum ada', 'No photo yet'));
+    if (image.size > MAX_COVER_BYTES) throw new BadRequest(tx('Foto terlalu besar', 'The photo is too large'));
+    const bytes = new Uint8Array(await image.arrayBuffer());
+    // The phone sends a JPEG (prepareImage); anything else is not kept.
+    if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[2] !== 0xff) throw new BadRequest(tx('Foto tidak bisa dibaca', 'The photo cannot be read'));
+    const key = covers.save(r.farmId, pond.id, bytes, clock());
+    r.setPondCover(pond.id, key);
+    if (pond.cover) covers.remove(pond.cover);
+    return c.json({ pond: pondSummary(r, r.getPond(pond.id)!) });
+  });
+
+  api.delete('/ponds/:id/cover', (c) => {
+    const r = needOwner(c);
+    const pond = r.getPond(Number(c.req.param('id')));
+    if (!pond) return c.json({ error: tx('Kolam tidak ditemukan', 'Pond not found') }, 404);
+    r.setPondCover(pond.id, null);
+    if (pond.cover) covers?.remove(pond.cover);
+    return c.json({ pond: pondSummary(r, r.getPond(pond.id)!) });
+  });
+
+  // Served only to members of the pond's farm (the pond lookup is scoped to the session's farm).
+  // The page asks with ?v=<key>, so a new picture is a new address and the old one can be cached.
+  api.get('/ponds/:id/cover', (c) => {
+    const r = needFarm(c);
+    const pond = r.getPond(Number(c.req.param('id')));
+    const image = pond?.cover ? covers?.read(pond.cover) : null;
+    if (!image) return c.json({ error: tx('Foto sampul tidak ada', 'No cover photo') }, 404);
+    return c.body(new Uint8Array(image), 200, { 'content-type': 'image/jpeg', 'cache-control': 'private, max-age=604800', 'x-content-type-options': 'nosniff' });
   });
 
   /** One pond's learned model, its best measuring hours and its pattern facts. */

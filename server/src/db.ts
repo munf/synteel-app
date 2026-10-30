@@ -217,6 +217,11 @@ export function openDb(path = process.env.SYNTEEL_DB ?? defaultPath) {
     create index if not exists outages_farm on outages (farm_id, started_at);
   `);
   // ---------- end of the farms power block ----------
+  // ---------- Pond cover photo (captures.ts coverStore) ----------
+  // Additive only. cover_photo: the folder of the pond's cover picture under the captures folder
+  // (named with the farm id, so a deleted demo farm's covers go with its captures); null = the pond icon.
+  if (!pondCols.includes('cover_photo')) db.exec('alter table ponds add column cover_photo text');
+  // ---------- end of the pond cover block ----------
   db.exec('create index if not exists ponds_farm on ponds (farm_id)');
   // Single-farm databases (before accounts): the old farm becomes farm 1 and owns every pond.
   const legacy = db.prepare("select name from sqlite_master where type = 'table' and name = 'farm'").get();
@@ -247,6 +252,7 @@ const toPond = (r: Row): Pond => ({
   depthCm: r.depth_cm as number | null,
   waterColor: (r.water_color as Pond['waterColor']) ?? null,
   light: (r.light as Pond['light']) ?? null,
+  cover: (r.cover_photo as string | null) ?? null,
   nicknames: r.nicknames ? (JSON.parse(r.nicknames as string) as string[]) : [],
 });
 
@@ -406,6 +412,11 @@ export function farmRepo(db: Db, farmId: number) {
     },
     patternRunsSince(sinceIso: string): number {
       return (db.prepare("select count(*) as n from pond_patterns where farm_id = ? and created_at >= ? and json_extract(body, '$.precomputed') is null").get(farmId, sinceIso) as Row).n as number;
+    },
+
+    /** The pond's cover picture (a coverStore key), or null for the pond icon. Profile saves leave it as it is. */
+    setPondCover(id: number, key: string | null) {
+      db.prepare('update ponds set cover_photo = ? where id = ? and farm_id = ?').run(key, id, farmId);
     },
 
     archivePond(id: number) {

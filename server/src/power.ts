@@ -53,6 +53,14 @@ export type PowerLevel = 'low' | 'medium' | 'high';
 export type PowerBackup = 'genset' | 'battery' | 'none';
 export const POWER_BACKUPS: PowerBackup[] = ['genset', 'battery', 'none'];
 
+/** The power backup in words, as the farmer chose it in Profil ("Cadangan listrik"). */
+export function powerBackupLabel(backup: PowerBackup | null): string {
+  if (backup === 'genset') return tx('Genset', 'Generator');
+  if (backup === 'battery') return tx('Aki atau baterai cadangan', 'Battery backup');
+  if (backup === 'none') return tx('Tidak ada', 'None');
+  return tx('Belum diisi', 'Not set');
+}
+
 export interface StormHour {
   t: number;
   code: number | null;
@@ -248,7 +256,7 @@ function prepChecks(level: PowerLevel, backup: PowerBackup | null, reasons: Powe
   const check = (t: number, reason: string, alarm = false): PowerCheck => ({ t, kind: 'look', reason, alarm, why: because });
   const checks: PowerCheck[] = [];
   if (backup === 'genset') checks.push(check(prepAt, tx('Siapkan genset dan bahan bakar', 'Get the generator and fuel ready')));
-  else if (backup === 'battery') checks.push(check(prepAt, tx('Pastikan aki atau UPS terisi penuh', 'Make sure the battery backup is fully charged')));
+  else if (backup === 'battery') checks.push(check(prepAt, tx('Pastikan aki atau baterai cadangan terisi penuh', 'Make sure the battery backup is fully charged')));
   else {
     if (level === 'high') checks.push(check(prepAt, tx('Kurangi pakan malam ini supaya sisa pakan tidak memakai oksigen', 'Feed less tonight so leftover feed does not use up oxygen')));
     checks.push(check(prepAt, tx('Tentukan siapa yang bangun cek aerator kalau listrik padam', 'Decide who gets up to check the aerator if the power goes out')));

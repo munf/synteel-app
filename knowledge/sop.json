@@ -20,7 +20,7 @@
     { "frequency": "monthly", "scope": "general", "task": "Kalibrasi alat ukur pH, ORP, EC/TDS", "note": "Larutan buffer standar" },
     { "frequency": "monthly", "scope": "synt-nursery", "task": "Ganti filter sedimen, cek karbon blok" },
     { "frequency": "monthly", "scope": "synt-nursery", "task": "Bersihkan selongsong kuarsa UV", "note": "Matikan UV dulu" },
-    { "frequency": "monthly", "scope": "general", "task": "Uji cadangan listrik (UPS) dan oksigen darurat dengan simulasi padam", "note": "5 menit" },
+    { "frequency": "monthly", "scope": "general", "task": "Uji cadangan listrik (genset, aki atau baterai cadangan) dan oksigen darurat dengan simulasi padam", "note": "5 menit" },
 
     { "frequency": "per_batch", "scope": "general", "task": "Kuras dan bersihkan kolam", "note": "Setelah panen" },
     { "frequency": "per_batch", "scope": "synt-nursery", "task": "Ganti karbon aktif, regenerasi zeolit" },

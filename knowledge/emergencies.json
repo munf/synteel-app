@@ -19,7 +19,7 @@
       "source": "Disusun saat hackathon dari praktik umum pendederan; perlu validasi lapangan",
       "operator_actions": [
         "Catat jam listrik mulai padam dan kabari pemilik tambak",
-        "Nyalakan genset, atau sambungkan aerator ke aki atau UPS, kalau ada",
+        "Nyalakan genset, atau sambungkan aerator ke aki atau baterai cadangan, kalau ada",
         "Jangan beri pakan sampai aerator nyala lagi",
         "Lihat sidat tiap 30 menit: naik ke permukaan atau berkumpul di air masuk tanda oksigen kurang",
         "Kalau padam lebih dari 1 jam tanpa cadangan listrik, alirkan pelan-pelan air bersih yang sudah diendapkan",

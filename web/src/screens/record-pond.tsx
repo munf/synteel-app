@@ -761,7 +761,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
       {/* The pond being recorded: its own card, so the pond picture never reads as part of the back button. */}
       <section class="card" aria-label={t('Kolam yang dicatat', 'Pond being recorded')} style={{ padding: '16px 20px 4px', gap: 12 }}>
         <div class="row">
-          <PondThumb kind={pond.kind} size={56} />
+          <PondThumb kind={pond.kind} pond={pond} size={56} />
           <div class="grow stack-xs" style={{ gap: 2 }}>
             <div class="row between" style={{ gap: 8 }}>
               <span style={{ fontSize: '1.5rem', fontWeight: 800, lineHeight: 1.25 }}>{pond.name}</span>

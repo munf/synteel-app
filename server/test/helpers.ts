@@ -8,7 +8,7 @@ export type Deps = Parameters<typeof createApi>[1];
 /** Calls the API like a phone does: keeps the session cookie between requests. */
 export function client(api: Api, headers: Record<string, string> = {}) {
   let cookie = '';
-  return async (method: string, path: string, body?: unknown) => {
+  const call = async (method: string, path: string, body?: unknown) => {
     const form = body instanceof FormData;
     const res = await api.request(path, {
       method,
@@ -19,6 +19,9 @@ export function client(api: Api, headers: Record<string, string> = {}) {
     if (set) cookie = set.split(';')[0];
     return { status: res.status, json: res.status === 204 ? null : await res.json() };
   };
+  /** A GET with the session that returns the raw response (pictures are not JSON). */
+  const raw = (path: string) => api.request(path, { headers: { ...headers, ...(cookie && { cookie }) } });
+  return Object.assign(call, { raw });
 }
 
 export type Call = ReturnType<typeof client>;

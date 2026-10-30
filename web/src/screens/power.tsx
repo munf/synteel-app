@@ -11,7 +11,7 @@ import './power.css';
 
 export const BACKUP_LABEL: Record<PowerBackup, string> = {
   genset: t('Genset', 'Generator'),
-  battery: t('Aki atau UPS', 'Battery backup'),
+  battery: t('Aki atau baterai cadangan', 'Battery backup'),
   none: t('Tidak ada', 'None'),
 };
 
@@ -137,7 +137,7 @@ export function PowerNightCard({ power, go, compact = false }: { power: PowerNig
   );
 }
 
-/** "Cadangan listrik": genset, battery or UPS, or none. */
+/** "Cadangan listrik": generator, battery backup, or none. */
 export function BackupChoice({ value, onChange }: { value: PowerBackup | null; onChange: (v: PowerBackup) => void }) {
   return <Chips<PowerBackup> options={BACKUP_LABEL} value={value ? [value] : []} onChange={(v) => v[0] && onChange(v[0])} />;
 }

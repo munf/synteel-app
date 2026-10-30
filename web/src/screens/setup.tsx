@@ -3,7 +3,7 @@ import { api, type Aeration, type Farm, type Me, type Phase, type PondSummary, t
 import { BackupChoice } from './power.tsx';
 import { aerationLabel, phaseLabel } from '../labels.ts';
 import { Chips, Field, Icon, initialOf, kindLabel, Tick, Wordmark } from '../ui.tsx';
-import { applyDraft, PondPhoto, profileBody, ProfileFields, type ProfileValue } from '../pondprofile.tsx';
+import { applyDraft, PondPhoto, profileBody, ProfileFields, saveCover, useCoverChange, type ProfileValue } from '../pondprofile.tsx';
 import type { PondPhotoDraft } from '../api.ts';
 import { JoinByCode } from '../join.tsx';
 import { LOCALE, t } from '../i18n.ts';
@@ -306,6 +306,7 @@ export function AddPond({
   const [nickDraft, setNickDraft] = useState('');
   const [profile, setProfile] = useState<ProfileValue>(NEW_PROFILE);
   const [photo, setPhoto] = useState<PondPhotoDraft | null>(null);
+  const [cover, setCover] = useCoverChange();
   const [phase, setPhase] = useState<Phase[]>(['elver']);
   const [stockedAt, setStockedAt] = useState(today);
   const [dateMode, setDateMode] = useState<'today' | 'yesterday' | 'pick'>('today');
@@ -336,6 +337,10 @@ export function AddPond({
       };
       const { pond } = await api.addPond(body);
       await api.startBatch(pond.id, { phase: phase[0] ?? 'elver', stockedAt, initialCount: initialCount ? Number(initialCount) : undefined });
+      // The pond photo as its cover. The pond is already saved: a failed upload must not lead to a second
+      // pond on the next tap; the photo can be added again from the pond's page.
+      await saveCover(pond.id, cover).catch(() => null);
+      setCover(null);
       const summary = [typeLabel(profile.kind), phaseLabel[phase[0] ?? 'elver'], t(`tebar ${longDate(stockedAt)}`, `stocked ${longDate(stockedAt)}`).replace(/ /g, '\u00a0'), initialCount ? t(`${initialCount} ekor`, `${initialCount} eels`) : null]
         .filter(Boolean)
         .join(' · ');
@@ -367,6 +372,8 @@ export function AddPond({
     setInitialCount('');
     setNicks([]);
     setNickDraft('');
+    // A photo shows one pond: the next one starts without a cover.
+    setCover(null);
     setSaved(null);
     window.scrollTo(0, 0);
   };
@@ -378,6 +385,7 @@ export function AddPond({
     setNickDraft('');
     setProfile(NEW_PROFILE);
     setPhoto(null);
+    setCover(null);
     setPhase(['elver']);
     chooseDate('today');
     setVolumeL('');
@@ -509,7 +517,14 @@ export function AddPond({
           <h2>{t('Wadah dan tempat', 'Container and place')}</h2>
           <span class="meta">{t('Dasar perkiraan suhu air. Foto kolam bisa mengisinya.', 'The water temperature estimate starts from this. A pond photo can fill it in.')}</span>
         </div>
-        <PondPhoto draft={photo} onDraft={(d) => (setPhoto(d), setProfile(applyDraft(profile, d)))} />
+        <PondPhoto
+          draft={photo}
+          onDraft={(d) => (setPhoto(d), setProfile(applyDraft(profile, d)))}
+          cover={cover && cover !== 'remove' ? cover.url : null}
+          pending={Boolean(cover)}
+          onCover={setCover}
+          onRemove={() => setCover(null)}
+        />
         <ProfileFields value={profile} onChange={setProfile} draft={photo} />
       </section>
 

@@ -1,6 +1,6 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import type { Finding, Level, PondSummary } from './api.ts';
+import { coverUrl, type Finding, type Level, type PondSummary } from './api.ts';
 import { fmtClock, levelLabel, phaseLabel } from './labels.ts';
 import { lang, LOCALE, setLang, t, type Lang } from './i18n.ts';
 
@@ -140,12 +140,18 @@ export const kindLabel: Record<string, string> = {
   gen5: 'Synteel Nursery Gen0',
 };
 
-export function PondThumb({ kind, size = 56 }: { kind: string | null; size?: number }) {
+/** The pond's cover photo when it has one, else its container as a line glyph. */
+export function PondThumb({ kind, size = 56, pond }: { kind: string | null; size?: number; pond?: { id: number; cover?: string | null } }) {
+  const photo = pond ? coverUrl(pond) : null;
   return (
     <span class={`thumb${size <= 40 ? ' sm' : ''}`} style={{ width: size, height: size }}>
-      <svg width={Math.round(size * 0.5)} height={Math.round(size * 0.5)} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d={tankPath(kind)} />
-      </svg>
+      {photo ? (
+        <img src={photo} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+      ) : (
+        <svg width={Math.round(size * 0.5)} height={Math.round(size * 0.5)} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d={tankPath(kind)} />
+        </svg>
+      )}
     </span>
   );
 }
@@ -196,7 +202,7 @@ export function PondPicker({
         onClick={() => setOpen(!open)}
       >
         {cur ? (
-          <PondThumb kind={cur.kind} />
+          <PondThumb kind={cur.kind} pond={cur} />
         ) : (
           <span class="thumb" style={{ width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)' }}>
             <Icon name="plus" />
@@ -233,7 +239,7 @@ export function PondPicker({
                   setQuery('');
                 }}
               >
-                <PondThumb kind={p.kind} size={40} />
+                <PondThumb kind={p.kind} pond={p} size={40} />
                 <span class="grow stack-xs">
                   <span class="strong">
                     {p.name} <SimChip pond={p} />

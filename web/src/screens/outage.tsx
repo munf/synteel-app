@@ -20,7 +20,7 @@ const PENDING_KEY = 'synteel.outage.pending';
 // Shown when the knowledge base never reached this phone (first use without signal).
 const FALLBACK = [
   t('Catat jam listrik mulai padam dan kabari pemilik tambak', 'Note the time the power went out and tell the farm owner'),
-  t('Nyalakan genset, atau sambungkan aerator ke aki atau UPS, kalau ada', 'Start the generator, or connect the aerator to a battery backup, if there is one'),
+  t('Nyalakan genset, atau sambungkan aerator ke aki atau baterai cadangan, kalau ada', 'Start the generator, or connect the aerator to a battery backup, if there is one'),
   t('Jangan beri pakan sampai aerator nyala lagi', 'Do not feed until the aerator is running again'),
   t('Lihat sidat tiap 30 menit: naik ke permukaan atau berkumpul di air masuk tanda oksigen kurang', 'Look at the eels every 30 minutes: rising to the surface or crowding at the water inlet means oxygen is short'),
   t('Kalau padam lebih dari 1 jam tanpa cadangan listrik, alirkan pelan-pelan air bersih yang sudah diendapkan', 'If the power is out for more than 1 hour with no backup, slowly let in clean water that has been settled'),
@@ -51,7 +51,7 @@ function stepsFor(actions: string[], backup: PowerBackup | null) {
     backup === 'genset'
       ? t('Nyalakan genset untuk aerator', 'Start the generator for the aerators')
       : backup === 'battery'
-        ? t('Sambungkan aerator ke aki atau UPS', 'Connect the aerators to the battery backup')
+        ? t('Sambungkan aerator ke aki atau baterai cadangan', 'Connect the aerators to the battery backup')
         : null;
   // The app has noted the time already, and the message card below tells the owner.
   const recorded = (s: string) => /^(catat jam|note the time)/i.test(s);

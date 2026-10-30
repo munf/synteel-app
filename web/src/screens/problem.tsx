@@ -175,7 +175,7 @@ function PondChooser({ ponds, value, onChange }: { ponds: PondSummary[]; value: 
     <div class="picker" ref={ref}>
       <button type="button" class={`picker-btn${open ? ' open' : cur ? '' : ' empty'}`} aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen(!open)}>
         {cur ? (
-          <PondThumb kind={cur.kind} />
+          <PondThumb kind={cur.kind} pond={cur} />
         ) : (
           <span class="thumb" style={{ width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)' }}>
             <Icon name="plus" />
@@ -210,7 +210,7 @@ function PondChooser({ ponds, value, onChange }: { ponds: PondSummary[]; value: 
                   setQuery('');
                 }}
               >
-                <PondThumb kind={p.kind} size={40} />
+                <PondThumb kind={p.kind} pond={p} size={40} />
                 <span class="grow stack-xs" style={{ gap: 0 }}>
                   <span class="strong">{p.name}</span>
                   <Meta p={p} />
@@ -356,7 +356,7 @@ function Result({ report, emergencies, go, onBack, onSaved }: { report: Report; 
         <button class="icon-btn" aria-label={t('Kembali', 'Back')} onClick={onBack}>
           <Icon name="back" />
         </button>
-        <PondThumb kind={pond.kind} size={48} />
+        <PondThumb kind={pond.kind} pond={pond} size={48} />
         <div class="stack-xs grow">
           <h1 style={{ lineHeight: 1 }}>
             {pond.name} · {fmtClock(report.at)}

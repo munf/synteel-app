@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'preact/hooks';
 import { StepList, useSteps } from '../steps.tsx';
 import { CaseCard, ClosedCases, useCases } from './case.tsx';
-import { api, ApiError, type Limits, type Log, type Nowcast, type NowcastState, type PondPhotoDraft, type PondProfile, type PondSummary, type PondTemperature, type Role } from '../api.ts';
-import { applyDraft, errorWords, PondPhoto, profileBody, ProfileFields, profileLine, profileOf } from '../pondprofile.tsx';
+import { api, ApiError, coverUrl, type Limits, type Log, type Nowcast, type NowcastState, type PondPhotoDraft, type PondProfile, type PondSummary, type PondTemperature, type Role } from '../api.ts';
+import { applyDraft, errorWords, PondPhoto, profileBody, ProfileFields, profileLine, profileOf, saveCover, useCoverChange } from '../pondprofile.tsx';
 import type { Go } from '../app.tsx';
 import { aerationLabel, fmtAgo, fmtNum, fmtTemp, fmtTime, phaseLabel, readingWord, sourceLabel, summarizeLog } from '../labels.ts';
 import { usePrefs } from '../prefs.ts';
@@ -474,13 +474,16 @@ function WaterTempCard({ pond, nc, go }: { pond: PondSummary; nc: Nowcast | unde
 function ProfileEditor({ pond, onSaved, onClose, go }: { pond: PondSummary; onSaved: (p: PondSummary) => void; onClose: () => void; go: Go }) {
   const [value, setValue] = useState(profileOf(pond));
   const [draft, setDraft] = useState<PondPhotoDraft | null>(null);
+  const [cover, setCover] = useCoverChange();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const shown = cover === 'remove' ? null : cover ? cover.url : coverUrl(pond);
   const save = async () => {
     setBusy(true);
     setError('');
     try {
-      onSaved((await api.updatePond(pond.id, profileBody(value) as PondProfile)).pond);
+      const saved = (await api.updatePond(pond.id, profileBody(value) as PondProfile)).pond;
+      onSaved((await saveCover(pond.id, cover)) ?? saved);
     } catch (err) {
       setError((err as Error).message);
       setBusy(false);
@@ -492,7 +495,16 @@ function ProfileEditor({ pond, onSaved, onClose, go }: { pond: PondSummary; onSa
         <h2>{t('Profil kolam', 'Pond profile')}</h2>
         <span class="meta">{t('Dasar perkiraan suhu air. Foto kolam bisa mengisinya; cek dulu sebelum disimpan.', 'The water temperature estimate starts from this. A pond photo can fill it in; check before saving.')}</span>
       </div>
-      <PondPhoto pondId={pond.id} draft={draft} onDraft={(d) => (setDraft(d), setValue(applyDraft(value, d)))} onQuota={() => go({ name: 'quota' })} />
+      <PondPhoto
+        pondId={pond.id}
+        draft={draft}
+        onDraft={(d) => (setDraft(d), setValue(applyDraft(value, d)))}
+        onQuota={() => go({ name: 'quota' })}
+        cover={shown}
+        pending={Boolean(cover && cover !== 'remove')}
+        onCover={setCover}
+        onRemove={() => setCover(cover && cover !== 'remove' ? null : 'remove')}
+      />
       <ProfileFields value={value} onChange={setValue} draft={draft} />
       {error && <p class="error">{error}</p>}
       <div class="grid2" style={{ gap: 8 }}>
@@ -560,6 +572,7 @@ export function PondDetail({
     );
 
   const { pond, logs } = data;
+  const cover = coverUrl(pond);
   const nc = nowcast?.ponds.find((n) => n.pondId === pond.id);
   const top = pond.findings.find((f) => f.level === 'critical' || f.level === 'warning');
   const stage = pond.program?.stage;
@@ -570,12 +583,17 @@ export function PondDetail({
   return (
     <div class="screen">
       <section class="cover" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {/* No photo yet: the pond type as a line glyph in a neutral tile, never a filled shape. */}
-        <span style={{ width: 120, height: 120, marginRight: 80, borderRadius: 24, background: 'var(--bg)', color: 'var(--ink-2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d={tankPath(pond.kind)} />
-          </svg>
-        </span>
+        {cover ? (
+          // The pond photo the farmer saved with the pond profile.
+          <img class="cover-photo" src={cover} alt={t(`Foto ${pond.name}`, `Photo of ${pond.name}`)} />
+        ) : (
+          // No photo yet: the pond type as a line glyph in a neutral tile, never a filled shape.
+          <span style={{ width: 120, height: 120, marginRight: 80, borderRadius: 24, background: 'var(--bg)', color: 'var(--ink-2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d={tankPath(pond.kind)} />
+            </svg>
+          </span>
+        )}
         <button class="icon-btn" aria-label={t('Kembali ke Beranda', 'Back to Home')} onClick={() => go({ name: 'today' })}>
           <Icon name="back" />
         </button>

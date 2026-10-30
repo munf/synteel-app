@@ -47,7 +47,7 @@ function AttentionCard({ pond, go, today }: { pond: PondSummary; go: Go; today: 
   return (
     <button class="pond-card" onClick={() => go({ name: 'pond', id: pond.id })}>
       <div class="row top">
-        <PondThumb kind={pond.kind} />
+        <PondThumb kind={pond.kind} pond={pond} />
         <div class="grow stack-xs">
           <span class="h2">
             {pond.name}
@@ -85,7 +85,7 @@ function UnrecordedCard({ pond, go }: { pond: PondSummary; go: Go }) {
   return (
     <button class="pond-card" onClick={() => go({ name: 'pond', id: pond.id })}>
       <div class="row top">
-        <PondThumb kind={pond.kind} />
+        <PondThumb kind={pond.kind} pond={pond} />
         <div class="grow stack-xs">
           <div class="row between" style={{ gap: 8 }}>
             <span class="h2">
@@ -132,7 +132,7 @@ function SafeCard({ ponds, go, now }: { ponds: PondSummary[]; go: Go; now: numbe
       </div>
       <hr class="rule" />
       <div class="row">
-        <PondThumb kind={oldest.kind} size={48} />
+        <PondThumb kind={oldest.kind} pond={oldest} size={48} />
         <div class="grow stack-xs">
           <span class="meta">{t('Paling lama belum dicatat', 'Longest without a record')}</span>
           <span class="strong">

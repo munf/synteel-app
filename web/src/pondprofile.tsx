@@ -1,9 +1,10 @@
 // The pond profile the water temperature estimate starts from: container, place (indoor / under a
 // roof / open), water color, light and depth. A pond photo can fill it in (Muse Spark vision); the
 // farmer always checks and saves it, and anything the AI was unsure of stays empty to pick by hand.
-// Used when adding a pond (setup.tsx) and from the pond's page (pond.tsx).
-import { useRef, useState } from 'preact/hooks';
-import { api, ApiError, type Light, type Place, type Pond, type PondPhotoDraft, type WaterColor } from './api.ts';
+// Used when adding a pond (setup.tsx) and from the pond's page (pond.tsx). The photo also becomes the
+// pond's cover picture, but only when the farmer taps Simpan (saveCover); skipped, the cover stays.
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { api, ApiError, type Light, type Place, type Pond, type PondPhotoDraft, type PondSummary, type WaterColor } from './api.ts';
 import { prepareImage } from './capture/media.ts';
 import { colorLabel, fmtNum } from './labels.ts';
 import { Chips, Icon, kindLabel, tankPath } from './ui.tsx';
@@ -140,16 +141,62 @@ export function ProfileFields({ value, onChange, draft, depth = true }: { value:
   );
 }
 
+/** What Simpan does to the pond's cover: a new picture, remove it, or leave it (null). */
+export type CoverChange = { image: Blob; url: string } | 'remove' | null;
+
+/** The cover change a form holds until Simpan, with the preview address freed when it is replaced. */
+export function useCoverChange() {
+  const [change, setChange] = useState<CoverChange>(null);
+  useEffect(() => () => void (change && change !== 'remove' && URL.revokeObjectURL(change.url)), [change]);
+  return [change, setChange] as const;
+}
+
+/** A new photo for the cover, made small on the phone first (about 1000 px on the long side). */
+export async function coverChange(file: Blob): Promise<CoverChange> {
+  const { blob } = await prepareImage(file, 1024, 0.8);
+  return { image: blob, url: URL.createObjectURL(blob) };
+}
+
+/** Saves the cover change after the pond itself was saved. Returns the pond as it is now, or null when nothing changed. */
+export async function saveCover(pondId: number, change: CoverChange): Promise<PondSummary | null> {
+  if (change === 'remove') return (await api.removePondCover(pondId)).pond;
+  if (change) return (await api.setPondCover(pondId, change.image)).pond;
+  return null;
+}
+
 /**
  * "Foto kolam": take or pick a photo, the AI names what it sees, and the choices below are filled
- * in as a draft. Shows the husbandry notes and, in sample mode, says so.
+ * in as a draft. Shows the husbandry notes and, in sample mode, says so. The photo is also offered as
+ * the pond's cover (`onCover`); `cover` is the picture shown: the new one, or the saved one.
  */
-export function PondPhoto({ pondId, draft, onDraft, onQuota }: { pondId?: number; draft: PondPhotoDraft | null; onDraft: (d: PondPhotoDraft) => void; onQuota?: () => void }) {
+export function PondPhoto({
+  pondId,
+  draft,
+  onDraft,
+  onQuota,
+  cover,
+  pending = false,
+  onCover,
+  onRemove,
+}: {
+  pondId?: number;
+  draft: PondPhotoDraft | null;
+  onDraft: (d: PondPhotoDraft) => void;
+  onQuota?: () => void;
+  /** The picture to show: the new photo, or the pond's saved cover. */
+  cover?: string | null;
+  /** `cover` is a new photo that is saved with Simpan. */
+  pending?: boolean;
+  /** A new photo was taken (null: it was not a pond, so it is not used as the cover). */
+  onCover?: (c: CoverChange) => void;
+  /** "Hapus foto sampul": the cover goes when the farmer taps Simpan. */
+  onRemove?: () => void;
+}) {
   const camera = useRef<HTMLInputElement>(null);
   const gallery = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ text: string; quota: boolean } | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [dropped, setDropped] = useState(false);
 
   const read = async (e: Event) => {
     const input = e.currentTarget as HTMLInputElement;
@@ -158,11 +205,17 @@ export function PondPhoto({ pondId, draft, onDraft, onQuota }: { pondId?: number
     if (!file) return;
     setBusy(true);
     setError(null);
+    setDropped(false);
     try {
       const { blob } = await prepareImage(file, 1280, 0.82);
-      if (preview) URL.revokeObjectURL(preview);
-      setPreview(URL.createObjectURL(blob));
-      onDraft((await api.pondPhoto(blob, pondId)).draft);
+      onCover?.(await coverChange(file));
+      const d = (await api.pondPhoto(blob, pondId)).draft;
+      // Not a pond: the photo is not kept as the cover.
+      if (d.notPond && onCover) {
+        onCover(null);
+        setDropped(true);
+      }
+      onDraft(d);
     } catch (err) {
       const quota = err instanceof ApiError && err.code === 'ai_quota';
       setError({ text: err instanceof TypeError ? t('Belum ada sinyal. Pilih sendiri dulu, atau coba lagi nanti.', 'No signal yet. Pick them yourself, or try again later.') : (err as Error).message, quota });
@@ -178,8 +231,8 @@ export function PondPhoto({ pondId, draft, onDraft, onQuota }: { pondId?: number
       <input ref={camera} type="file" accept="image/*" capture="environment" hidden onChange={read} />
       <input ref={gallery} type="file" accept="image/*" hidden onChange={read} />
       <div class="row">
-        {preview ? (
-          <img src={preview} alt={t('Foto kolam', 'Pond photo')} style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 16, flex: 'none' }} />
+        {cover ? (
+          <img src={cover} alt={t('Foto kolam', 'Pond photo')} style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 16, flex: 'none' }} />
         ) : (
           <span class="icon-box" style={{ width: 56, height: 56, borderRadius: 28 }}>
             <Icon name="camera" size={26} />
@@ -188,6 +241,10 @@ export function PondPhoto({ pondId, draft, onDraft, onQuota }: { pondId?: number
         <span class="grow stack-xs">
           <span class="strong">{t('Foto kolam', 'Pond photo')}</span>
           <span class="meta">{t('AI membaca jenis wadah, tempat, warna air dan cahaya. Cek dulu sebelum disimpan.', 'The AI reads the container, place, water color and light. Check before saving.')}</span>
+          {onCover && cover && (
+            <span class="label ink2">{pending ? t('Jadi foto sampul kolam setelah Simpan.', 'Becomes the pond cover after Save.') : t('Foto sampul kolam sekarang.', 'The pond cover now.')}</span>
+          )}
+          {dropped && <span class="label ink2">{t('Foto ini tidak dipakai jadi sampul kolam.', 'This photo is not used as the pond cover.')}</span>}
         </span>
       </div>
       <div class="grid2" style={{ gap: 8 }}>
@@ -198,6 +255,11 @@ export function PondPhoto({ pondId, draft, onDraft, onQuota }: { pondId?: number
           {t('Dari galeri', 'From gallery')}
         </button>
       </div>
+      {cover && onRemove && (
+        <button type="button" class="link-btn" style={{ alignSelf: 'flex-start' }} disabled={busy} onClick={onRemove}>
+          {pending ? t('Jangan pakai foto ini', 'Do not use this photo') : t('Hapus foto sampul', 'Remove cover photo')}
+        </button>
+      )}
       {busy && (
         <p class="working" role="status">
           {t('AI melihat foto kolam…', 'The AI is looking at the pond photo…')}

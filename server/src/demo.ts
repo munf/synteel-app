@@ -156,7 +156,9 @@ export function demoStore(db: Db) {
 
         const userId = Number(db.prepare('insert into users (phone, name, pin_hash) values (?, ?, ?)').run(user.phone, user.name, user.pinHash).lastInsertRowid);
         const farmId = Number(
-          db.prepare('insert into farms (name, location_name, lat, lon, timezone, created_at) values (?, ?, ?, ?, ?, ?)').run(farm.name as string, farm.location_name as string | null, farm.lat as number | null, farm.lon as number | null, tz, now.toISOString()).lastInsertRowid,
+          db
+            .prepare('insert into farms (name, location_name, lat, lon, timezone, created_at, power_backup, adm4) values (?, ?, ?, ?, ?, ?, ?, ?)')
+            .run(farm.name as string, farm.location_name as string | null, farm.lat as number | null, farm.lon as number | null, tz, now.toISOString(), (farm.power_backup as string | null) ?? null, (farm.adm4 as string | null) ?? null).lastInsertRowid,
         );
         db.prepare("insert into memberships (user_id, farm_id, role) values (?, ?, 'owner')").run(userId, farmId);
         db.prepare("insert into demo_farms (farm_id, user_id, kind, created_at, expires_at, ip_key) values (?, ?, 'copy', ?, ?, ?)").run(
@@ -258,7 +260,7 @@ export type DemoStore = ReturnType<typeof demoStore>;
 // ---------- the template's data ----------
 
 /**
- * Seeds the demo farm "Tambak Sidat Mitra" owned by `ownerId`: three ponds with two weeks of
+ * Seeds the demo farm "Tambak Sidat Mitra" owned by `ownerId` (no power backup): three ponds with two weeks of
  * records up to `now`, and Kolam B's dead-eel case (rising today, re-check answered "not better"
  * yesterday). `weather`: real hourly weather so the outdoor pond follows actual days and nights;
  * null gives synthetic values. Returns the farm id.
@@ -274,6 +276,9 @@ export function seedDemoFarm(store: Repo, ownerId: number, now: Date, weather: M
   const farm = { name: 'Tambak Sidat Mitra', locationName: 'Sleman, Yogyakarta', lat: -7.72, lon: 110.36, timezone: tz };
   const farmId = store.createFarm(farm, ownerId);
   const r = store.farm(farmId);
+  // No power backup, as on many small farms: on a night at risk of a power cut the demo shows the
+  // "feed less, decide who checks the aerator" preparation instead of "power backup not set".
+  r.setPowerBackup('none');
 
   const ponds = [
     // Glass eels in indoor fiber tanks.

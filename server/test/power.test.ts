@@ -3,11 +3,13 @@ import { createServer } from 'node:http';
 import { test } from 'node:test';
 import { parseBmkg, type BmkgForecast, type BmkgStep } from '../src/bmkg.ts';
 import { findDesa, nearestDesa, searchDesa } from '../src/desa.ts';
-import { applyPower, assessPowerNight, tonight, type StormHour } from '../src/power.ts';
+import { applyPower, assessPowerNight, powerBackupLabel, tonight, type StormHour } from '../src/power.ts';
 import type { Nowcast, NowcastPoint } from '../src/nowcast.ts';
 import type { Pond } from '../src/domain.ts';
 import { guard, runBriefing, type BriefingInput } from '../src/agent.ts';
-import { farmWithWorker } from './helpers.ts';
+import { withLang } from '../src/i18n.ts';
+import { knowledge } from '../src/knowledge.ts';
+import { farmWithWorker, server } from './helpers.ts';
 
 const H = 3600_000;
 const TZ = 'Asia/Jakarta';
@@ -77,7 +79,7 @@ test('preparation checks follow the power backup', () => {
   assert.deepEqual(run('genset').map((c) => c.reason), ['Siapkan genset dan bahan bakar', 'Cek aerator masih nyala']);
   assert.equal(run('genset')[0].t, at('17:00'));
   assert.equal(run('genset')[1].alarm, true, 'the storm hour falls in sleeping time');
-  assert.equal(run('battery')[0].reason, 'Pastikan aki atau UPS terisi penuh');
+  assert.equal(run('battery')[0].reason, 'Pastikan aki atau baterai cadangan terisi penuh');
   assert.deepEqual(run('none').slice(0, 2).map((c) => c.reason), ['Kurangi pakan malam ini supaya sisa pakan tidak memakai oksigen', 'Tentukan siapa yang bangun cek aerator kalau listrik padam']);
   assert.match(run(null)[0].why!, /^Malam rawan listrik padam: /);
 });
@@ -258,7 +260,38 @@ test('briefing agent: the get_bmkg_forecast tool gives BMKG steps and both sourc
     assert.equal(tool.village, 'Tridadi, Sleman, Sleman');
     assert.equal(tool.steps[0].weather, 'Hujan Lebat');
     assert.deepEqual([tool.power_cut_tonight.thunder_bmkg, tool.power_cut_tonight.thunder_open_meteo, tool.power_cut_tonight.sources_disagree], [true, false, true]);
+    // The backup in the farmer's words, not the stored code.
+    assert.equal(tool.power_cut_tonight.power_backup, 'Tidak ada');
   } finally {
     server.close();
   }
+});
+
+test('the battery option reads "Aki atau baterai cadangan" (English "Battery backup") in checks, briefing, agent tool and SOP', async () => {
+  assert.equal(powerBackupLabel('battery'), 'Aki atau baterai cadangan');
+  assert.equal(withLang('en', () => powerBackupLabel('battery')), 'Battery backup');
+  assert.deepEqual([powerBackupLabel('genset'), powerBackupLabel('none'), powerBackupLabel(null)], ['Genset', 'Tidak ada', 'Belum diisi']);
+  const om = storm({ [iso(next('01:00'))]: { code: 95 } });
+  const power = assessPowerNight({ storm: om, bmkg: bmkgSteps(next('00:00')), now: NOW, timezone: TZ, backup: 'battery' });
+  assert.equal(withLang('en', () => assessPowerNight({ storm: om, bmkg: bmkgSteps(next('00:00')), now: NOW, timezone: TZ, backup: 'battery' })).checks[0].reason, 'Make sure the battery backup is fully charged');
+  const rules = await runBriefing(briefing({ ...power, level: 'high' }), []);
+  assert.match(rules.summary, /pastikan aki atau baterai cadangan terisi penuh/);
+  // No "UPS" left in what farmers read: the emergency steps and the monthly SOP.
+  const texts = JSON.stringify([(knowledge.emergencies as any).emergencies.map((e: any) => e.operator_actions), (knowledge.sop as any).tasks]);
+  assert.doesNotMatch(texts, /UPS/);
+  assert.match(texts, /aki atau baterai cadangan/);
+});
+
+test('the demo template and its copies have no power backup: a risky night says feed less and who checks the aerator', async () => {
+  const s = server(iso(NOW), { demoPhone: '620000000000', getBmkg: fakeBmkg(true), getStorm: async () => storm({ [iso(at('21:00'))]: { code: 95 } }) });
+  const template = await s.api.buildDemoTemplate();
+  assert.equal(s.store.farm(template).getFarm()!.powerBackup, 'none');
+  const visitor = s.client();
+  const me = (await visitor('POST', '/auth/demo')).json;
+  assert.notEqual(me.farm.id, template);
+  assert.equal(s.store.farm(me.farm.id).getFarm()!.powerBackup, 'none');
+  const nc = (await visitor('GET', '/nowcast')).json;
+  assert.equal(nc.power.level, 'high');
+  assert.equal(nc.power.backup, 'none');
+  assert.deepEqual(nc.power.checks.slice(0, 2).map((c: { reason: string }) => c.reason), ['Kurangi pakan malam ini supaya sisa pakan tidak memakai oksigen', 'Tentukan siapa yang bangun cek aerator kalau listrik padam']);
 });

@@ -31,6 +31,8 @@ export interface Pond {
   /** From a pond photo or picked by hand: water colour and light at the pond (thermal.ts priors, husbandry notes). */
   waterColor?: 'clear' | 'green' | 'brown' | 'cloudy' | null;
   light?: 'bright' | 'dim' | 'dark' | null;
+  /** The cover picture kept from the pond photo (captures.ts coverStore key); null shows the pond icon. */
+  cover?: string | null;
   /** Other names farmers use for the pond ("kolam dekat pintu"), for the voice round. */
   nicknames: string[];
 }
