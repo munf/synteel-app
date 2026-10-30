@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
+import { demoStore } from './demo.ts';
 import { deviceStore } from './devices.ts';
 import type { Aeration, Batch, Farm, Log, LogData, Phase, Pond, Setting } from './domain.ts';
 
@@ -161,6 +162,12 @@ export function openDb(path = process.env.SYNTEEL_DB ?? defaultPath) {
   // Tickets from the website's contact form can ask for a reply by e-mail.
   const ticketCols = (db.prepare('pragma table_info(support_tickets)').all() as { name: string }[]).map((c) => c.name);
   if (!ticketCols.includes('reply_email')) db.exec('alter table support_tickets add column reply_email text');
+  // Briefings in more than one language: the language, 'lang' for a re-run in another language of the
+  // briefing `basis`, 'copy' for one copied into a demo farm. Older rows: Indonesian originals.
+  const briefingCols = (db.prepare('pragma table_info(briefings)').all() as { name: string }[]).map((c) => c.name);
+  for (const [col, type] of [['lang', 'text'], ['kind', 'text'], ['basis', 'integer']]) {
+    if (!briefingCols.includes(col)) db.exec(`alter table briefings add column ${col} ${type}`);
+  }
   db.exec('create index if not exists ponds_farm on ponds (farm_id)');
   // Single-farm databases (before accounts): the old farm becomes farm 1 and owns every pond.
   const legacy = db.prepare("select name from sqlite_master where type = 'table' and name = 'farm'").get();
@@ -377,8 +384,21 @@ export function farmRepo(db: Db, farmId: number) {
       db.prepare('insert into ai_usage (farm_id, user_id, local_date, used) values (?, ?, ?, 1) on conflict do update set used = used + 1').run(farmId, userId, localDate);
     },
 
-    saveBriefing(localDate: string, briefing: unknown) {
-      db.prepare('insert into briefings (farm_id, local_date, created_at, body) values (?, ?, ?, ?)').run(farmId, localDate, new Date().toISOString(), JSON.stringify(briefing));
+    /** `kind` 'lang': the same evening in another language, made from briefing `basis`. Returns the row id. */
+    saveBriefing(localDate: string, briefing: { lang?: string }, kind: 'lang' | null = null, basis: number | null = null): number {
+      return Number(
+        db
+          .prepare('insert into briefings (farm_id, local_date, created_at, body, lang, kind, basis) values (?, ?, ?, ?, ?, ?, ?)')
+          .run(farmId, localDate, new Date().toISOString(), JSON.stringify(briefing), briefing.lang ?? 'id', kind, basis).lastInsertRowid,
+      );
+    },
+
+    /** Every briefing made on `localDate`, oldest first. */
+    briefingRows<T>(localDate: string): { id: number; lang: string; kind: string | null; basis: number | null; body: T }[] {
+      return (db.prepare('select * from briefings where farm_id = ? and local_date = ? order by id').all(farmId, localDate) as Row[]).map((r) => {
+        const body = JSON.parse(r.body as string) as T & { lang?: string };
+        return { id: r.id as number, lang: (r.lang as string | null) ?? body.lang ?? 'id', kind: r.kind as string | null, basis: r.basis as number | null, body };
+      });
     },
 
     /** Newest briefing made on `localDate`, or null. */
@@ -387,8 +407,9 @@ export function farmRepo(db: Db, farmId: number) {
       return r ? (JSON.parse(r.body as string) as T) : null;
     },
 
-    briefingsOn(localDate: string): number {
-      return (db.prepare('select count(*) as n from briefings where farm_id = ? and local_date = ?').get(farmId, localDate) as Row).n as number;
+    /** Briefings asked for on `localDate` (not counting other-language re-runs or demo copies), or of one kind. */
+    briefingsOn(localDate: string, kind: 'lang' | null = null): number {
+      return (db.prepare('select count(*) as n from briefings where farm_id = ? and local_date = ? and kind is ?').get(farmId, localDate, kind) as Row).n as number;
     },
 
     // ---------- dead-eel cases ----------
@@ -461,6 +482,7 @@ export function repo(db: Db) {
   return {
     farm: (farmId: number) => farmRepo(db, farmId),
     devices: deviceStore(db),
+    demo: demoStore(db),
 
     createFarm(f: Farm, ownerId: number): number {
       const { lastInsertRowid } = db

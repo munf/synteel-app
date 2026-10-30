@@ -228,15 +228,15 @@ test('owner invites a worker; the worker logs but cannot change ponds; other far
   assert.equal((await again('GET', '/farm')).json.farm, null);
 });
 
-test('demo login enters the shared demo farm', async () => {
-  const { store, client } = server(undefined, { demoPhone: '620000000000' });
-  const demo = store.createUser({ phone: '620000000000', name: 'Petani Demo', pinHash: 'x' });
-  store.createFarm({ name: 'Tambak Demo', locationName: null, lat: null, lon: null, timezone: 'Asia/Jakarta' }, demo.id);
+test('demo login enters a copy of the demo template; its PIN cannot be changed', async () => {
+  const { api, client } = server(undefined, { demoPhone: '620000000000' });
   const call = client();
+  assert.equal((await call('GET', '/auth/options')).json.demo, false);
+  await api.buildDemoTemplate();
   assert.equal((await call('GET', '/auth/options')).json.demo, true);
   const me = (await call('POST', '/auth/demo')).json;
   assert.equal(me.demo, true);
-  assert.equal((await call('GET', '/farm')).json.farm.name, 'Tambak Demo');
+  assert.equal((await call('GET', '/farm')).json.farm.name, 'Tambak Sidat Mitra');
   assert.equal((await call('PUT', '/auth/pin', { pin: 'x', newPin: '135790' })).status, 403);
 });
 

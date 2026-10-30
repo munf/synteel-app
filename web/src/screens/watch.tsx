@@ -185,8 +185,21 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
   const [expanded, setExpanded] = useState<string | null>(null);
   const [permission, setPermission] = useState(notifyPermission);
 
+  const [briefRunning, setBriefRunning] = useState(false);
+  const loadBriefing = () =>
+    api.briefing().then(
+      (r) => (setBriefing(r.briefing), setBriefRunning(Boolean(r.running))),
+      () => {},
+    );
+  // The night summary written in the other language is being written in this one: check every 3 seconds.
   useEffect(() => {
-    api.briefing().then((r) => setBriefing(r.briefing), () => {});
+    if (!briefRunning) return;
+    const timer = setInterval(() => document.visibilityState === 'visible' && loadBriefing(), 3000);
+    return () => clearInterval(timer);
+  }, [briefRunning]);
+
+  useEffect(() => {
+    loadBriefing();
     const off = onDoneChange(setDone);
     return () => {
       off();
@@ -448,8 +461,9 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
             {briefing ? (
               <>
                 <span class="sub">
-                  {briefing.source === 'agent' ? t('Ringkasan malam dari AI', 'Night summary from the AI') : t('Ringkasan malam dari aturan', 'Night summary from rules')} ·{' '}
-                  {fmtClock(briefing.generatedAt)}
+                  {briefRunning
+                    ? t('AI sedang menulis ringkasan dalam Bahasa Indonesia…', 'The AI is writing the summary in English…')
+                    : `${briefing.source === 'agent' ? t('Ringkasan malam dari AI', 'Night summary from the AI') : t('Ringkasan malam dari aturan', 'Night summary from rules')} · ${fmtClock(briefing.generatedAt)}`}
                 </span>
                 <p style={{ color: 'var(--on-navy)' }}>{briefing.summary}</p>
                 {briefing.steps.length > 0 && (
@@ -480,7 +494,7 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
               </p>
             )}
             {briefError && <p class="label" style={{ color: '#FDA29B', fontWeight: 600 }}>{briefError}</p>}
-            <button type="button" class="w-link" disabled={briefBusy} onClick={makeBriefing}>
+            <button type="button" class="w-link" disabled={briefBusy || briefRunning} onClick={makeBriefing}>
               {briefBusy ? t('AI sedang membaca data…', 'The AI is reading the data…') : briefing ? t('Susun ulang', 'Redo') : t('Susun ringkasan malam sekarang', 'Write the night summary now')}
             </button>
           </div>

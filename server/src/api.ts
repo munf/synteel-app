@@ -8,11 +8,12 @@ import type { SendMail } from './mail.ts';
 import { attemptLimiter, AuthError, checkPin, hashPin, hashToken, inviteCode, newToken, normalizePhone, tempPin, verifyPin } from './auth.ts';
 import { knowledge } from './knowledge.ts';
 import { KINDS, SCENARIOS, sendEveryMs, simulate, toLogData, type Device, type DeviceKind, type Scenario } from './devices.ts';
-import { currentLang, parseLang, tx, withLang } from './i18n.ts';
+import { currentLang, parseLang, tx, withLang, type Lang } from './i18n.ts';
+import { DEMO_MAX_LIVE, DEMO_PER_IP_PER_DAY, seedDemoFarm } from './demo.ts';
 import { AiFailed, AiUnavailable, type Ai, type CaptureKind, type ChatProvider } from './ai.ts';
 import { rulesBriefing, runBriefing, type Briefing, type BriefingInput } from './agent.ts';
 import { countDeadEels, type SamProvider } from './sam.ts';
-import { caseView, MAX_AGENT_RUNS_PER_DAY, RECHECK_AFTER, RECHECK_GRACE, mockCaseRun, rulesCaseRun, runCaseAgent, type CaseEvent, type CaseInput, type CaseRun, type CaseTrigger, type CaseView } from './cases.ts';
+import { caseView, MAX_AGENT_RUNS_PER_DAY, MAX_LANG_RUNS_PER_DAY, RECHECK_AFTER, RECHECK_GRACE, mockCaseRun, rulesCaseRun, runCaseAgent, type CaseEvent, type CaseInput, type CaseRun, type CaseTrigger, type CaseView } from './cases.ts';
 import type { SaveCapture } from './captures.ts';
 import { computeNowcast } from './nowcast.ts';
 import { assessPond, classifyReading, limitsFor, overallLevel, type Limits, type Threshold } from './rules.ts';
@@ -129,7 +130,7 @@ export interface ApiDeps {
   saveCapture?: SaveCapture;
   /** One name per deployment, so the preview and production on one domain keep separate logins. */
   cookieName?: string;
-  /** Phone of the shared demo account behind "Coba demo"; unset turns the button off. */
+  /** Phone of the demo template's owner; "Coba demo" copies its farm for each visitor (demo.ts). Unset turns the button off. */
   demoPhone?: string | null;
   /** Real AI reads per farm per day, so one farm cannot use up everyone's credits; 0 = no cap. */
   farmAiCap?: number;
@@ -139,7 +140,14 @@ export interface ApiDeps {
   sam?: SamProvider | null;
   /** Sends support tickets to the team; null = only stored. */
   mail?: SendMail | null;
+  /** Abuse limits for "Coba demo": new copies per address per day, and copies alive at once. */
+  demoLimits?: { perIp: number; maxLive: number };
+  /** Deletes what a demo farm left on disk (captures) once it expires. */
+  removeFarmFiles?: (farmId: number) => void;
 }
+
+/** Briefings made in another language for the same evening (the viewer's language had none yet), per farm per day. */
+export const MAX_LANG_BRIEFINGS_PER_DAY = 2;
 
 const MAX_IMAGES = 24;
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
@@ -240,7 +248,7 @@ type Env = { Variables: { userId: number; farmId: number | null; tokenHash: stri
 
 export function createApi(
   store: Repo,
-  { clock = () => new Date(), getWeather = defaultGetWeather, geocode = defaultGeocode, ai, saveCapture, cookieName = 'synteel_session', demoPhone = null, farmAiCap = 0, agentProviders = [], sam = null, mail = null }: ApiDeps = {},
+  { clock = () => new Date(), getWeather = defaultGetWeather, geocode = defaultGeocode, ai, saveCapture, cookieName = 'synteel_session', demoPhone = null, farmAiCap = 0, agentProviders = [], sam = null, mail = null, demoLimits = { perIp: DEMO_PER_IP_PER_DAY, maxLive: DEMO_MAX_LIVE }, removeFarmFiles }: ApiDeps = {},
 ) {
   const api = new Hono<Env>();
   // Every handler below answers in the language the app asked for (i18n.ts).
@@ -486,11 +494,40 @@ export function createApi(
     };
   }
 
-  async function makeBriefing(r: FarmRepo): Promise<Briefing> {
+  /** Runs the briefing agent (or the rules) in the current language and saves it. `basis`: re-run of that briefing in this language. */
+  async function makeBriefing(r: FarmRepo, basis: number | null = null): Promise<Briefing & { id: number }> {
     const input = await briefingInput(r);
     const briefing = await runBriefing(input, ai?.mode === 'meta' ? agentProviders : []);
-    r.saveBriefing(localDate(new Date(input.now), timezone(r)), briefing);
-    return briefing;
+    const id = r.saveBriefing(localDate(new Date(input.now), timezone(r)), briefing, basis === null ? null : 'lang', basis);
+    return { ...briefing, id };
+  }
+
+  // A briefing in another language runs in the background; the phone polls while `running`.
+  const briefJobs = new Map<number, Promise<unknown>>();
+
+  /**
+   * Today's briefing in the viewer's language. The newest briefing someone asked for (or the evening run made)
+   * is the one that counts; when it was written in another language by the agent, the agent writes it once more
+   * in this language in the background, within its own small daily allowance, and the rules version shows meanwhile.
+   */
+  async function briefingFor(r: FarmRepo): Promise<{ briefing: Briefing | null; running: boolean }> {
+    const today = localDate(clock(), timezone(r));
+    const rows = r.briefingRows<Briefing>(today);
+    const original = rows.filter((b) => b.kind !== 'lang').at(-1);
+    const lang = currentLang();
+    if (!original) return { briefing: null, running: false };
+    if (original.lang === lang) return { briefing: original.body, running: false };
+    const translated = rows.find((b) => b.kind === 'lang' && b.basis === original.id && b.lang === lang);
+    if (translated) return { briefing: translated.body, running: false };
+    let running = briefJobs.has(r.farmId);
+    if (!running && original.body.source === 'agent' && ai?.mode === 'meta' && r.briefingsOn(today, 'lang') < MAX_LANG_BRIEFINGS_PER_DAY) {
+      running = true;
+      const job = withLang(lang, () => makeBriefing(r, original.id))
+        .catch((err) => console.error(`briefing farm ${r.farmId} (${lang}):`, err))
+        .finally(() => briefJobs.delete(r.farmId));
+      briefJobs.set(r.farmId, job);
+    }
+    return { briefing: { ...rulesBriefing(await briefingInput(r)), generatedAt: original.body.generatedAt }, running };
   }
 
   // ---------- dead-eel cases (cases.ts) ----------
@@ -531,36 +568,66 @@ export function createApi(
   // Agent runs happen in the background so a report is saved at once; the phone polls while `running`.
   // One run per case at a time; anything that arrives meanwhile asks for one more run afterwards.
   const caseJobs = new Map<number, Promise<void>>();
-  const caseAgain = new Map<number, CaseTrigger>();
+  const caseAgain = new Map<number, { trigger: CaseTrigger; lang: Lang }>();
 
-  async function runCaseOnce(r: FarmRepo, caseId: number, trigger: CaseTrigger) {
+  /** Agent runs of a case today: the farmer's own, and re-runs in another language (each has its own allowance). */
+  function caseRunsToday(r: FarmRepo, events: CaseEvent[]) {
+    const today = localDate(clock(), timezone(r));
+    const todays = events.filter((e) => e.kind === 'run' && !e.data?.precomputed && localDate(new Date(e.at), timezone(r)) === today);
+    return { agent: todays.filter((e) => e.data?.source === 'agent' && !e.data?.langRun).length, lang: todays.filter((e) => e.data?.langRun).length };
+  }
+
+  /** One case update in the current language. `basis`: the run (event id) this one repeats in another language. */
+  async function runCaseOnce(r: FarmRepo, caseId: number, trigger: CaseTrigger, basis?: number) {
     const c = r.getCase(caseId);
     if (!c || c.status !== 'open') return;
     const input = await caseInput(r, c, trigger);
-    const today = localDate(clock(), timezone(r));
-    const agentRunsToday = input.events.filter((e) => e.kind === 'run' && e.data?.source === 'agent' && localDate(new Date(e.at), timezone(r)) === today).length;
+    const used = caseRunsToday(r, input.events);
     let run: CaseRun;
     if (ai?.mode === 'mock') run = mockCaseRun(input);
-    else if (ai?.mode === 'meta' && agentRunsToday < MAX_AGENT_RUNS_PER_DAY) run = await runCaseAgent(input, agentProviders);
+    else if (ai?.mode === 'meta' && (basis === undefined ? used.agent < MAX_AGENT_RUNS_PER_DAY : used.lang < MAX_LANG_RUNS_PER_DAY)) run = await runCaseAgent(input, agentProviders);
     else run = rulesCaseRun(input);
     // The case may have been closed while the model was thinking.
-    if (r.getCase(caseId)?.status === 'open') r.addCaseEvent(caseId, 'run', clock().toISOString(), null, run);
+    if (r.getCase(caseId)?.status === 'open') r.addCaseEvent(caseId, 'run', clock().toISOString(), null, basis === undefined ? run : { ...run, langRun: true, basis });
   }
 
+  /**
+   * The case update to show in the viewer's language: the newest run (not counting other-language re-runs), or
+   * its re-run in this language. A run the agent wrote in another language is written once more in this
+   * one in the background (`needs`); until then the view shows the rules version.
+   */
+  function caseRunFor(events: CaseEvent[]): { saved: CaseRun | null; needs: { basis: number; trigger: CaseTrigger } | null } {
+    const runs = events.filter((e) => e.kind === 'run');
+    const original = runs.filter((e) => !e.data?.langRun).at(-1);
+    if (!original) return { saved: null, needs: null };
+    const lang: Lang = currentLang();
+    if (original.data.lang === lang) return { saved: original.data, needs: null };
+    const translated = runs.find((e) => e.data?.langRun && e.data.basis === original.id && e.data.lang === lang);
+    if (translated) return { saved: translated.data, needs: null };
+    return { saved: original.data, needs: original.data.source === 'agent' ? { basis: original.id, trigger: original.data.trigger ?? 'open' } : null };
+  }
+
+  /** Runs the case update in the background, in the language of whoever caused it. */
   function kickCase(r: FarmRepo, caseId: number, trigger: CaseTrigger) {
+    const lang = currentLang();
     if (caseJobs.has(caseId)) {
-      caseAgain.set(caseId, trigger);
+      caseAgain.set(caseId, { trigger, lang });
       return;
     }
-    const job = (async () => {
-      let next: CaseTrigger | undefined = trigger;
-      while (next) {
+    caseAgain.set(caseId, { trigger, lang });
+    caseJobs.set(caseId, drainCase(r, caseId));
+  }
+
+  /** Works through the runs asked for while the previous one was busy, then frees the case. */
+  function drainCase(r: FarmRepo, caseId: number, first?: Promise<unknown>): Promise<void> {
+    return (async () => {
+      await first;
+      for (let next = caseAgain.get(caseId); next; next = caseAgain.get(caseId)) {
         caseAgain.delete(caseId);
-        await runCaseOnce(r, caseId, next).catch((err) => console.error(`case ${caseId}:`, err));
-        next = caseAgain.get(caseId);
+        const { trigger, lang } = next;
+        await withLang(lang, () => runCaseOnce(r, caseId, trigger)).catch((err) => console.error(`case ${caseId}:`, err));
       }
     })().finally(() => caseJobs.delete(caseId));
-    caseJobs.set(caseId, job);
   }
 
   /** The farm owner to send the case to: an owner other than the person looking, with the number for wa.me. */
@@ -572,7 +639,14 @@ export function createApi(
 
   async function viewCase(r: FarmRepo, c: CaseRow, userId: number): Promise<CaseView> {
     const input = await caseInput(r, c, 'open');
-    const saved = (input.events.filter((e) => e.kind === 'run').at(-1)?.data as CaseRun | undefined) ?? null;
+    const { saved, needs } = caseRunFor(input.events);
+    // Another language's agent run: write it once in this language too, within its own allowance.
+    if (needs && c.status === 'open' && ai?.mode === 'meta' && !caseJobs.has(c.id) && caseRunsToday(r, input.events).lang < MAX_LANG_RUNS_PER_DAY) {
+      const lang = currentLang();
+      const translate = withLang(lang, () => runCaseOnce(r, c.id, needs.trigger, needs.basis)).catch((err) => console.error(`case ${c.id} (${lang}):`, err));
+      // Anything the farmer does meanwhile runs right after it.
+      caseJobs.set(c.id, drainCase(r, c.id, translate));
+    }
     return caseView(input, c, saved, caseOwner(r.farmId, userId), caseJobs.has(c.id) || caseAgain.has(c.id));
   }
 
@@ -608,15 +682,15 @@ export function createApi(
 
   const clientIp = (c: Context) => c.req.header('cf-connecting-ip') ?? c.req.header('x-forwarded-for')?.split(',')[0].trim() ?? 'local';
 
-  function startSession(c: Context, userId: number, farmId: number | null) {
+  function startSession(c: Context, userId: number, farmId: number | null, days = SESSION_DAYS) {
     const token = newToken();
-    store.createSession(hashToken(token), userId, farmId, SESSION_DAYS);
+    store.createSession(hashToken(token), userId, farmId, days);
     setCookie(c, cookieName, token, {
       httpOnly: true,
       sameSite: 'Lax',
       secure: c.req.header('x-forwarded-proto') === 'https',
       path: '/',
-      maxAge: SESSION_DAYS * 86400,
+      maxAge: days * 86400,
     });
   }
 
@@ -645,12 +719,14 @@ export function createApi(
 
   function me(userId: number, farmId: number | null) {
     const farms = store.farmsOf(userId);
-    return { user: store.user(userId), farm: farms.find((f) => f.id === farmId) ?? null, farms, demo: store.user(userId)?.phone === demoPhone };
+    return { user: store.user(userId), farm: farms.find((f) => f.id === farmId) ?? null, farms, demo: isDemoUser(userId) };
   }
+
+  const isDemoUser = (userId: number) => store.user(userId)?.phone === demoPhone || store.demo.isDemoUser(userId);
 
   // ---------- public routes: everything registered before the session check below ----------
 
-  api.get('/auth/options', (c) => c.json({ demo: Boolean(demoPhone && store.userByPhone(demoPhone)) }));
+  api.get('/auth/options', (c) => c.json({ demo: Boolean(demoPhone && store.demo.template()) }));
 
   api.post('/auth/register', async (c) => {
     const body = await c.req.json();
@@ -679,13 +755,22 @@ export function createApi(
     return c.json(me(user.id, farmId));
   });
 
-  // The shared demo farm for judges and visitors: no sign-up, reset every night.
+  // "Coba demo": a fresh copy of the template demo farm for each tap, deleted after 48 hours (demo.ts).
   api.post('/auth/demo', (c) => {
-    const user = demoPhone ? store.userByPhone(demoPhone) : null;
-    if (!user) throw new AuthError(tx('Demo tidak tersedia', 'The demo is not available'), 403);
-    const farmId = store.farmsOf(user.id)[0]?.id ?? null;
-    startSession(c, user.id, farmId);
-    return c.json(me(user.id, farmId));
+    const template = demoPhone ? store.demo.template() : null;
+    if (!template) throw new AuthError(tx('Demo tidak tersedia saat ini. Coba lagi nanti.', 'The demo is not available right now. Try again later.'), 403);
+    const now = clock();
+    const ip = clientIp(c);
+    const counts = store.demo.counts(ip, now);
+    if (counts.fromIp >= demoLimits.perIp) {
+      throw new AuthError(tx('Demo sudah dibuka berkali-kali dari jaringan ini hari ini. Coba lagi besok.', 'The demo was opened many times from this network today. Try again tomorrow.'), 429, 'demo_limit');
+    }
+    if (counts.live >= demoLimits.maxLive) {
+      throw new AuthError(tx('Sedang banyak yang mencoba demo. Coba lagi beberapa jam lagi.', 'Many people are trying the demo right now. Try again in a few hours.'), 429, 'demo_full');
+    }
+    const copy = store.demo.copyTemplate(template, { phone: `demo-${newToken().slice(0, 16)}`, name: tx('Petani Demo', 'Demo Farmer'), pinHash: hashPin(newToken()) }, now, ip);
+    startSession(c, copy.userId, copy.farmId, 2);
+    return c.json(me(copy.userId, copy.farmId));
   });
 
   api.get('/auth/invite/:code', (c) => {
@@ -909,7 +994,7 @@ export function createApi(
   api.put('/auth/pin', async (c) => {
     const body = await c.req.json();
     const user = store.userByPhone(store.user(c.get('userId'))!.phone)!;
-    if (user.phone === demoPhone) throw new AuthError(tx('PIN akun demo tidak bisa diubah', 'The demo account PIN cannot be changed'), 403);
+    if (isDemoUser(user.id)) throw new AuthError(tx('PIN akun demo tidak bisa diubah', 'The demo account PIN cannot be changed'), 403);
     const keys = [`phone:${user.phone}`];
     limiter.check(...keys);
     if (!verifyPin(String(body.pin ?? ''), user.pinHash)) {
@@ -1010,20 +1095,15 @@ export function createApi(
     return c.body(null, 204);
   });
 
-  api.get('/briefing', async (c) => {
-    const r = needFarm(c);
-    const saved = r.briefing<Briefing>(localDate(clock(), timezone(r)));
-    // Written in the other language: show the rules-only briefing in this one ("Susun ulang" asks the agent again).
-    if (saved && (saved.lang ?? 'id') !== currentLang()) return c.json({ briefing: { ...rulesBriefing(await briefingInput(r)), generatedAt: saved.generatedAt } });
-    return c.json({ briefing: saved });
-  });
+  api.get('/briefing', async (c) => c.json(await briefingFor(needFarm(c))));
 
   // Ask for a fresh briefing now (the server also makes one by itself every evening).
   api.post('/briefing', async (c) => {
     const r = needFarm(c);
     if (r.listPonds().length === 0) throw new BadRequest(tx('Belum ada kolam', 'No ponds yet'));
     if (r.briefingsOn(localDate(clock(), timezone(r))) >= MAX_BRIEFINGS_PER_DAY) throw new BadRequest(tx('Ringkasan malam hari ini sudah disusun beberapa kali. Coba lagi besok.', "Tonight's summary has been made several times today. Try again tomorrow."));
-    return c.json({ briefing: await makeBriefing(r) }, 201);
+    const { id: _id, ...briefing } = await makeBriefing(r);
+    return c.json({ briefing }, 201);
   });
 
   // ---------- dead-eel cases ----------
@@ -1087,7 +1167,8 @@ export function createApi(
     needFarm(c);
     // Workers see names only; owners also see phone numbers, to reach them.
     const owner = c.get('role') === 'owner';
-    return c.json({ members: store.members(c.get('farmId')!).map((m) => ({ ...m, phone: owner ? m.phone : undefined, me: m.id === c.get('userId') })) });
+    // Demo people have no real number to show.
+    return c.json({ members: store.members(c.get('farmId')!).map((m) => ({ ...m, phone: owner && !m.phone.startsWith('demo-') ? m.phone : undefined, me: m.id === c.get('userId') })) });
   });
 
   api.post('/farm/invites', async (c) => {
@@ -1548,6 +1629,9 @@ export function createApi(
      */
     caseRechecks() {
       for (const id of store.farmIds()) {
+        // The demo template gets its runs when it is built, never by itself.
+        const demo = store.demo.kindOf(id);
+        if (demo === 'template' || demo === 'building') continue;
         const r = store.farm(id);
         for (const row of r.listCases()) {
           if (caseJobs.has(row.id)) continue;
@@ -1567,14 +1651,60 @@ export function createApi(
     },
     /** Waits for the case agent runs in flight (tests). */
     async settleCases() {
-      while (caseJobs.size) await Promise.all([...caseJobs.values()]);
+      while (caseJobs.size || briefJobs.size) await Promise.all([...caseJobs.values(), ...briefJobs.values()]);
+    },
+    /**
+     * (Re)builds the demo template: the seeded farm, then the case update and the evening briefing in
+     * Indonesian and English (agent when available, rules otherwise), then it replaces the old template.
+     * Copies made before keep working. Returns the new template's farm id.
+     */
+    async buildDemoTemplate(): Promise<number> {
+      if (!demoPhone) throw new Error('SYNTEEL_DEMO_PHONE is not set');
+      const owner = store.userByPhone(demoPhone) ?? store.createUser({ phone: demoPhone, name: 'Petani Demo', pinHash: hashPin(newToken()) });
+      const now = clock();
+      const weather = await getWeather(-7.72, 110.36, now.getTime()).then(
+        (w) => (w.hours.length ? new Map(w.hours.map((h) => [h.t, h])) : null),
+        () => null,
+      );
+      if (!weather) console.warn('Weather unavailable: outdoor temperatures are synthetic.');
+      const farmId = seedDemoFarm(store, owner.id, now, weather);
+      const r = store.farm(farmId);
+      store.demo.markBuilding(farmId, owner.id, localDate(now, timezone(r)), now);
+      const briefings = (async () => {
+        const id = await withLang('id', () => makeBriefing(r));
+        if (id.source === 'agent') await withLang('en', () => makeBriefing(r, id.id));
+      })();
+      const cases = Promise.all(
+        r.listCases().map(async (c) => {
+          await withLang('id', () => runCaseOnce(r, c.id, 'open'));
+          const first = r.caseEvents(c.id).filter((e) => e.kind === 'run').at(-1);
+          if (first?.data?.source === 'agent') await withLang('en', () => runCaseOnce(r, c.id, 'open', first.id));
+        }),
+      );
+      await Promise.all([briefings, cases]);
+      store.demo.markTemplate(farmId);
+      return farmId;
+    },
+    /** Deletes demo copies older than 48 hours, with their people and files. Returns how many. */
+    expireDemos(): number {
+      const gone = store.demo.expired(clock());
+      for (const d of gone) {
+        store.demo.deleteCopy(d.farmId, d.userId);
+        try {
+          removeFarmFiles?.(d.farmId);
+        } catch (err) {
+          console.error(`demo farm ${d.farmId} files:`, err);
+        }
+      }
+      return gone.length;
     },
     /** The evening run: a briefing for every farm with ponds that has none yet today, from `hour` local time. */
     async briefFarms(hour = 17) {
       for (const id of store.farmIds()) {
         const r = store.farm(id);
         const farm = r.getFarm();
-        if (!farm || r.listPonds().length === 0) continue;
+        // Demo farms bring their evening briefing from the template; a visitor can ask for a new one.
+        if (!farm || r.listPonds().length === 0 || store.demo.kindOf(id)) continue;
         const localHour = Number(clock().toLocaleString('en-GB', { hour: '2-digit', hour12: false, timeZone: farm.timezone }));
         if (localHour < hour || r.briefing(localDate(clock(), farm.timezone))) continue;
         await makeBriefing(r).catch((err) => console.error(`briefing farm ${id}:`, err));

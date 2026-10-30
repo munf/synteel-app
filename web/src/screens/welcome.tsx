@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { api, type Me } from '../api.ts';
-import { Eel, Glyph, GLYPH, Icon, type IconName } from '../ui.tsx';
+import { Eel, Glyph, GLYPH, Icon, LangSwitch, type IconName } from '../ui.tsx';
 import { t } from '../i18n.ts';
 
 export type SignInMode = 'login' | 'register' | 'join';
@@ -81,13 +81,14 @@ export function Welcome({ onPick, onSignedIn }: { onPick: (mode: SignInMode) => 
 
   return (
     <div class="screen" style={{ minHeight: '100dvh', paddingBottom: 'calc(32px + env(safe-area-inset-bottom, 0px))' }}>
-      <div class="row" style={{ gap: 8 }}>
+      <div class="row" style={{ gap: 8, flexWrap: 'wrap' }}>
         <span class="icon-box" style={{ width: 36, height: 36, borderRadius: 12, background: 'var(--hero-bg)', color: '#fbd38d' }}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
             <path d="M3 13c3-4 5-4 8 0s5 4 10-2" />
           </svg>
         </span>
         <span class="title">synteel</span>
+        <LangSwitch />
       </div>
 
       <section class="hero" style={{ background: 'var(--hero-bg)', gap: 16 }}>
@@ -116,22 +117,22 @@ export function Welcome({ onPick, onSignedIn }: { onPick: (mode: SignInMode) => 
         <button type="button" class="btn" style={{ background: 'var(--surface)', color: 'var(--ink)', border: '2px solid var(--ink)' }} onClick={() => pick('register')}>
           {t('Daftar akun baru', 'Create a new account')}
         </button>
-        <div class="row" style={{ justifyContent: 'center', gap: 24, flexWrap: 'wrap' }}>
-          <button type="button" class="link-btn label row" style={{ minHeight: 48, gap: 6, fontWeight: 800 }} onClick={() => pick('join')}>
-            <Icon name="users" size={18} /> {t('Punya kode undangan', 'Have an invite code')}
-          </button>
-          {demo && (
-            <button type="button" class="link-btn label row" style={{ minHeight: 48, gap: 6, fontWeight: 800 }} disabled={busy} onClick={tryDemo}>
-              <Glyph d={GLYPH.play} size={18} /> {busy ? t('Tunggu…', 'Wait…') : t('Coba demo', 'Try the demo')}
+        {demo && (
+          <div class="stack-xs" style={{ gap: 4 }}>
+            <button type="button" class="btn tint block" disabled={busy} onClick={tryDemo}>
+              <Glyph d={GLYPH.play} size={20} /> {busy ? t('Menyiapkan tambak contoh…', 'Setting up a sample farm…') : t('Coba demo', 'Try the demo')}
             </button>
-          )}
-        </div>
+            <p class="label ink2 center">{t('Tambak contoh sendiri, tanpa akun dan PIN. Dihapus sesudah 2 hari.', 'A sample farm of your own, no account or PIN. Deleted after 2 days.')}</p>
+          </div>
+        )}
         {error && (
           <p class="error center" role="alert">
             {error}
           </p>
         )}
-        {demo && <p class="label ink2 center">{t('Demo: tambak contoh, direset tiap malam.', 'Demo: sample farm, reset every night.')}</p>}
+        <button type="button" class="link-btn label row" style={{ minHeight: 48, gap: 6, fontWeight: 800, alignSelf: 'center' }} onClick={() => pick('join')}>
+          <Icon name="users" size={18} /> {t('Punya kode undangan', 'Have an invite code')}
+        </button>
       </div>
     </div>
   );

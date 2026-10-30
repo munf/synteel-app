@@ -6,7 +6,7 @@ Built for the **Meta Global AI Developer Hackathon** (Oct 26 to Nov 4, 2026). Tr
 
 | | |
 |---|---|
-| Try the app | **[eel.synt.fun/preview](https://eel.synt.fun/preview/)** (demo farm, real Meta AI) |
+| Try the app | **[eel.synt.fun/preview/?lang=en](https://eel.synt.fun/preview/?lang=en)** (own demo farm, real Meta AI, in English) |
 | Measured results | [`docs/evaluation.md`](docs/evaluation.md) |
 | Meta models | Muse Spark 1.3, Muse Spark Open (Baseten and Fireworks), Muse Voice Transcribe, SAM 3.1 |
 
@@ -20,9 +20,9 @@ Synt Eel is for these farmers and their workers. They talk or take photos at the
 
 ## Try it in 2 minutes
 
-1. Open **https://eel.synt.fun/preview/** on a phone, or in a narrow browser window.
-2. Tap **Coba demo** (Try the demo) below the Masuk and Daftar buttons. You need no account or PIN. You land on the shared demo farm "Tambak Sidat Mitra": three ponds with two weeks of records. The farm resets every night.
-3. For English: tap your name at the top of **Beranda** (Profil dan info), then under **Bahasa** tap **English**. The app reloads in English. The choice is saved on that browser.
+1. Open **https://eel.synt.fun/preview/?lang=en** on a phone, or in a narrow browser window. The link opens the app in English and the browser remembers it. The **Indonesia** and **English** buttons at the top switch the language before you sign in; later it is under Profil, **Language**.
+2. Tap **Try the demo** below the Sign in and Create account buttons. You need no account or PIN. You get your own copy of the demo farm "Tambak Sidat Mitra": three ponds with two weeks of records up to today and an open dead-eel case on Kolam B. Nobody else sees your changes. The copy is deleted after 2 days; tapping **Try the demo** again later gives a fresh one.
+3. The first screens already show agent output in English and Indonesian, written by the agents when the demo farm was prepared that day. Anything you do after that runs the models live.
 
 Then try:
 
@@ -33,7 +33,7 @@ Then try:
 | Record | Tap **Speak** and say something like "Pond A, 27 degrees, pH 7.4. Pond B, two dead." Indonesian and Javanese work too. Or try **Notebook photo** with a handwritten page. You review a draft before anything is saved. | Muse Voice Transcribe, Muse Spark 1.3 |
 | Problem | Pick a pond and **Dead eels**, then **Photo for an AI count** with a photo of dead glass eels from above. Then **See what to do**. | SAM 3.1 |
 
-The preview calls the real Meta models. Photos, voice and notebook pages share a daily AI quota for the demo farm (Profil, **Daily AI reads**). Dead-eel counts and emergency reports do not use it. When the quota is used up or a model is down, the app says so and manual entry still works.
+The preview calls the real Meta models. Photos, voice and notebook pages share a daily AI quota for each demo farm (Profil, **Daily AI reads**). Dead-eel counts and emergency reports do not use it. When the quota is used up or a model is down, the app says so and manual entry still works.
 
 ## What it does
 
@@ -48,7 +48,8 @@ The preview calls the real Meta models. Photos, voice and notebook pages share a
 | Dead-eel case agent | A dead-eel report opens one case per pond that follows the die-off across days: dead per day, trend, a 1-hour re-check, up to 2 questions for the farmer, extra checks, and a WhatsApp message for the owner when the rules say deaths are rising or the re-check went unanswered. | [`cases.ts`](server/src/cases.ts) |
 | Problem flow | The farmer picks a pond and what they see. The app shows steps from the emergency SOPs (kept on the phone for use without signal), possible causes from the pond's records and thresholds, when to ask the owner or an extension officer, and a WhatsApp summary. | [`problem.tsx`](web/src/screens/problem.tsx) |
 | Dead eel count | One photo of the scoop, net or basin goes to SAM 3.1. The app outlines each eel, marks heads, and fills in one number, a range, or "at least N" when eels are piled up. The farmer can change it. | [`sam.ts`](server/src/sam.ts) |
-| English interface | Indonesian by default. English in Profil switches the screens and the language the server and agents write in. | [`i18n.ts`](web/src/i18n.ts) |
+| English interface | Indonesian by default. English on the sign-in screen, in Profil or with `?lang=en` switches the screens and the language the server and agents write in. An agent result written in the other language is written once more in the viewer's language and both are kept. | [`i18n.ts`](web/src/i18n.ts) |
+| Demo farms | **Try the demo** copies a template farm for each visitor, with dates moved to today and the agents' results already in both languages. Copies are deleted after 48 hours; new copies are limited per network and in total. | [`demo.ts`](server/src/demo.ts) |
 | Simulated devices | **Hubungkan alat** (Connect a device) links a Synteel device by code or QR. Simulated devices made on [eel.synt.fun/sim](https://eel.synt.fun/sim) get their own ponds labelled **Simulasi**, so simulated readings never mix with real ponds. Their readings go through the same rules, forecast and alarms. | [`devices.ts`](server/src/devices.ts) |
 | Accounts | Phone number and 6-digit PIN, several farms per server, owners and workers, invite codes, installable as a PWA. | [`auth.ts`](server/src/auth.ts) |
 
@@ -149,7 +150,7 @@ npm install
 #   BASETEN_API_KEY=...     optional: Muse Spark Open for the agents
 #   FIREWORKS_API_KEY=...   optional: Muse Spark Open fallback
 npm run check:meta                              # which Muse models your keys reach
-npm run seed:demo                               # demo farm with two weeks of records (server stopped)
+npm run seed:demo                               # demo template farm with two weeks of records (server stopped)
 SYNTEEL_DEMO_PHONE=620000000000 npm run dev:server   # http://localhost:8787, enables "Coba demo"
 npm run dev:web                                 # http://localhost:5173, proxies /api to the server
 ```

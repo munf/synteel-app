@@ -211,7 +211,8 @@ export const api = {
   addLog: (pondId: number, data: LogData, source: LogSource = 'manual', link: { report?: 'dead'; recheck?: 'better' | 'worse' } = {}) =>
     call<{ log: Log; pond: PondSummary }>('POST', `/ponds/${pondId}/logs`, { ...data, source, ...link }),
   aiMode: () => call<{ mode: 'meta' | 'mock' | 'off' }>('GET', '/ai'),
-  briefing: () => call<{ briefing: Briefing | null }>('GET', '/briefing'),
+  /** `running`: the agent is writing it in this language (it had one only in the other); poll until done. */
+  briefing: () => call<{ briefing: Briefing | null; running?: boolean }>('GET', '/briefing'),
   makeBriefing: () => call<{ briefing: Briefing }>('POST', '/briefing'),
   countEels: (pondId: number, image: Blob) => {
     const form = new FormData();

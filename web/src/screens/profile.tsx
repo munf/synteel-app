@@ -498,7 +498,7 @@ export function Profile({
 
       {me.demo && (
         <p class="note info">
-          <Icon name="info" size={20} /> {t('Akun demo: data direset tiap malam', 'Demo account: data resets every night')}
+          <Icon name="info" size={20} /> {t('Akun demo: tambak contoh ini dihapus 2 hari sesudah dibuka', 'Demo account: this sample farm is deleted 2 days after it was opened')}
         </p>
       )}
 

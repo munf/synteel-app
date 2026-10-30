@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { api, API, ApiError, type Me, type Role } from '../api.ts';
 import { fmtClock } from '../labels.ts';
-import { Eel, Field, fmtPhone, Glyph, GLYPH, Icon, Notice, PinBoxes, roleLabel } from '../ui.tsx';
+import { Field, fmtPhone, Glyph, GLYPH, Icon, LangSwitch, Notice, PinBoxes, roleLabel } from '../ui.tsx';
 import type { SignInMode } from './welcome.tsx';
 import { lang, t } from '../i18n.ts';
 
@@ -55,19 +55,14 @@ function Header() {
         gap: 12,
       }}
     >
-      <div class="row" style={{ gap: 8 }}>
+      <div class="row" style={{ gap: 8, flexWrap: 'wrap' }}>
         <span class="icon-box" style={{ width: 36, height: 36, borderRadius: 12, background: '#fbd38d', color: 'var(--hero-bg)' }}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
             <path d="M3 13c3-4 5-4 8 0s5 4 10-2" />
           </svg>
         </span>
         <span class="title">synteel</span>
-        <svg width="150" height="36" viewBox="0 0 150 36" aria-hidden="true" style={{ marginLeft: 'auto', flex: 'none' }}>
-          <path d="M0 30c12-5 22-5 34 0s22 5 34 0 22-5 34 0 22 5 34 0" class="art-wave" fill="none" stroke="#2C4471" stroke-width="2.5" stroke-linecap="round" />
-          <Eel x={2} y={-3} scale={0.62} />
-          <circle cx="134" cy="9" r="2.5" class="art-wave" fill="none" stroke="#5E7BB0" stroke-width="1.8" />
-          <circle cx="141" cy="3" r="1.6" class="art-wave" fill="none" stroke="#5E7BB0" stroke-width="1.6" />
-        </svg>
+        <LangSwitch onHero />
       </div>
       <p style={{ fontSize: '1.125rem', fontWeight: 800, lineHeight: 1.3 }}>{t('Jaga kolam sidat, siang dan malam', 'Look after your eel ponds, day and night')}</p>
     </header>
@@ -469,7 +464,7 @@ export function SignIn({
                     {t('Coba demo', 'Try the demo')}
                   </span>
                   <span class="label ink2" style={{ lineHeight: 1.25 }}>
-                    {t('Tambak contoh, direset tiap malam', 'Sample farm, reset every night')}
+                    {t('Tambak contoh sendiri, tanpa akun', 'Your own sample farm, no account')}
                   </span>
                 </button>
               )}

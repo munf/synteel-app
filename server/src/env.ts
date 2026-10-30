@@ -45,8 +45,11 @@ export const env = {
   aiDailyCap: Number(process.env.SYNTEEL_AI_DAILY_CAP ?? 0),
   // Per deployment, so two instances on one domain (preview, production) keep separate logins.
   cookieName: process.env.SYNTEEL_COOKIE ?? 'synteel_session',
-  // Phone number of the shared demo account ("Coba demo"); unset disables demo login.
+  // Phone number of the demo template's owner ("Coba demo" copies its farm); unset disables demo login.
   demoPhone: process.env.SYNTEEL_DEMO_PHONE || null,
+  // "Coba demo" limits (demo.ts defaults when unset): new demo farms per address per day, demo farms alive at once.
+  demoPerIp: Number(process.env.SYNTEEL_DEMO_PER_IP || 0) || undefined,
+  demoMaxLive: Number(process.env.SYNTEEL_DEMO_MAX_LIVE || 0) || undefined,
   port: Number(process.env.PORT ?? 8787),
   // e.g. 127.0.0.1 behind a reverse proxy; unset listens on all interfaces.
   host: process.env.HOST,

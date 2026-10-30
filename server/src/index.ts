@@ -2,8 +2,9 @@ import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { createAi, withDailyCap } from './ai.ts';
 import { createApi } from './api.ts';
-import { captureStore } from './captures.ts';
+import { captureStore, removeFarmCaptures } from './captures.ts';
 import { openDb, repo } from './db.ts';
+import { DEMO_MAX_LIVE, DEMO_PER_IP_PER_DAY } from './demo.ts';
 import { env } from './env.ts';
 import { emergenciesEn, knowledge } from './knowledge.ts';
 import { parseLang } from './i18n.ts';
@@ -25,7 +26,7 @@ const chain = env.aiChat.filter((p) => p.apiKey).map((p) => p.name).join(' → '
 console.log(`AI mode: ${ai.mode}${ai.mode === 'meta' ? ` (${chain}${env.aiTranscriber.apiKey ? ', voice: meta' : ', no voice'}${env.aiDailyCap ? `, cap ${env.aiDailyCap}/day` : ''})` : ''}`);
 if (ai.mode === 'meta') console.log(`Briefing and case agent: ${env.agentChat.filter((p) => p.apiKey).map((p) => p.name).join(' → ')}`);
 const store = repo(openDb());
-const api = createApi(store, { ai, saveCapture: captureStore(), cookieName: env.cookieName, demoPhone: env.demoPhone, farmAiCap: env.farmAiCap, agentProviders: env.agentChat.filter((p) => p.apiKey), sam: env.aiTranscriber.apiKey ? { apiKey: env.aiTranscriber.apiKey, base: env.aiTranscriber.base } : null, mail: mailer(env.smtp) });
+const api = createApi(store, { ai, saveCapture: captureStore(), cookieName: env.cookieName, demoPhone: env.demoPhone, farmAiCap: env.farmAiCap, agentProviders: env.agentChat.filter((p) => p.apiKey), sam: env.aiTranscriber.apiKey ? { apiKey: env.aiTranscriber.apiKey, base: env.aiTranscriber.base } : null, mail: mailer(env.smtp), removeFarmFiles: (farmId) => removeFarmCaptures(farmId), demoLimits: { perIp: env.demoPerIp ?? DEMO_PER_IP_PER_DAY, maxLive: env.demoMaxLive ?? DEMO_MAX_LIVE } });
 console.log(`Support mail: ${env.smtp ? `${env.smtp.host}:${env.smtp.port}` : 'not configured (tickets only stored)'}`);
 app.route('/', api);
 
@@ -57,6 +58,18 @@ const caseRechecks = () => {
 };
 setTimeout(caseRechecks, 5_000);
 setInterval(caseRechecks, 5 * 60_000);
+
+// "Coba demo" copies are deleted 48 hours after they were made.
+const expireDemos = () => {
+  try {
+    const n = api.expireDemos();
+    if (n) console.log(`demo farms expired: ${n}`);
+  } catch (err) {
+    console.error('demo expiry:', err);
+  }
+};
+setTimeout(expireDemos, 10_000);
+setInterval(expireDemos, 30 * 60_000);
 
 // Evening briefing: check every 10 minutes; each farm gets one from 17.00 local time.
 setInterval(() => api.briefFarms().catch((err) => console.error('briefings:', err)), 10 * 60_000);

@@ -31,6 +31,8 @@ export const RECHECK_AFTER = HOUR;
 export const RECHECK_GRACE = 30 * 60_000;
 /** Agent runs per case per farm day; after that the case is updated from the rules. */
 export const MAX_AGENT_RUNS_PER_DAY = 6;
+/** Re-runs per case per farm day in another language (the viewer's language had no agent result yet); not counted above. */
+export const MAX_LANG_RUNS_PER_DAY = 3;
 
 export type CaseTrigger = 'open' | 'report' | 'answer' | 'recheck' | 'recheck_missed' | 'nodead';
 export type CaseEventKind = 'open' | 'report' | 'answer' | 'recheck' | 'nodead' | 'run' | 'close';

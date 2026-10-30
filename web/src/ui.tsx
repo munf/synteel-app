@@ -2,7 +2,7 @@ import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Finding, Level, PondSummary } from './api.ts';
 import { fmtClock, levelLabel, phaseLabel } from './labels.ts';
-import { LOCALE, t } from './i18n.ts';
+import { lang, LOCALE, setLang, t, type Lang } from './i18n.ts';
 
 // ---------- icons (stroke, 24 grid) ----------
 
@@ -282,6 +282,37 @@ export function PinInput({ value, onChange, autoComplete = 'current-password', l
       placeholder="••••••"
       required
     />
+  );
+}
+
+/** Language before signing in (Sambutan, Masuk): the same choice as in Profil. Language names are never translated. */
+export function LangSwitch({ onHero = false }: { onHero?: boolean }) {
+  const options: { id: Lang; label: string }[] = [
+    { id: 'id', label: 'Indonesia' },
+    { id: 'en', label: 'English' },
+  ];
+  return (
+    <div role="radiogroup" aria-label={t('Bahasa', 'Language')} class="row" style={{ gap: 4, flex: 'none', marginLeft: 'auto' }}>
+      {options.map((o) => {
+        const on = lang === o.id;
+        // On the navy header the chosen one is white; elsewhere it is navy.
+        const look = onHero ? (on ? 'light' : '') : on ? 'primary' : 'secondary';
+        return (
+          <button
+            key={o.id}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            lang={o.id}
+            class={`btn compact ${look}`}
+            style={{ padding: '0 12px', ...(onHero && !on && { background: 'transparent', color: '#fff', border: '2px solid var(--hero-ring)' }) }}
+            onClick={() => setLang(o.id)}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

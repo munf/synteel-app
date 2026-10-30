@@ -1,11 +1,27 @@
-// Interface language. Indonesian is the default; English is chosen in Profil → Tampilan → Bahasa.
+// Interface language. Indonesian is the default; English is chosen on Sambutan or Masuk, in Profil → Tampilan → Bahasa,
+// or by a link with ?lang=en.
 // The choice is fixed for the life of the page: switching reloads the app, so module-level labels
 // (labels.ts) can be built once with `t()`.
 import { getPrefs, setPrefs } from './prefs.ts';
 
 export type Lang = 'id' | 'en';
 
-export const lang: Lang = getPrefs().lang === 'en' ? 'en' : 'id';
+/**
+ * A link may choose the language: ?lang=en or ?lang=id (the README sends judges to ?lang=en). The choice is
+ * saved like the one in Profil, and the parameter leaves the address so a later switch in the app is not undone.
+ */
+function fromLink(): Lang | null {
+  if (typeof location === 'undefined') return null;
+  const url = new URL(location.href);
+  const asked = url.searchParams.get('lang')?.toLowerCase();
+  if (asked !== 'en' && asked !== 'id') return null;
+  setPrefs({ lang: asked });
+  url.searchParams.delete('lang');
+  history.replaceState(history.state, '', url.pathname + url.search + url.hash);
+  return asked;
+}
+
+export const lang: Lang = fromLink() ?? (getPrefs().lang === 'en' ? 'en' : 'id');
 export const isEn = lang === 'en';
 /** For toLocaleString: Indonesian decimal comma and day names, or British English (day before month, 24-hour). */
 export const LOCALE = isEn ? 'en-GB' : 'id-ID';
