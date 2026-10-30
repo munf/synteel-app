@@ -8,7 +8,6 @@ import { lang, siteInAppLanguage, t } from '../i18n.ts';
 /** 'reset': Lupa PIN, a code to the account's e-mail and a new PIN. */
 type Mode = SignInMode | 'reset';
 
-const REGISTER_SUB = t('Buat akun pemilik tambak, lalu siapkan tambak.', 'Create a farm owner account, then set up your farm.');
 const BUTTONS: Record<Mode, string> = {
   login: t('Masuk', 'Sign in'),
   register: t('Daftar dan siapkan tambak', 'Create account and set up farm'),
@@ -301,7 +300,7 @@ export function SignIn({
   );
   const pinHint =
     mode === 'register' || reset
-      ? t('PIN terlihat supaya tidak salah ketik. Mudah diingat, tapi jangan 123456 atau 111111.', 'The PIN is shown so you do not mistype it. Easy to remember, but not 123456 or 111111.')
+      ? t('Hindari PIN yang mudah ditebak 123456 atau 111111.', 'Avoid PINs that are easy to guess, like 123456 or 111111.')
       : join
         ? t('PIN terlihat supaya tidak salah ketik.', 'The PIN is shown so you do not mistype it.')
         : sessionEnded
@@ -372,7 +371,6 @@ export function SignIn({
                 );
               })}
             </div>
-            {mode === 'register' && <h1 style={{ fontSize: '1rem', fontWeight: 400, color: 'var(--ink-2)' }}>{REGISTER_SUB}</h1>}
           </div>
         )}
 
@@ -449,7 +447,7 @@ export function SignIn({
           </Field>
         )}
         {mode === 'register' && emailOn && !taken && (
-          <Field label={t('Email', 'E-mail')} hint={t('Kode dikirim ke sini. Dipakai juga kalau lupa PIN.', 'The code goes here. Also used if the PIN is forgotten.')}>
+          <Field label={t('Email', 'E-mail')}>
             <EmailInput
               value={email}
               onChange={(v) => {
