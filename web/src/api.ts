@@ -4,6 +4,7 @@ import type { CaseCheck, CaseQuestion, CaseRun, CaseView } from '../../server/sr
 import type { Aeration, Batch, Behavior, Farm, Finding, Level, Log, LogData, Phase, Pond, Setting } from '../../server/src/domain.ts';
 import type { Nowcast, NowcastPoint, RiskFactor, RiskLevel, SuggestedCheck } from '../../server/src/nowcast.ts';
 import type { Limits } from '../../server/src/rules.ts';
+import type { Outage, PowerBackup, PowerLevel, PowerNight, PowerReason } from '../../server/src/power.ts';
 import type { Draft, DraftField } from '../../server/src/ai.ts';
 import type { AutoFix, HistoryLog, LogEdit, QuotaState, ReadingField, RoundDraft, RoundIssue, RoundResult, SupportRequest, SupportTopic } from '../../server/src/contract.ts';
 import type { NotebookCheck, NotebookField, NotebookPage, NotebookRow, NotebookSaveResult, NotebookSaveRow, NotebookValueField } from '../../server/src/contract.ts';
@@ -12,6 +13,7 @@ import { lang, t } from './i18n.ts';
 
 export type { Aeration, Batch, Behavior, Farm, Finding, Level, Log, LogData, Phase, Pond, Setting };
 export type { Limits, Nowcast, NowcastPoint, RiskFactor, RiskLevel, SuggestedCheck };
+export type { Outage, PowerBackup, PowerLevel, PowerNight, PowerReason };
 export type { Draft, DraftField, LogSource };
 export type { Briefing, BriefingCheck, CountResult };
 export type { CaseCheck, CaseQuestion, CaseRun, CaseView };
@@ -86,8 +88,28 @@ export interface NowcastState {
     error: string | null;
     place: string | null;
     hours: { t: number; airTemp: number; rain: number; cloud: number }[];
+    /** BMKG village forecast ("Sumber: BMKG"); null when the farm has no place yet. */
+    bmkg?: BmkgView | null;
   };
   ponds: Nowcast[];
+  /** Tonight's power-cut risk (power.ts). */
+  power?: PowerNight | null;
+}
+
+/** A village (desa/kelurahan) BMKG forecasts for. */
+export interface Region {
+  code: string;
+  desa: string;
+  kecamatan: string;
+  kabupaten: string;
+  provinsi: string;
+}
+
+export interface BmkgView {
+  source: 'BMKG';
+  region: Region & { auto: boolean; km: number | null };
+  steps: { t: number; code: number; desc: string; rain: number; wind: number; temp: number }[];
+  error: string | null;
 }
 
 export type PondProfile = Partial<Pick<Pond, 'name' | 'kind' | 'volumeL' | 'areaM2' | 'setting' | 'shaded' | 'aeration' | 'depthCm' | 'nicknames'>>;
@@ -225,6 +247,16 @@ export const api = {
   noDeadToday: (id: number) => call<{ case: CaseView }>('POST', `/cases/${id}/nodead`),
   closeCase: (id: number) => call<{ case: CaseView }>('POST', `/cases/${id}/close`),
   knowledge: () => call<{ emergencies: { emergencies: Emergency[] } }>('GET', '/knowledge'),
+
+  // Power cuts and the BMKG region (power.ts, bmkg.ts).
+  setPowerBackup: (powerBackup: PowerBackup) => call<{ farm: Farm }>('PUT', '/farm/power', { powerBackup }),
+  searchRegion: (q: string) => call<{ results: Region[] }>('GET', `/wilayah?q=${encodeURIComponent(q)}`),
+  /** null: back to the village nearest the farm. */
+  setRegion: (code: string | null) => call<{ farm: Farm; region: (Region & { auto: boolean }) | null }>('PUT', '/farm/wilayah', { code }),
+  openOutage: () => call<{ outage: Outage | null; backup: PowerBackup | null }>('GET', '/outages/open'),
+  startOutage: (minutesAgo = 0) => call<{ outage: Outage; backup: PowerBackup | null }>('POST', '/outages', { minutesAgo }),
+  moveOutageStart: (id: number, minutesAgo: number) => call<{ outage: Outage; backup: PowerBackup | null }>('PUT', `/outages/${id}`, { minutesAgo }),
+  endOutage: (id: number) => call<{ outage: Outage; backup: PowerBackup | null }>('POST', `/outages/${id}/end`),
 
   // Voice round: one recording that names many ponds → one draft per pond. Nothing is saved here.
   round: (audio: Blob) => {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { api, isAuthError, onSessionLost, type FarmState, type Me, type NowcastState } from './api.ts';
 import { PondDetail } from './screens/pond.tsx';
 import { Problem } from './screens/problem.tsx';
+import { OutageScreen } from './screens/outage.tsx';
 import { Profile, Rewards } from './screens/profile.tsx';
 import { Record } from './screens/record.tsx';
 import { AddPond, FarmSetup, NoPonds } from './screens/setup.tsx';
@@ -44,7 +45,9 @@ export type Route =
   /** The night-check alarm, full screen. */
   | { name: 'alarm'; at: number; pondId: number }
   /** Hubungkan alat: link a Synteel device by its code (typed, scanned, or from a ?device= link). */
-  | { name: 'device'; code?: string };
+  | { name: 'device'; code?: string }
+  /** "Listrik padam": records the power cut (or reopens the open one) and shows the emergency steps. */
+  | { name: 'outage' };
 
 export type Go = (r: Route) => void;
 
@@ -58,6 +61,7 @@ const tabs: { name: 'today' | 'record' | 'watch' | 'problem'; label: string; ico
 const TAB_OF: Partial<Record<Route['name'], (typeof tabs)[number]['name']>> = {
   pond: 'today', 'add-pond': 'today', profile: 'today', rewards: 'today', history: 'today', quota: 'today', help: 'today',
   'record-pond': 'record', round: 'record', device: 'record', notebook: 'record',
+  outage: 'problem',
 };
 
 /** The simulator's QR opens …/app/?device=CODE: kept until someone is signed in to a farm, then opened. */
@@ -336,6 +340,8 @@ export function App() {
     body = <Watch state={state} nowcast={nowcast} onChanged={refresh} go={go} />;
   } else if (route.name === 'problem') {
     body = <Problem key={route.pondId ?? 0} ponds={state.ponds} initialPondId={route.pondId} onSaved={refresh} go={go} />;
+  } else if (route.name === 'outage') {
+    body = <OutageScreen state={state} go={go} onChanged={refresh} />;
   } else if (route.name === 'rewards') {
     body = <Rewards state={state} go={go} />;
   } else if (route.name === 'record-pond') {
@@ -353,7 +359,7 @@ export function App() {
   } else if (route.name === 'alarm') {
     body = <Alarm ponds={state.ponds} at={route.at} pondId={route.pondId} role={role} onSaved={refresh} go={go} />;
   } else {
-    body = <Today state={state} userName={me.user.name} nowcast={nowcast} go={go} onRetryWeather={refresh} />;
+    body = <Today state={state} userName={me.user.name} nowcast={nowcast} go={go} onRetryWeather={refresh} onWeatherChanged={() => api.nowcast().then(setNowcast, () => {})} />;
   }
 
   const ready = Boolean(me && state?.farm && state.ponds.length);

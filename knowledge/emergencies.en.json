@@ -12,6 +12,18 @@
       ]
     },
     {
+      "id": "aerator_off",
+      "trigger": "Aerator off because of a power cut (ponds without the Synt Nursery system)",
+      "operator_actions": [
+        "Note the time the power went out and tell the farm owner",
+        "Start the generator, or connect the aerator to a battery backup, if there is one",
+        "Do not feed until the aerator is running again",
+        "Look at the eels every 30 minutes: rising to the surface or crowding at the water inlet means oxygen is short",
+        "If the power is out for more than 1 hour with no backup, slowly let in clean water that has been settled",
+        "When the power is back: turn the aerator on first, then the other equipment one by one, and look at the eels"
+      ]
+    },
+    {
       "id": "pump_failure",
       "trigger": "Main pump failed or flow below 50%",
       "operator_actions": ["Make sure the aeration keeps running", "Swap the pump (keep a spare)", "Check for blockages"]

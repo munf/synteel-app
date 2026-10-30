@@ -27,7 +27,7 @@ export type Call = ReturnType<typeof client>;
 export function server(nowIso = '2026-10-28T03:00:00Z', deps: Deps = {}) {
   const store = repo(openDb(':memory:'));
   const now = { t: new Date(nowIso) };
-  const api = createApi(store, { clock: () => now.t, getWeather: async () => ({ hours: [], fetchedAt: 0 }), geocode: async () => null, ...deps });
+  const api = createApi(store, { clock: () => now.t, getWeather: async () => ({ hours: [], fetchedAt: 0 }), geocode: async () => null, getBmkg: async () => { throw new Error('offline'); }, getStorm: async () => [], ...deps });
   return { store, api, now, client: (headers?: Record<string, string>) => client(api, headers) };
 }
 

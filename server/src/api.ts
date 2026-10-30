@@ -18,6 +18,9 @@ import type { SaveCapture } from './captures.ts';
 import { computeNowcast } from './nowcast.ts';
 import { assessPond, classifyReading, limitsFor, overallLevel, type Limits, type Threshold } from './rules.ts';
 import { geocode as defaultGeocode, getWeather as defaultGetWeather } from './weather.ts';
+import { farmForecast, getBmkgForecast, regionCandidates, type BmkgForecast, type GetBmkg, type Region } from './bmkg.ts';
+import { findDesa, searchDesa, type Desa } from './desa.ts';
+import { applyPower, assessPowerNight, getStormHours, POWER_BACKUPS, type GetStorm, type PowerBackup, type PowerNight } from './power.ts';
 
 const thresholds = knowledge.thresholds.parameters as Threshold[];
 const stages = knowledge.nurseryProgram.stages as { weeks: [number, number]; name: string; feed: string; mesh_mm: string; water: string }[];
@@ -47,6 +50,7 @@ const FIELD_EN: Record<string, string> = {
   'ganti air': 'Water change', 'luas kolam': 'Pond area', 'tempat kolam': 'Pond setting', 'kedalaman air': 'Water depth',
   'nama kolam': 'Pond name', 'jenis kolam': 'Pond type', 'jenis rekaman': 'Recording type', 'Nomor WhatsApp': 'WhatsApp number',
   'Nomor HP akun': 'Account phone number', aerasi: 'Aeration', aerator: 'Aerator', fase: 'Phase',
+  'cadangan listrik': 'Power backup', wilayah: 'Region', 'lama padam': 'How long the power has been out',
 };
 const fieldName = (f: string) => tx(f, FIELD_EN[f] ?? f);
 const invalid = (field: string) => new BadRequest(tx(`${field} tidak valid`, `${fieldName(field)} is not valid`));
@@ -138,6 +142,9 @@ export interface ApiDeps {
   agentProviders?: ChatProvider[];
   /** Meta Model API access for SAM 3.1 (counting dead eels in a photo). */
   sam?: SamProvider | null;
+  /** BMKG village forecast (bmkg.ts) and Open-Meteo storm signs (power.ts); tests pass fakes, no network. */
+  getBmkg?: GetBmkg;
+  getStorm?: GetStorm;
   /** Sends support tickets to the team; null = only stored. */
   mail?: SendMail | null;
   /** Abuse limits for "Coba demo": new copies per address per day, and copies alive at once. */
@@ -248,7 +255,7 @@ type Env = { Variables: { userId: number; farmId: number | null; tokenHash: stri
 
 export function createApi(
   store: Repo,
-  { clock = () => new Date(), getWeather = defaultGetWeather, geocode = defaultGeocode, ai, saveCapture, cookieName = 'synteel_session', demoPhone = null, farmAiCap = 0, agentProviders = [], sam = null, mail = null, demoLimits = { perIp: DEMO_PER_IP_PER_DAY, maxLive: DEMO_MAX_LIVE }, removeFarmFiles }: ApiDeps = {},
+  { clock = () => new Date(), getWeather = defaultGetWeather, geocode = defaultGeocode, ai, saveCapture, cookieName = 'synteel_session', demoPhone = null, farmAiCap = 0, agentProviders = [], sam = null, getBmkg = getBmkgForecast, getStorm = getStormHours, mail = null, demoLimits = { perIp: DEMO_PER_IP_PER_DAY, maxLive: DEMO_MAX_LIVE }, removeFarmFiles }: ApiDeps = {},
 ) {
   const api = new Hono<Env>();
   // Every handler below answers in the language the app asked for (i18n.ts).
@@ -434,6 +441,52 @@ export function createApi(
     return { generatedAt: now.getTime(), weather: { available: weather.length > 0, error: weatherError, place: farm?.locationName ?? null, hours }, ponds };
   }
 
+  // ---------- power cuts and BMKG (power.ts, bmkg.ts) ----------
+
+  /** A village as the app shows it. */
+  const desaView = (d: Desa) => ({ code: d.code, desa: d.name, kecamatan: d.kecamatan, kabupaten: d.kabupaten, provinsi: d.provinsi });
+
+  /** BMKG for the weather card and the agent: the region, and the next 24 hours of 3-hour steps in the viewer's language. */
+  function bmkgView(region: Region | null, forecast: BmkgForecast | null, error: string | null, now: number) {
+    if (!region) return null;
+    const en = currentLang() === 'en';
+    return {
+      source: 'BMKG',
+      region: { ...desaView(region.desa), auto: region.auto, km: region.km },
+      steps: (forecast?.steps ?? [])
+        .filter((s) => s.t >= now - 90 * 60_000 && s.t <= now + 24 * 3600_000)
+        .map((s) => ({ t: s.t, code: s.code, desc: en ? s.descEn || s.desc : s.desc, rain: s.rain, wind: s.wind, temp: s.temp })),
+      error: forecast ? null : error,
+    };
+  }
+
+  /** Tonight's power-cut risk for a farm, from Open-Meteo storm signs and the BMKG village forecast. */
+  async function powerState(r: FarmRepo, now: number) {
+    const farm = r.getFarm();
+    if (!farm) return { power: null, bmkg: null };
+    const [storm, bmkg] = await Promise.all([
+      farm.lat != null && farm.lon != null ? getStorm(farm.lat, farm.lon, now).catch(() => []) : Promise.resolve([]),
+      farmForecast(farm, getBmkg, now).catch(() => null),
+    ]);
+    const power: PowerNight = assessPowerNight({ storm, bmkg: bmkg?.forecast?.steps ?? null, now, timezone: farm.timezone, backup: farm.powerBackup ?? null, outage: r.openOutage() });
+    return { power, bmkg: bmkgView(bmkg?.region ?? regionCandidates(farm)[0] ?? null, bmkg?.forecast ?? null, bmkg?.error ?? null, now) };
+  }
+
+  /** nowcastAll plus tonight's power-cut risk: its own label, and a higher danger for ponds already at risk. */
+  async function nowcastFull(r: FarmRepo) {
+    const at = clock().getTime();
+    const job = powerState(r, at);
+    const nc = await nowcastAll(r);
+    const { power, bmkg } = await job;
+    const ponds = power
+      ? nc.ponds.map((p) => {
+          const pond = r.getPond(p.pondId);
+          return pond ? applyPower(p, pond, power, nc.generatedAt, timezone(r)) : p;
+        })
+      : nc.ponds;
+    return { ...nc, weather: { ...nc.weather, bmkg }, ponds, power };
+  }
+
   // ---------- evening briefing ----------
 
   const MAX_BRIEFINGS_PER_DAY = 4;
@@ -469,7 +522,7 @@ export function createApi(
 
   async function briefingInput(r: FarmRepo): Promise<BriefingInput> {
     const now = clock();
-    const nc = await nowcastAll(r);
+    const nc = await nowcastFull(r);
     const farm = r.getFarm()!;
     return {
       farmName: farm.name,
@@ -490,6 +543,8 @@ export function createApi(
       }),
       nowcasts: nc.ponds,
       weather: nc.weather.hours,
+      bmkg: nc.weather.bmkg,
+      power: nc.power,
       history: (pondId, days) => pondHistory(r, pondId, days),
     };
   }
@@ -1032,14 +1087,92 @@ export function createApi(
       lon,
       timezone: text(body.timezone, 'zona waktu') ?? 'Asia/Jakarta',
     };
+    // "Cadangan listrik" can be answered in the same form (Siapkan tambak); left out, it stays as it was.
+    const backup = oneOf<PowerBackup>(body.powerBackup, POWER_BACKUPS, 'cadangan listrik');
     if (c.get('farmId') === null) {
       const id = store.createFarm(farm, c.get('userId'));
       store.setSessionFarm(c.get('tokenHash'), id);
+      if (backup) store.farm(id).setPowerBackup(backup);
       return c.json({ farm: store.farm(id).getFarm() }, 201);
     }
     const r = needOwner(c);
+    const before = r.getFarm();
     r.saveFarm(farm);
+    if (backup) r.setPowerBackup(backup);
+    // The farm moved: a BMKG village picked for the old place no longer fits; go back to the nearest one.
+    if (before?.adm4 && (before.lat !== farm.lat || before.lon !== farm.lon)) r.setAdm4(null);
     return c.json({ farm: r.getFarm() });
+  });
+
+  // ---------- power cuts and the BMKG region ----------
+
+  // "Cadangan listrik" in Profil (owner).
+  api.put('/farm/power', async (c) => {
+    const r = needOwner(c);
+    const backup = oneOf<PowerBackup>((await c.req.json()).powerBackup, POWER_BACKUPS, 'cadangan listrik');
+    if (!backup) throw invalid('cadangan listrik');
+    r.setPowerBackup(backup);
+    return c.json({ farm: r.getFarm() });
+  });
+
+  // "Ganti wilayah": villages by name, for the owner to pick the BMKG forecast region.
+  api.get('/wilayah', (c) => {
+    needFarm(c);
+    return c.json({ results: searchDesa(String(c.req.query('q') ?? '').slice(0, 80)).map(desaView) });
+  });
+
+  // The owner's pick (a Kemendagri village code), or null to go back to the village nearest the farm.
+  api.put('/farm/wilayah', async (c) => {
+    const r = needOwner(c);
+    const code = (await c.req.json()).code;
+    if (code !== null && (typeof code !== 'string' || !findDesa(code))) throw invalid('wilayah');
+    r.setAdm4(code);
+    const region = regionCandidates(r.getFarm()!)[0] ?? null;
+    return c.json({ farm: r.getFarm(), region: region && { ...desaView(region.desa), auto: region.auto, km: region.km } });
+  });
+
+  /** "Sudah berapa lama padam?": minutes before now, 0 to 24 hours. */
+  const startFrom = (minutesAgo: unknown) => new Date(clock().getTime() - (num(minutesAgo, 'lama padam', { min: 0, max: 24 * 60 }) ?? 0) * 60_000).toISOString();
+  const outageView = (r: FarmRepo, id: number) => ({ outage: r.getOutage(id), backup: r.getFarm()?.powerBackup ?? null });
+
+  // The power cut being recorded now, if any (Beranda, Masalah).
+  api.get('/outages/open', (c) => {
+    const r = needFarm(c);
+    const open = r.openOutage();
+    return c.json({ outage: open && clock().getTime() - Date.parse(open.startedAt) < 24 * 3600_000 ? open : null, backup: r.getFarm()?.powerBackup ?? null });
+  });
+
+  // "Listrik padam": one tap records when it started; a second tap while it is still out returns the same one.
+  api.post('/outages', async (c) => {
+    const r = needFarm(c);
+    const body = await c.req.json().catch(() => ({}));
+    const open = r.openOutage();
+    if (open && clock().getTime() - Date.parse(open.startedAt) < 24 * 3600_000) return c.json(outageView(r, open.id));
+    if (open) r.endOutage(open.id, open.startedAt, null);
+    const outage = r.startOutage(startFrom(body.minutesAgo), c.get('userId'));
+    return c.json(outageView(r, outage.id), 201);
+  });
+
+  const needOutage = (c: Context<Env>) => {
+    const r = needFarm(c);
+    const outage = r.getOutage(Number(c.req.param('id')));
+    if (!outage) throw new NotFound(tx('Catatan listrik padam tidak ditemukan', 'Power cut record not found'));
+    return { r, outage };
+  };
+
+  // "Sudah berapa lama padam?": moves the start back.
+  api.put('/outages/:id', async (c) => {
+    const { r, outage } = needOutage(c);
+    if (outage.endedAt) throw new BadRequest(tx('Listrik sudah dicatat menyala', 'The power is already recorded as back on'));
+    r.moveOutageStart(outage.id, startFrom((await c.req.json()).minutesAgo));
+    return c.json(outageView(r, outage.id));
+  });
+
+  // "Listrik sudah menyala".
+  api.post('/outages/:id/end', (c) => {
+    const { r, outage } = needOutage(c);
+    if (!outage.endedAt) r.endOutage(outage.id, clock().toISOString(), c.get('userId'));
+    return c.json(outageView(r, outage.id));
   });
 
   // ---------- Synteel devices: "Hubungkan alat" in the app ----------
@@ -1262,7 +1395,7 @@ export function createApi(
     return c.json({ pond: pondSummary(r, r.getPond(pond.id)!) });
   });
 
-  api.get('/nowcast', async (c) => c.json(await nowcastAll(needFarm(c))));
+  api.get('/nowcast', async (c) => c.json(await nowcastFull(needFarm(c))));
 
   api.delete('/ponds/:id', (c) => {
     needOwner(c).archivePond(Number(c.req.param('id')));
@@ -1620,7 +1753,7 @@ export function createApi(
 
   // For the server's own background monitor, which has no session.
   return Object.assign(api, {
-    nowcastFarm: (farmId: number) => nowcastAll(store.farm(farmId)),
+    nowcastFarm: (farmId: number) => nowcastFull(store.farm(farmId)),
     /** Linked Synteel devices: write the logs that are due. Called every minute. */
     sendDeviceLogs,
     /**

@@ -7,6 +7,7 @@ import { fmtClock, fmtTemp, readingWord } from '../labels.ts';
 import { usePrefs } from '../prefs.ts';
 import { Icon, Shape, type Tone } from '../ui.tsx';
 import { isEn, t } from '../i18n.ts';
+import { OutageBanner, PowerNightCard } from './power.tsx';
 import './watch.css';
 
 const HOUR = 3600_000;
@@ -57,6 +58,8 @@ function stepLabel(step: Briefing['steps'][number], pondName: (id: number) => st
       return t(`Membaca prakiraan malam ${pond}`, `Read the night forecast for ${pond}`);
     case 'get_weather':
       return t('Membaca cuaca 18 jam ke depan', 'Read the weather for the next 18 hours');
+    case 'get_bmkg_forecast':
+      return t('Membaca prakiraan BMKG dan risiko listrik padam', 'Read the BMKG forecast and the power-cut risk');
     case 'get_pond_history':
       return t(`Membaca catatan ${step.args.days ?? 3} hari terakhir ${pond}`, `Read the last ${step.args.days ?? 3} days of records for ${pond}`);
     case 'search_guidance':
@@ -67,6 +70,8 @@ function stepLabel(step: Briefing['steps'][number], pondName: (id: number) => st
       return step.tool;
   }
 }
+
+const BOLT = 'M13 3 5 14h6l-1 7 8-11h-6z';
 
 /** A risk factor as a short chip: a few words and an icon. */
 function chip(f: RiskFactor, p: NowcastPoint): { icon: string; label: string } {
@@ -95,6 +100,10 @@ function chip(f: RiskFactor, p: NowcastPoint): { icon: string; label: string } {
       return { icon: GLYPH.rain, label: t('Hujan deras', 'Heavy rain') };
     case 'unwatched':
       return { icon: GLYPH.clock, label: t('Lama belum dicek', 'Not checked for a while') };
+    case 'power_night':
+      return { icon: BOLT, label: t('Rawan listrik padam', 'Power cut risk') };
+    case 'power_out':
+      return { icon: BOLT, label: t('Listrik padam', 'Power is out') };
     default:
       return { icon: GLYPH.eye, label: f.label };
   }
@@ -157,7 +166,7 @@ function groupRows(checks: NightCheck[], done: Record<string, boolean>): Row[] {
     // "· puncak rawan" when this is the check for the pond's worst hour.
     const atPeak = cs.length === 1 && first.peak && first.peak.level !== 'ok' && Math.abs(first.peak.t - first.t) <= HOUR;
     const agent = cs.find((c) => c.agent);
-    const why = (agent ? `${agent.why ?? agent.reason}` : /^risiko/i.test(first.reason) ? first.reason : '').replace(/°c\b/g, '°C');
+    const why = (agent ? `${agent.why ?? agent.reason}` : first.why ? first.why : /^risiko/i.test(first.reason) ? first.reason : '').replace(/°c\b/g, '°C');
     return {
       key,
       t: first.t,
@@ -500,6 +509,9 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
           </div>
         )}
       </section>
+
+      {nowcast.power?.outage && <OutageBanner startedAt={nowcast.power.outage.startedAt} go={go} />}
+      {nowcast.power && (nowcast.power.sources.openMeteo || nowcast.power.sources.bmkg) && <PowerNightCard power={nowcast.power} go={go} />}
 
       <section class="stack" style={{ gap: 12 }}>
         <div class="w-head">

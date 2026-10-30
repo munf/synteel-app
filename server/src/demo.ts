@@ -72,6 +72,7 @@ export function demoStore(db: Db) {
     db.exec(`delete from batches where pond_id in ${ponds}`);
     db.prepare('delete from ponds where farm_id = ?').run(farmId);
     db.prepare('delete from briefings where farm_id = ?').run(farmId);
+    db.prepare('delete from outages where farm_id = ?').run(farmId);
     db.prepare('delete from ai_usage where farm_id = ?').run(farmId);
     db.prepare('delete from invites where farm_id = ?').run(farmId);
     db.prepare('delete from sessions where farm_id = ?').run(farmId);

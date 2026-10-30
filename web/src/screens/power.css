@@ -1,0 +1,20 @@
+/* Power cuts: tonight's label, the open power cut, BMKG on the weather card, the outage screen. */
+.power-banner { width: 100%; border: 0; text-align: left; align-items: center; min-height: 64px; font-size: 1rem; }
+.power-card .pill { flex: none; }
+.power-prep { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 12px 16px; border-radius: 16px; background: var(--soft); }
+.power-prep svg { flex: none; margin-top: 2px; color: var(--accent); }
+.power-reasons { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: 0.875rem; }
+
+.bmkg { border-top: 1px solid var(--line); padding-top: 16px; }
+.bmkg-steps div { padding: 12px 4px; }
+.bmkg-desc { line-height: 1.2; overflow-wrap: anywhere; }
+.region-option { min-height: 56px; border: 0; border-radius: 16px; background: var(--soft); color: var(--ink); display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; padding: 8px 12px; text-align: left; width: 100%; }
+.region-option:disabled { opacity: 0.6; }
+
+.outage-clock { font-size: 2.5rem; font-weight: 800; line-height: 1; }
+.outage-steps { display: flex; flex-direction: column; gap: 8px; }
+.outage-step { display: flex; gap: 12px; align-items: center; min-height: 64px; padding: 8px 12px; border: 0; border-radius: 16px; background: rgba(255, 255, 255, 0.08); color: #fff; text-align: left; font-size: 1rem; }
+.outage-step.on { background: rgba(63, 185, 132, 0.18); }
+.outage-step.on .grow { text-decoration: line-through; text-decoration-color: rgba(255, 255, 255, 0.5); }
+.outage-entry { width: 100%; border: 0; text-align: left; align-items: center; min-height: 72px; font-size: 1rem; background: var(--bad-bg); color: var(--bad); border-radius: 16px; display: flex; gap: 12px; padding: 12px 16px; }
+.outage-entry .icon-box { background: var(--surface); color: var(--bad); }

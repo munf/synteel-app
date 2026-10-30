@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { demoStore } from './demo.ts';
 import { deviceStore } from './devices.ts';
 import type { Aeration, Batch, Farm, Log, LogData, Phase, Pond, Setting } from './domain.ts';
+import type { Outage } from './power.ts';
 
 const defaultPath = fileURLToPath(new URL('../../data/synteel.sqlite', import.meta.url));
 
@@ -168,6 +169,26 @@ export function openDb(path = process.env.SYNTEEL_DB ?? defaultPath) {
   for (const [col, type] of [['lang', 'text'], ['kind', 'text'], ['basis', 'integer']]) {
     if (!briefingCols.includes(col)) db.exec(`alter table briefings add column ${col} ${type}`);
   }
+  // ---------- Farms: power backup, BMKG region, power cuts (power.ts, bmkg.ts) ----------
+  // Additive only. power_backup: 'genset' | 'battery' | 'none' (null = not answered yet).
+  // adm4: the BMKG village the owner picked (null = nearest to the farm's coordinates).
+  // outages: "Listrik padam" taps, farm-wide; ended_at null while the power is still out.
+  const farmCols = (db.prepare('pragma table_info(farms)').all() as { name: string }[]).map((c) => c.name);
+  for (const [col, type] of [['power_backup', 'text'], ['adm4', 'text']]) {
+    if (!farmCols.includes(col)) db.exec(`alter table farms add column ${col} ${type}`);
+  }
+  db.exec(`
+    create table if not exists outages (
+      id integer primary key,
+      farm_id integer not null,
+      started_at text not null,
+      ended_at text,
+      started_by integer,
+      ended_by integer
+    );
+    create index if not exists outages_farm on outages (farm_id, started_at);
+  `);
+  // ---------- end of the farms power block ----------
   db.exec('create index if not exists ponds_farm on ponds (farm_id)');
   // Single-farm databases (before accounts): the old farm becomes farm 1 and owns every pond.
   const legacy = db.prepare("select name from sqlite_master where type = 'table' and name = 'farm'").get();
@@ -243,6 +264,16 @@ const toFarm = (r: Row): Farm => ({
   lat: r.lat as number | null,
   lon: r.lon as number | null,
   timezone: r.timezone as string,
+  powerBackup: (r.power_backup as Farm['powerBackup']) ?? null,
+  adm4: (r.adm4 as string | null) ?? null,
+});
+
+const toOutage = (r: Row): Outage => ({
+  id: r.id as number,
+  startedAt: r.started_at as string,
+  endedAt: r.ended_at as string | null,
+  startedBy: r.started_by as number | null,
+  endedBy: r.ended_by as number | null,
 });
 
 export interface CaseRow {
@@ -276,6 +307,33 @@ export function farmRepo(db: Db, farmId: number) {
 
     saveFarm(f: Farm) {
       db.prepare('update farms set name = ?, location_name = ?, lat = ?, lon = ?, timezone = ? where id = ?').run(f.name, f.locationName, f.lat, f.lon, f.timezone, farmId);
+    },
+
+    // ---------- power backup, BMKG region, power cuts (power.ts) ----------
+    setPowerBackup(backup: Farm['powerBackup']) {
+      db.prepare('update farms set power_backup = ? where id = ?').run(backup ?? null, farmId);
+    },
+    setAdm4(code: string | null) {
+      db.prepare('update farms set adm4 = ? where id = ?').run(code, farmId);
+    },
+    /** The newest power cut that has not been closed, if any. */
+    openOutage(): Outage | null {
+      const r = db.prepare('select * from outages where farm_id = ? and ended_at is null order by started_at desc limit 1').get(farmId) as Row | undefined;
+      return r ? toOutage(r) : null;
+    },
+    getOutage(id: number): Outage | null {
+      const r = db.prepare('select * from outages where id = ? and farm_id = ?').get(id, farmId) as Row | undefined;
+      return r ? toOutage(r) : null;
+    },
+    startOutage(at: string, userId: number | null): Outage {
+      const id = Number(db.prepare('insert into outages (farm_id, started_at, started_by) values (?, ?, ?)').run(farmId, at, userId).lastInsertRowid);
+      return this.getOutage(id)!;
+    },
+    moveOutageStart(id: number, at: string) {
+      db.prepare('update outages set started_at = ? where id = ? and farm_id = ?').run(at, id, farmId);
+    },
+    endOutage(id: number, at: string, userId: number | null) {
+      db.prepare('update outages set ended_at = ?, ended_by = ? where id = ? and farm_id = ? and ended_at is null').run(at, userId, id, farmId);
     },
 
     listPonds(): Pond[] {

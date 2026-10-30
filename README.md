@@ -43,6 +43,7 @@ The preview calls the real Meta models. Photos, voice and notebook pages share a
 | Meter photo, daily video | A photo of a pH, TDS or thermometer display becomes a reading. A video is cut on the phone into 12 frames and a 16 kHz soundtrack to save data. The phone checks blur and glare first. Captures wait in an offline queue until there is signal. | [`ai.ts`](server/src/ai.ts), [`media.ts`](web/src/capture/media.ts) |
 | Notebook photo | Muse Spark copies each cell of a handwritten page as written. Code parses the numbers, drops values for blank cells and ditto marks, infers the year, matches ponds, and leaves pH 74 or 9 °C empty with 7.4 or 29 offered. The farmer saves the clear rows first and fixes the rest. | [`notebook.ts`](server/src/notebook.ts) |
 | Risk forecast | Every 30 minutes the server estimates each pond's water temperature hour by hour from Open-Meteo weather. It re-anchors on each reading and learns a per-pond offset. It scores oxygen risk with reasons (warm water, eels at the surface, aerator, green water at night, density, leftover feed, rain, hours unwatched) and builds a check schedule with night alarms. No model involved. | [`nowcast.ts`](server/src/nowcast.ts), [`monitor.ts`](server/src/monitor.ts) |
+| Power-cut nights | Aerators that stop when the power goes out at night kill whole batches. For tonight (17:00 to 06:00) the server cross-checks Open-Meteo (thunderstorm codes, gusts, heavy rain, unstable air) with the BMKG forecast for the farm's village and labels the night **Rawan / Mungkin / Kecil** with its reasons, and says so when the two disagree. A risky night adds preparation checks that follow the farm's power backup (generator, battery, none: feed less and decide who checks the aerator) and raises the danger of ponds whose oxygen risk is already up. **Listrik padam** records a power cut in one tap, shows the steps and a WhatsApp message, and ends with **Listrik sudah menyala**. The BMKG village is the one nearest the farm, or the owner's pick. No model involved. | [`power.ts`](server/src/power.ts), [`bmkg.ts`](server/src/bmkg.ts), [`outage.tsx`](web/src/screens/outage.tsx) |
 | Threshold alarms | Water limits per phase from [`knowledge/`](knowledge/). A night check marked as an alarm opens a full-screen alarm with sound and vibration while the app is open in the browser. | [`rules.ts`](server/src/rules.ts), [`alarms.ts`](web/src/alarms.ts) |
 | Evening briefing agent | From 17:00 farm time, or on request, the agent reads the farm through tools and writes a short summary plus extra checks. See [Agents](#agents). | [`agent.ts`](server/src/agent.ts) |
 | Dead-eel case agent | A dead-eel report opens one case per pond that follows the die-off across days: dead per day, trend, a 1-hour re-check, up to 2 questions for the farmer, extra checks, and a WhatsApp message for the owner when the rules say deaths are rising or the re-check went unanswered. | [`cases.ts`](server/src/cases.ts) |
@@ -58,7 +59,7 @@ The preview calls the real Meta models. Photos, voice and notebook pages share a
 | Model | Model id | What it does | Beyond a basic call |
 |---|---|---|---|
 | Muse Spark 1.3 (Meta Model API) | `muse-spark-1.3` | Reads meter photos, video frames and notebook pages; splits voice transcripts per pond; second provider for both agents | Strict JSON schema on every read. Code re-checks every value (plausible ranges, local pond matching, numbers parsed from the written text). On 402, 429 or 5xx the next provider takes over |
-| Muse Spark Open on Baseten | `meta-models/muse-spark-open-1026` | First provider for both agents | Open-weight model in a tool-calling loop (6 tools for the briefing, 8 for the case) with a code guard on what it submits |
+| Muse Spark Open on Baseten | `meta-models/muse-spark-open-1026` | First provider for both agents | Open-weight model in a tool-calling loop (7 tools for the briefing, 8 for the case) with a code guard on what it submits |
 | Muse Spark Open on Fireworks | `accounts/fireworks/models/muse-spark-open` | Fallback for capture reading; third provider for both agents | Automatic failover when the Meta API is down or out of credits. `SYNTEEL_AI_PROVIDER=fireworks` puts it first for capture |
 | Muse Voice Transcribe | `muse-voice-transcribe-1.0` | Voice notes, voice rounds, video soundtracks, spoken answers to case questions, spoken help messages | The phone converts audio to WAV. The transcript goes through Muse Spark extraction and the local number guards. Without ASR the recording stays queued on the phone |
 | SAM 3.1 (Meta Responses API) | `sam-3.1` | Counts dead glass eels and elvers in one photo | Four prompts in parallel: "transparent eel", "thin worm", "transparent worm" for bodies, "black eye" for heads; elver ponds add "worm". Code merges bodies that several prompts found, counts two eyes close together as one head, and treats an outline 1.7 times the typical size as possibly two eels. The phone sends the photo at 1600 px and 12% brighter so the eyes stand out |
@@ -88,7 +89,7 @@ flowchart TD
 
 | | Evening briefing agent | Dead-eel case agent |
 |---|---|---|
-| Read tools | `get_ponds`, `get_pond_history`, `get_night_forecast`, `get_weather`, `search_guidance` | `get_case`, `get_pond_logs`, `get_forecast`, `search_guidance` |
+| Read tools | `get_ponds`, `get_pond_history`, `get_night_forecast`, `get_weather`, `get_bmkg_forecast`, `search_guidance` | `get_case`, `get_pond_logs`, `get_forecast`, `search_guidance` |
 | Action tools | `submit_briefing` | `ask_farmer`, `add_check`, `draft_owner_message`, `submit_case_update` |
 | Limits | Up to 5 extra checks, 8 rounds, 4 runs per farm per day | Up to 2 questions, 3 extra checks, 10 rounds, 6 agent runs per case per day |
 
@@ -137,7 +138,7 @@ scripts/    Demo seed, offline evaluation, Meta API check
 docs/       Evaluation
 ```
 
-The phone talks only to the server. The server calls the Meta Model API (Muse Spark 1.3, Muse Voice Transcribe, SAM 3.1), Baseten and Fireworks (Muse Spark Open), and Open-Meteo for weather. Rules, forecast and alarms are plain TypeScript with no model in the path.
+The phone talks only to the server. The server calls the Meta Model API (Muse Spark 1.3, Muse Voice Transcribe, SAM 3.1), Baseten and Fireworks (Muse Spark Open), Open-Meteo for weather and BMKG for the village forecast. Rules, forecast and alarms are plain TypeScript with no model in the path.
 
 ## Run locally
 
@@ -165,3 +166,11 @@ npm run eval   # offline evaluation: SAM fixture and count rules, voice, meter a
 ```
 
 Neither needs API keys.
+
+## Data sources and licences
+
+| Data | Source | Licence and use |
+|---|---|---|
+| Hourly weather and storm signs | [Open-Meteo](https://open-meteo.com) | CC BY 4.0. Weather data by Open-Meteo.com |
+| Village weather forecast, 3-hour steps | BMKG public forecast API, `api.bmkg.go.id/publik/prakiraan-cuaca` | BMKG open data. Called only by the server, cached per village for 2 hours and kept below BMKG's 60 requests per minute. The app shows "Sumber: BMKG" wherever BMKG data appears |
+| Village codes (Kemendagri `adm4`), names and centres | [cahyadsn/wilayah](https://github.com/cahyadsn/wilayah) and [cahyadsn/wilayah_boundaries](https://github.com/cahyadsn/wilayah_boundaries) by Cahya DSN | MIT. Built into [`server/geo/desa.tsv.gz`](server/geo/) (83,762 villages, 1.2 MB) by [`scripts/build-desa.ts`](scripts/build-desa.ts); licence text in [`server/geo/LICENSE-wilayah.txt`](server/geo/LICENSE-wilayah.txt) |

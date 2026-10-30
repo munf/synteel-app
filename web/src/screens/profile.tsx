@@ -10,6 +10,7 @@ import { Field, Icon, initialOf, roleLabel, Shape, Soon, Switch, Tick, Glyph, GL
 import { ChangePin, Members } from './members.tsx';
 import { MediaDone, QuotaBar } from './quota.tsx';
 import { LocateButton, useLocate } from './setup.tsx';
+import { BackupCard } from './power.tsx';
 import './profile.css';
 import { JoinByCode } from '../join.tsx';
 
@@ -446,6 +447,8 @@ export function Profile({
           }}
         />
       )}
+
+      {farm && <BackupCard value={farm.powerBackup ?? null} owner={owner} onSaved={() => onFarmChanged?.()} />}
 
       <section class="card list">
         {toggles.map((tg) => (

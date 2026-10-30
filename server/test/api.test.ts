@@ -23,7 +23,7 @@ function client(api: Api) {
 
 function server(nowIso = '2026-10-28T03:00:00Z', deps: Parameters<typeof createApi>[1] = {}) {
   const store = repo(openDb(':memory:'));
-  const api = createApi(store, { clock: () => new Date(nowIso), getWeather: async () => ({ hours: [], fetchedAt: 0 }), geocode: async () => null, ...deps });
+  const api = createApi(store, { clock: () => new Date(nowIso), getWeather: async () => ({ hours: [], fetchedAt: 0 }), geocode: async () => null, getBmkg: async () => { throw new Error('offline'); }, getStorm: async () => [], ...deps });
   return { store, api, client: () => client(api) };
 }
 

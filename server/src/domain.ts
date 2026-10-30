@@ -8,6 +8,10 @@ export interface Farm {
   lat: number | null;
   lon: number | null;
   timezone: string;
+  /** "Cadangan listrik" (power.ts): what keeps the aerators running in a power cut; null = not answered. */
+  powerBackup?: 'genset' | 'battery' | 'none' | null;
+  /** BMKG forecast village (Kemendagri code) picked by the owner; null = nearest to the coordinates. */
+  adm4?: string | null;
 }
 
 export type Setting = 'outdoor' | 'indoor';

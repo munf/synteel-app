@@ -8,6 +8,7 @@ import { isEn, LOCALE, t } from '../i18n.ts';
 import { StepList, useSteps } from '../steps.tsx';
 import { Icon, PondThumb, Shape, Stepper, Tick, TickBox, toneOf, type IconName } from '../ui.tsx';
 import './problem.css';
+import { OutageBanner, useOpenOutage } from './power.tsx';
 
 type Sign = 'dead' | 'surface' | 'inlet' | 'feed' | 'skin' | 'water' | 'power' | 'other';
 
@@ -38,7 +39,7 @@ const countText = (r: CountResult) => {
 const dayClock = (at: number) => `${new Date(at).toLocaleDateString(LOCALE, { weekday: 'long', timeZone: 'Asia/Jakarta' })} ${fmtClock(at)}`;
 
 // Which emergency SOP (knowledge/emergencies.json) answers which sign. Deterministic: works without the AI.
-const SOP: Partial<Record<Sign, string>> = { dead: 'low_do', surface: 'low_do', inlet: 'low_do', power: 'power_outage', water: 'heavy_rain' };
+const SOP: Partial<Record<Sign, string>> = { dead: 'low_do', surface: 'low_do', inlet: 'low_do', power: 'aerator_off', water: 'heavy_rain' };
 
 // Steps in the words a farmer uses at the pond; the same step from two sources shows once.
 const PLAIN: Record<string, string> = {
@@ -549,6 +550,7 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
   const [manual, setManual] = useState(false);
   const [more, setMore] = useState(false);
   const photo = useRef<HTMLInputElement>(null);
+  const outage = useOpenOutage();
 
   useSendPending(onSaved);
   // Opened from the night alarm, alarm.tsx forces the dark theme; it ends when this flow (form and result) is left.
@@ -656,6 +658,22 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
         <h1>{t('Ada masalah?', 'Something wrong?')}</h1>
         <p class="ink2">{t('Pilih kolamnya dulu, lalu pilih yang terlihat.', 'Choose the pond first, then pick what you see.')}</p>
       </section>
+
+      {/* A power cut stops every aerator at once: one tap, no pond to choose. */}
+      {outage ? (
+        <OutageBanner startedAt={outage.startedAt} go={go} />
+      ) : (
+        <button type="button" class="outage-entry" onClick={() => go({ name: 'outage' })}>
+          <span class="icon-box">
+            <Icon name="bolt" />
+          </span>
+          <span class="grow stack-xs" style={{ gap: 0 }}>
+            <span class="h2">{t('Listrik padam', 'Power cut')}</span>
+            <span class="label">{t('Satu ketuk: jam padam dicatat, langkah darurat muncul', 'One tap: the time is recorded, the emergency steps show')}</span>
+          </span>
+          <Icon name="next" size={20} />
+        </button>
+      )}
 
       <div class="field">
         <span class="field-label">{t('Kolam mana?', 'Which pond?')}</span>

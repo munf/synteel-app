@@ -7,6 +7,7 @@ import { alarmReason, sensorCritical, silenceSensorAlarm, useSensorRinging } fro
 import { DueRechecks, useRechecks } from './recheck.tsx';
 import { CaseBrief, useCases } from './case.tsx';
 import { LOCALE, t } from '../i18n.ts';
+import { BmkgPanel, OutageBanner, PowerNightCard } from './power.tsx';
 import './today.css';
 
 const rank = { ok: 0, info: 0, warning: 1, critical: 2 } as const;
@@ -218,6 +219,8 @@ function WeatherCard({
   many,
   onRetry,
   onPlace,
+  owner,
+  onWeatherChanged,
 }: {
   nowcast: NowcastState;
   focus: Nowcast | undefined;
@@ -226,6 +229,9 @@ function WeatherCard({
   many: boolean;
   onRetry: () => void;
   onPlace: () => void;
+  /** Owners may change the BMKG village ("Ganti wilayah"). */
+  owner: boolean;
+  onWeatherChanged: () => void;
 }) {
   const [why, setWhy] = useState(false);
   const w = nowcast.weather;
@@ -319,6 +325,7 @@ function WeatherCard({
           </div>
         ))}
       </div>
+      {w.bmkg && <BmkgPanel bmkg={w.bmkg} owner={owner} onChanged={onWeatherChanged} />}
       <button type="button" class="link-btn row" style={{ alignSelf: 'flex-start', gap: 8, fontWeight: 800 }} aria-expanded={why} onClick={() => setWhy(!why)}>
         {t('Kenapa?', 'Why?')}
         <span style={{ display: 'flex', transform: why ? 'rotate(180deg)' : 'none' }}>
@@ -385,12 +392,15 @@ export function Today({
   nowcast,
   go,
   onRetryWeather,
+  onWeatherChanged,
 }: {
   state: FarmState;
   userName: string;
   nowcast: NowcastState | null;
   go: Go;
   onRetryWeather: () => void;
+  /** The owner changed the BMKG village: reload the estimate. */
+  onWeatherChanged: () => void;
 }) {
   const now = Date.now();
   const ponds = state.ponds;
@@ -435,6 +445,8 @@ export function Today({
       </header>
 
       <SensorAlarms ponds={ponds} go={go} now={now} />
+
+      {nowcast?.power?.outage && <OutageBanner startedAt={nowcast.power.outage.startedAt} go={go} />}
 
       <DueRechecks due={rechecks.due} update={rechecks.update} go={go} />
 
@@ -491,6 +503,9 @@ export function Today({
           </button>
         </section>
       )}
+
+      {/* Tonight's power-cut label sits with the next check: shape + word, reasons, one tap to "Listrik padam". */}
+      {nowcast?.power && nowcast.power.level !== 'low' && !nowcast.power.outage && <PowerNightCard power={nowcast.power} go={go} compact />}
 
       <button
         class="summary-link"
@@ -565,7 +580,7 @@ export function Today({
       )}
 
       {nowcast ? (
-        <WeatherCard nowcast={nowcast} focus={focus} pond={focusPond} many={ponds.length > 1} onRetry={onRetryWeather} onPlace={() => go({ name: 'profile' })} />
+        <WeatherCard nowcast={nowcast} focus={focus} pond={focusPond} many={ponds.length > 1} onRetry={onRetryWeather} onPlace={() => go({ name: 'profile' })} owner={owner} onWeatherChanged={onWeatherChanged} />
       ) : (
         <p class="label ink2">{t('Memuat cuaca…', 'Loading the weather…')}</p>
       )}

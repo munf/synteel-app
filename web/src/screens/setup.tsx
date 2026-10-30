@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
-import { api, type Aeration, type Farm, type Me, type Phase, type PondSummary, type Setting } from '../api.ts';
+import { api, type Aeration, type Farm, type Me, type Phase, type PondSummary, type PowerBackup, type Setting } from '../api.ts';
+import { BackupChoice } from './power.tsx';
 import { aerationLabel, phaseLabel, settingLabel } from '../labels.ts';
 import { Chips, Field, Icon, initialOf, Soon, tankPath, Tick, Wordmark } from '../ui.tsx';
 import { JoinByCode } from '../join.tsx';
@@ -56,6 +57,7 @@ export function LocateButton({ gps }: { gps: ReturnType<typeof useLocate> }) {
 export function FarmSetup({ onDone, onLogout, onJoined, newPin }: { onDone: () => void; onLogout?: () => void; /** Joined another farm with an invite code instead. */ onJoined?: (m: Me) => void; /** Right after Daftar: the PIN just made, shown once. */ newPin?: string }) {
   const [name, setName] = useState('');
   const [locationName, setLocationName] = useState('');
+  const [powerBackup, setPowerBackup] = useState<PowerBackup | null>(null);
   const gps = useLocate();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -65,7 +67,7 @@ export function FarmSetup({ onDone, onLogout, onJoined, newPin }: { onDone: () =
     setBusy(true);
     setError('');
     try {
-      await api.saveFarm({ name, locationName, ...gps.coords });
+      await api.saveFarm({ name, locationName, ...gps.coords, ...(powerBackup && { powerBackup }) });
       onDone();
     } catch (err) {
       setError((err as Error).message);
@@ -103,6 +105,13 @@ export function FarmSetup({ onDone, onLogout, onJoined, newPin }: { onDone: () =
           <input value={locationName} onInput={(e) => setLocationName(e.currentTarget.value)} placeholder={t('contoh: Sleman, Yogyakarta', 'example: Sleman, Yogyakarta')} />
         </Field>
         <LocateButton gps={gps} />
+      </section>
+      <section class="card">
+        <div class="field">
+          <span class="field-label">{t('Cadangan listrik', 'Power backup')}</span>
+          <BackupChoice value={powerBackup} onChange={setPowerBackup} />
+          <span class="field-hint">{t('Yang menjalankan aerator saat listrik padam. Bisa diubah nanti di Profil.', 'What runs the aerators when the power goes out. Can be changed later in Profile.')}</span>
+        </div>
       </section>
       {(error || gps.error) && <p class="error">{error || gps.error}</p>}
       <button class="btn primary" disabled={busy}>

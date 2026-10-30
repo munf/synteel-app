@@ -10,7 +10,7 @@ Domain knowledge that the rules engine and the agents work from. The agents are 
 | `nursery-program.json` | Glass eel program, weeks 0–12: feed, mesh, water targets | Blueprint v5, ch. 2.4 and 5.2 |
 | `sop.json` | Daily, weekly, monthly and per-batch maintenance tasks | Blueprint v5, ch. 11 |
 | `alarm-levels.json` | Alarm levels and escalation | Blueprint v5, ch. 9.1 |
-| `emergencies.json` | Trigger → operator actions | Blueprint v5, ch. 10; heavy rain from the partner farm |
+| `emergencies.json` | Trigger → operator actions | Blueprint v5, ch. 10; heavy rain from the partner farm; `aerator_off` (power cut at a pond without the Synt system) drafted during the hackathon, to be validated |
 | `partner-practice.json` | Elver-phase practice: water ranges, stocking density, feeding progression, sorting, rainy season, fungus quarantine | Interview with the partner eel farmer in Sleman, **collected during the hackathon** |
 
 Elver ponds use the partner farm's ranges (`by_phase.elver` in `thresholds.json`: temperature 28–31 °C, pH 6.8–7.6), because the Blueprint values were designed for glass eels in an indoor recirculating system. TDS above 200 ppm comes from the partner farm and applies to all ponds.

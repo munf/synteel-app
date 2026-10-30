@@ -58,14 +58,20 @@ export function shortAction(reason: string): string {
 export function tonightChecks(briefing: Briefing | null, nowcast: NowcastState, ponds: PondSummary[], now = Date.now()): NightCheck[] {
   const raw = briefing
     ? briefing.checks.map((c) => ({ t: c.t, pondId: c.pondId, reason: c.action, alarm: c.alarm, agent: c.source === 'agent', why: c.why }))
-    : nowcast.ponds.flatMap((nc) => nc.checks.map((c) => ({ t: c.t, pondId: nc.pondId, reason: c.reason, alarm: c.alarm, agent: false, why: undefined as string | undefined })));
+    : nowcast.ponds.flatMap((nc) => nc.checks.map((c) => ({ t: c.t, pondId: nc.pondId, reason: c.reason, alarm: c.alarm, agent: false, why: (c as { why?: string }).why })));
+  const seen = new Set<string>();
   return raw
     .filter((c) => c.t >= now - 2 * HOUR && c.t <= now + 24 * HOUR)
     .map((c) => {
       const nc = nowcast.ponds.find((n) => n.pondId === c.pondId);
+      // Two checks on one pond at the same time (a power-cut preparation at 17.00 next to the routine one)
+      // each keep their own "done": the second gets a suffix, the first keeps the key it always had.
+      let key = `${c.pondId}-${c.t}`;
+      for (let i = 2; seen.has(key); i++) key = `${c.pondId}-${c.t}-${i}`;
+      seen.add(key);
       return {
         ...c,
-        key: `${c.pondId}-${c.t}`,
+        key,
         pondName: ponds.find((p) => p.id === c.pondId)?.name ?? t('Kolam', 'Pond'),
         action: shortAction(c.reason),
         peak: nc ? { t: nc.peak.t, level: nc.peak.level } : null,

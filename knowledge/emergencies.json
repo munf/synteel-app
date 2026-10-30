@@ -14,6 +14,20 @@
       "nursery_auto_response": "UPS memikul kontrol + aerator; solenoid O₂ membuka; SMS dalam 1 menit; O₂ mengalir 6–12 jam"
     },
     {
+      "id": "aerator_off",
+      "trigger": "Aerator mati karena listrik padam (kolam tanpa sistem Synt Nursery)",
+      "source": "Disusun saat hackathon dari praktik umum pendederan; perlu validasi lapangan",
+      "operator_actions": [
+        "Catat jam listrik mulai padam dan kabari pemilik tambak",
+        "Nyalakan genset, atau sambungkan aerator ke aki atau UPS, kalau ada",
+        "Jangan beri pakan sampai aerator nyala lagi",
+        "Lihat sidat tiap 30 menit: naik ke permukaan atau berkumpul di air masuk tanda oksigen kurang",
+        "Kalau padam lebih dari 1 jam tanpa cadangan listrik, alirkan pelan-pelan air bersih yang sudah diendapkan",
+        "Setelah listrik menyala: nyalakan aerator dulu, lalu alat lain satu per satu, dan lihat sidat"
+      ],
+      "nursery_auto_response": null
+    },
+    {
       "id": "pump_failure",
       "trigger": "Pompa utama gagal / debit < 50%",
       "operator_actions": [
