@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { farmWithWorker } from './helpers.ts';
+import { farmWithWorker, server } from './helpers.ts';
 
 test('Hapus akun: a worker leaves without a trace of their name; the farm and its records stay', async () => {
   const f = await farmWithWorker();
@@ -52,4 +52,16 @@ test('Hapus akun: with a second owner the farm stays', async () => {
   assert.deepEqual(removed, []);
   assert.equal((await second('GET', '/farm')).json.ponds.length, 3);
   assert.equal((await f.worker('GET', '/farm')).json.ponds.length, 3);
+});
+
+test('sign-ups are capped per network: 20 an hour, other networks still sign up', async () => {
+  const { client } = server();
+  const from = (ip: string) => client({ 'cf-connecting-ip': ip });
+  for (let i = 0; i < 20; i++) {
+    assert.equal((await from('203.0.113.7')('POST', '/auth/register', { name: `Petani ${i}`, phone: `08130000${String(i).padStart(4, '0')}`, pin: '246810' })).status, 201);
+  }
+  const refused = await from('203.0.113.7')('POST', '/auth/register', { name: 'Petani 21', phone: '081300009999', pin: '246810' });
+  assert.equal(refused.status, 429);
+  assert.match(refused.json.error, /pendaftaran/);
+  assert.equal((await from('198.51.100.4')('POST', '/auth/register', { name: 'Bu Sari', phone: '081300008888', pin: '246810' })).status, 201);
 });

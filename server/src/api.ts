@@ -281,6 +281,8 @@ export function createApi(
   api.use((c, next) => withLang(parseLang(c.req.header('x-lang')), next));
   const limiter = attemptLimiter();
   const supportLimiter = attemptLimiter(5, 60 * 60_000, undefined, () => tx('Terlalu banyak pesan. Coba lagi 1 jam lagi.', 'Too many messages. Try again in 1 hour.'));
+  // New accounts per network: room for a farmer group signing up together on one Wi-Fi, not for a bot.
+  const signupLimiter = attemptLimiter(20, 60 * 60_000, undefined, () => tx('Terlalu banyak pendaftaran dari jaringan ini. Coba lagi 1 jam lagi.', 'Too many sign-ups from this network. Try again in 1 hour.'));
   const speechLimiter = attemptLimiter(20, 60 * 60_000, undefined, () => tx('Terlalu sering. Ketik saja dulu, atau coba lagi 1 jam lagi.', 'Too often. Type it in for now, or try again in 1 hour.'));
 
   api.onError((err, c) => {
@@ -815,6 +817,9 @@ export function createApi(
     const pin = checkPin(body.pin);
     const name = text(body.name, 'nama', true)!;
     if (store.userByPhone(phone)) throw new AuthError(tx('Nomor ini sudah terdaftar. Silakan masuk.', 'This number is already registered. Please sign in.'), 409, 'phone_taken');
+    const key = `ip:${clientIp(c)}`;
+    signupLimiter.check(key);
+    signupLimiter.fail(key);
     const user = store.createUser({ phone, name, pinHash: hashPin(pin) });
     startSession(c, user.id, null);
     return c.json(me(user.id, null), 201);
@@ -874,6 +879,9 @@ export function createApi(
         throw new AuthError(tx('Nomor ini sudah terdaftar. Masukkan PIN yang benar.', 'This number is already registered. Enter the right PIN.'));
       }
     } else {
+      const key = `ip:${clientIp(c)}`;
+      signupLimiter.check(key);
+      signupLimiter.fail(key);
       user = { ...store.createUser({ phone, name: text(body.name, 'nama', true)!, pinHash: hashPin(checkPin(body.pin)) }), pinHash: '' };
     }
     // Joining never demotes an owner.
