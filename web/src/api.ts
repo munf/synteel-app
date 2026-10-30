@@ -230,10 +230,13 @@ async function upload<T>(path: string, form: FormData): Promise<T> {
 }
 
 export const api = {
-  authOptions: () => call<{ demo: boolean }>('GET', '/auth/options'),
+  /** `email`: Daftar asks for an e-mail code and Lupa PIN works by e-mail. */
+  authOptions: () => call<{ demo: boolean; email?: boolean }>('GET', '/auth/options'),
+  sendCode: (purpose: 'register' | 'reset', phone: string, email?: string) => call<{ sentTo: string }>('POST', '/auth/code', { purpose, phone, email }),
+  forgotPin: (phone: string, code: string, pin: string) => call<Me>('POST', '/auth/reset', { phone, code, pin }),
   me: () => call<Me>('GET', '/auth/me'),
   login: (phone: string, pin: string) => call<Me>('POST', '/auth/login', { phone, pin }),
-  register: (name: string, phone: string, pin: string) => call<Me>('POST', '/auth/register', { name, phone, pin }),
+  register: (name: string, phone: string, pin: string, email?: string, emailCode?: string) => call<Me>('POST', '/auth/register', { name, phone, pin, email, emailCode }),
   demo: () => call<Me>('POST', '/auth/demo'),
   invite: (code: string) => call<{ farmName: string; role: Role }>('GET', `/auth/invite/${encodeURIComponent(code)}`),
   join: (code: string, name: string, phone: string, pin: string) => call<Me>('POST', '/auth/join', { code, name, phone, pin }),

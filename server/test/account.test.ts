@@ -65,3 +65,88 @@ test('sign-ups are capped per network: 20 an hour, other networks still sign up'
   assert.match(refused.json.error, /pendaftaran/);
   assert.equal((await from('198.51.100.4')('POST', '/auth/register', { name: 'Bu Sari', phone: '081300008888', pin: '246810' })).status, 201);
 });
+
+test('Daftar with mail set up: the code from the e-mail creates the account and keeps the address', async () => {
+  const sent: { to?: string[]; subject: string; text: string }[] = [];
+  const { client, store } = server(undefined, { mail: async (m) => void sent.push(m) });
+  const call = client();
+  assert.equal((await call('GET', '/auth/options')).json.email, true);
+
+  assert.equal((await call('POST', '/auth/code', { phone: '0813 1111 2222', email: 'bukan-email' })).status, 400);
+  const asked = await call('POST', '/auth/code', { phone: '0813 1111 2222', email: ' Sari.Tambak@Gmail.com ' });
+  assert.equal(asked.status, 200);
+  assert.equal(asked.json.sentTo, 'sa•••@gmail.com');
+  assert.deepEqual(sent[0].to, ['sari.tambak@gmail.com']);
+  const code = sent[0].subject.match(/\d{6}/)![0];
+  assert.ok(sent[0].text.includes(code));
+
+  const form = { name: 'Bu Sari', phone: '081311112222', pin: '246810', email: 'sari.tambak@gmail.com' };
+  assert.equal((await call('POST', '/auth/register', form)).json.code, 'code_wrong');
+  // The code belongs to the address it went to.
+  assert.equal((await call('POST', '/auth/register', { ...form, email: 'lain@gmail.com', emailCode: code })).json.code, 'code_expired');
+  await call('POST', '/auth/code', { phone: '0813 1111 2222', email: 'sari.tambak@gmail.com' });
+  const fresh = sent[1].subject.match(/\d{6}/)![0];
+  const made = await call('POST', '/auth/register', { ...form, emailCode: fresh });
+  assert.equal(made.status, 201);
+  assert.equal(made.json.user.name, 'Bu Sari');
+  assert.equal(store.userByPhone('6281311112222')!.email, 'sari.tambak@gmail.com');
+  assert.equal((await call('POST', '/auth/register', { ...form, emailCode: fresh })).status, 409);
+  assert.equal((await call('POST', '/auth/code', { phone: '081311112222', email: 'x@y.co' })).json.code, 'phone_taken');
+});
+
+test('Lupa PIN: a code to the account e-mail sets a new PIN, signs in and ends other sessions', async () => {
+  const sent: { to?: string[]; subject: string; text: string }[] = [];
+  const { client } = server(undefined, { mail: async (m) => void sent.push(m) });
+  const owner = client();
+  await owner('POST', '/auth/code', { phone: '081311112222', email: 'sari@gmail.com' });
+  await owner('POST', '/auth/register', { name: 'Bu Sari', phone: '081311112222', pin: '246810', email: 'sari@gmail.com', emailCode: sent[0].subject.match(/\d{6}/)![0] });
+  assert.equal((await owner('GET', '/auth/me')).status, 200);
+
+  const phone = client();
+  const asked = await phone('POST', '/auth/code', { purpose: 'reset', phone: '0813-1111-2222' });
+  assert.equal(asked.json.sentTo, 'sa•••@gmail.com');
+  assert.deepEqual(sent[1].to, ['sari@gmail.com']);
+  assert.match(sent[1].text, /PIN lama tetap berlaku/);
+  const code = sent[1].subject.match(/\d{6}/)![0];
+  assert.equal((await phone('POST', '/auth/reset', { phone: '081311112222', code, pin: '123456' })).status, 400);
+  const done = await phone('POST', '/auth/reset', { phone: '081311112222', code, pin: '975310' });
+  assert.equal(done.status, 200);
+  assert.equal(done.json.user.name, 'Bu Sari');
+  assert.equal((await phone('POST', '/auth/reset', { phone: '081311112222', code, pin: '975310' })).json.code, 'code_expired');
+  assert.equal((await owner('GET', '/auth/me')).status, 401);
+  assert.equal((await client()('POST', '/auth/login', { phone: '081311112222', pin: '975310' })).status, 200);
+
+  // A number without an e-mail (a worker who joined with a code) is sent to the owner or support.
+  assert.equal((await client()('POST', '/auth/code', { purpose: 'reset', phone: '089999999999' })).json.code, 'no_email');
+});
+
+test('codes by e-mail are capped: 5 an hour per number, and five wrong tries end a code', async () => {
+  const sent: { subject: string }[] = [];
+  const { client } = server(undefined, { mail: async (m) => void sent.push(m) });
+  const call = client();
+  for (let i = 0; i < 5; i++) assert.equal((await call('POST', '/auth/code', { phone: '081311112222', email: 'sari@gmail.com' })).status, 200);
+  assert.equal((await call('POST', '/auth/code', { phone: '081311112222', email: 'sari@gmail.com' })).status, 429);
+
+  const form = { name: 'Bu Sari', phone: '081311112222', pin: '246810', email: 'sari@gmail.com' };
+  const right = sent[4].subject.match(/\d{6}/)![0];
+  const wrong = right === '111111' ? '222222' : '111111';
+  for (let i = 0; i < 4; i++) assert.equal((await call('POST', '/auth/register', { ...form, emailCode: wrong })).json.code, 'code_wrong');
+  assert.equal((await call('POST', '/auth/register', { ...form, emailCode: wrong })).json.code, 'code_expired');
+  assert.equal((await call('POST', '/auth/register', { ...form, emailCode: right })).status, 410);
+});
+
+test('without mail Daftar works as before and Lupa PIN by e-mail says it is not available', async () => {
+  const { client } = server();
+  const call = client();
+  assert.equal((await call('GET', '/auth/options')).json.email, false);
+  assert.equal((await call('POST', '/auth/register', { name: 'Pak Joko', phone: '081234567890', pin: '246810' })).status, 201);
+  assert.equal((await client()('POST', '/auth/code', { purpose: 'reset', phone: '081234567890' })).json.code, 'no_mail');
+});
+
+test('a failed e-mail says so and creates nothing', async () => {
+  const { client, store } = server(undefined, { mail: async () => { throw new Error('535 auth failed'); } });
+  const res = await client()('POST', '/auth/code', { phone: '081311112222', email: 'sari@gmail.com' });
+  assert.equal(res.status, 400);
+  assert.match(res.json.error, /Email gagal dikirim/);
+  assert.equal(store.userByPhone('6281311112222'), null);
+});

@@ -5,7 +5,7 @@ import type { CaseRow, FarmRepo, LogRecord, Repo, Role } from './db.ts';
 import type { HistoryLog, NotebookPage, NotebookSaveResult, QuotaState, SupportTopic } from './contract.ts';
 import { guardNotebook, localIso } from './notebook.ts';
 import type { SendMail } from './mail.ts';
-import { attemptLimiter, AuthError, checkPin, hashPin, hashToken, inviteCode, newToken, normalizePhone, tempPin, verifyPin } from './auth.ts';
+import { attemptLimiter, AuthError, checkPin, emailCodes, hashPin, hashToken, inviteCode, maskEmail, newToken, normalizeEmail, normalizePhone, tempPin, verifyPin, type CodePurpose } from './auth.ts';
 import { knowledge } from './knowledge.ts';
 import { KINDS, SCENARIOS, sendEveryMs, simulate, toLogData, type Device, type DeviceKind, type Scenario } from './devices.ts';
 import { currentLang, parseLang, tx, withLang, type Lang } from './i18n.ts';
@@ -283,6 +283,11 @@ export function createApi(
   const supportLimiter = attemptLimiter(5, 60 * 60_000, undefined, () => tx('Terlalu banyak pesan. Coba lagi 1 jam lagi.', 'Too many messages. Try again in 1 hour.'));
   // New accounts per network: room for a farmer group signing up together on one Wi-Fi, not for a bot.
   const signupLimiter = attemptLimiter(20, 60 * 60_000, undefined, () => tx('Terlalu banyak pendaftaran dari jaringan ini. Coba lagi 1 jam lagi.', 'Too many sign-ups from this network. Try again in 1 hour.'));
+  // E-mail codes (Daftar, Lupa PIN): 5 an hour per number or address, 30 per network.
+  const codes = emailCodes();
+  const codeMessage = () => tx('Terlalu banyak kode diminta. Coba lagi 1 jam lagi.', 'Too many codes asked for. Try again in 1 hour.');
+  const codeLimiter = attemptLimiter(5, 60 * 60_000, undefined, codeMessage);
+  const codeIpLimiter = attemptLimiter(30, 60 * 60_000, undefined, codeMessage);
   const speechLimiter = attemptLimiter(20, 60 * 60_000, undefined, () => tx('Terlalu sering. Ketik saja dulu, atau coba lagi 1 jam lagi.', 'Too often. Type it in for now, or try again in 1 hour.'));
 
   api.onError((err, c) => {
@@ -809,7 +814,70 @@ export function createApi(
 
   // ---------- public routes: everything registered before the session check below ----------
 
-  api.get('/auth/options', (c) => c.json({ demo: Boolean(demoPhone && store.demo.template()) }));
+  // `email`: Daftar asks for an e-mail code and Lupa PIN works by e-mail (the server can send mail).
+  api.get('/auth/options', (c) => c.json({ demo: Boolean(demoPhone && store.demo.template()), email: Boolean(mail) }));
+
+  const noEmail = () => new AuthError(tx('Nomor ini belum punya email untuk mengatur ulang PIN. Hubungi bantuan.', 'This number has no e-mail for resetting the PIN. Contact support.'), 404, 'no_email');
+
+  function codeMail(purpose: CodePurpose, code: string, email: string) {
+    const what = purpose === 'register' ? tx('mendaftar di Synteel', 'create a Synteel account') : tx('membuat PIN baru di Synteel', 'set a new Synteel PIN');
+    const ignore =
+      purpose === 'register'
+        ? tx('Kalau tidak sedang mendaftar di Synteel, abaikan email ini.', 'If you are not creating a Synteel account, ignore this e-mail.')
+        : tx('Kalau tidak sedang meminta PIN baru, abaikan email ini. PIN lama tetap berlaku.', 'If you did not ask for a new PIN, ignore this e-mail. The old PIN still works.');
+    return {
+      to: [email],
+      subject: tx(`Kode Synteel: ${code}`, `Synteel code: ${code}`),
+      text: [tx(`Kode untuk ${what}:`, `Code to ${what}:`), '', code, '', tx('Berlaku 15 menit.', 'Valid for 15 minutes.'), ignore, '', 'PT Synt Tekno Multikarya · eel.synt.fun'].join('\n'),
+    };
+  }
+
+  // Daftar and Lupa PIN: a 6-digit code to the e-mail address (Daftar: the one typed; Lupa PIN: the account's).
+  api.post('/auth/code', async (c) => {
+    if (!mail) throw new AuthError(tx('Kode lewat email belum tersedia. Hubungi bantuan.', 'Codes by e-mail are not available yet. Contact support.'), 404, 'no_mail');
+    const body = await c.req.json();
+    const purpose: CodePurpose = body.purpose === 'reset' ? 'reset' : 'register';
+    const phone = normalizePhone(body.phone);
+    const user = store.userByPhone(phone);
+    let email: string | null;
+    if (purpose === 'register') {
+      if (user) throw new AuthError(tx('Nomor ini sudah terdaftar. Silakan masuk.', 'This number is already registered. Please sign in.'), 409, 'phone_taken');
+      email = normalizeEmail(body.email);
+      if (!email) throw new BadRequest(tx('Alamat email tidak valid', 'The e-mail address is not valid'));
+    } else {
+      email = user?.email ?? null;
+      if (!email) throw noEmail();
+    }
+    const keys = [`phone:${phone}`, `email:${email}`];
+    const ip = `ip:${clientIp(c)}`;
+    codeLimiter.check(...keys);
+    codeIpLimiter.check(ip);
+    codeLimiter.fail(...keys);
+    codeIpLimiter.fail(ip);
+    const code = codes.issue(purpose, phone, email);
+    try {
+      await mail(codeMail(purpose, code, email));
+    } catch (err) {
+      console.error(`${purpose} code mail failed: ${(err as Error).message}`);
+      throw new BadRequest(tx('Email gagal dikirim. Periksa alamatnya, lalu coba lagi.', 'The e-mail could not be sent. Check the address, then try again.'));
+    }
+    return c.json({ sentTo: maskEmail(email) });
+  });
+
+  // Lupa PIN: the code from the account's e-mail sets a new PIN and signs in (other sessions end).
+  api.post('/auth/reset', async (c) => {
+    const body = await c.req.json();
+    const phone = normalizePhone(body.phone);
+    const user = store.userByPhone(phone);
+    if (!user?.email) throw noEmail();
+    const pin = checkPin(body.pin);
+    codes.use('reset', phone, user.email, body.code);
+    store.setPin(user.id, hashPin(pin));
+    limiter.clear(`phone:${phone}`);
+    const farmId = store.farmsOf(user.id)[0]?.id ?? null;
+    startSession(c, user.id, farmId);
+    return c.json(me(user.id, farmId));
+  });
 
   api.post('/auth/register', async (c) => {
     const body = await c.req.json();
@@ -817,10 +885,14 @@ export function createApi(
     const pin = checkPin(body.pin);
     const name = text(body.name, 'nama', true)!;
     if (store.userByPhone(phone)) throw new AuthError(tx('Nomor ini sudah terdaftar. Silakan masuk.', 'This number is already registered. Please sign in.'), 409, 'phone_taken');
+    // With mail set up, the e-mail code proves the address; it is kept for Lupa PIN.
+    const email = mail ? normalizeEmail(body.email) : null;
+    if (mail && !email) throw new BadRequest(tx('Alamat email tidak valid', 'The e-mail address is not valid'));
     const key = `ip:${clientIp(c)}`;
     signupLimiter.check(key);
+    if (email) codes.use('register', phone, email, body.emailCode);
     signupLimiter.fail(key);
-    const user = store.createUser({ phone, name, pinHash: hashPin(pin) });
+    const user = store.createUser({ phone, name, pinHash: hashPin(pin), email });
     startSession(c, user.id, null);
     return c.json(me(user.id, null), 201);
   });
@@ -882,7 +954,7 @@ export function createApi(
       const key = `ip:${clientIp(c)}`;
       signupLimiter.check(key);
       signupLimiter.fail(key);
-      user = { ...store.createUser({ phone, name: text(body.name, 'nama', true)!, pinHash: hashPin(checkPin(body.pin)) }), pinHash: '' };
+      user = { ...store.createUser({ phone, name: text(body.name, 'nama', true)!, pinHash: hashPin(checkPin(body.pin)) }), pinHash: '', email: null };
     }
     // Joining never demotes an owner.
     if (store.role(user.id, invite.farmId) !== 'owner') store.addMember(user.id, invite.farmId, invite.role);

@@ -97,3 +97,52 @@ export function attemptLimiter(max = 5, windowMs = 15 * 60_000, now = () => Date
     },
   };
 }
+
+/** "Fajar.N@Gmail.com " → "fajar.n@gmail.com"; null when it is not an e-mail address. */
+export function normalizeEmail(input: unknown): string | null {
+  const email = String(input ?? '').trim().toLowerCase();
+  return email.length <= 120 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) ? email : null;
+}
+
+/** "fajar.n@gmail.com" → "fa•••@gmail.com", to show where a code went without spelling out the address. */
+export function maskEmail(email: string): string {
+  const [local, domain] = email.split('@');
+  return `${local.slice(0, Math.min(2, local.length - 1) || 1)}•••@${domain}`;
+}
+
+export type CodePurpose = 'register' | 'reset';
+
+/**
+ * Six-digit codes sent by e-mail for Daftar and Lupa PIN: one live code per purpose and phone number,
+ * valid 15 minutes, gone after 5 wrong tries. In memory like the limiter: a restart only means asking again.
+ */
+export function emailCodes(now = () => Date.now(), validMs = 15 * 60_000, maxTries = 5) {
+  const live = new Map<string, { email: string; hash: string; expires: number; tries: number }>();
+  const key = (purpose: CodePurpose, phone: string) => `${purpose}:${phone}`;
+  return {
+    issue(purpose: CodePurpose, phone: string, email: string): string {
+      const code = String(randomInt(1_000_000)).padStart(6, '0');
+      live.set(key(purpose, phone), { email, hash: hashToken(code), expires: now() + validMs, tries: 0 });
+      return code;
+    },
+    /** Throws a 400 'code_wrong' or 410 'code_expired'; a right code is used up. */
+    use(purpose: CodePurpose, phone: string, email: string, input: unknown) {
+      const k = key(purpose, phone);
+      const entry = live.get(k);
+      if (!entry || entry.email !== email || entry.expires <= now()) {
+        live.delete(k);
+        throw new AuthError(tx('Kode sudah tidak berlaku. Minta kode baru.', 'This code no longer works. Ask for a new code.'), 410, 'code_expired');
+      }
+      const code = String(input ?? '').replace(/\D/g, '');
+      if (code.length !== 6 || !timingSafeEqual(Buffer.from(hashToken(code)), Buffer.from(entry.hash))) {
+        entry.tries += 1;
+        if (entry.tries >= maxTries) {
+          live.delete(k);
+          throw new AuthError(tx('Kode salah terlalu sering. Minta kode baru.', 'Wrong code too many times. Ask for a new code.'), 410, 'code_expired');
+        }
+        throw new AuthError(tx('Kode salah. Cek email yang paling baru.', 'Wrong code. Check the newest e-mail.'), 400, 'code_wrong');
+      }
+      live.delete(k);
+    },
+  };
+}

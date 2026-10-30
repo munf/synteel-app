@@ -36,9 +36,14 @@ export function server(nowIso = '2026-10-28T03:00:00Z', deps: Deps = {}) {
 
 /** An owner with a farm and ponds, plus a worker who joined it. */
 export async function farmWithWorker(nowIso?: string, deps?: Deps, pondNames = ['Kolam A', 'Kolam B', 'Kolam C']) {
-  const s = server(nowIso, deps);
+  // With mail set up, Daftar needs the e-mailed code: keep codes here, pass every other message on.
+  const codes: string[] = [];
+  const mail = deps?.mail;
+  const s = server(nowIso, mail ? { ...deps, mail: async (m) => (m.to ? void codes.push(m.subject.match(/\d{6}/)![0]) : mail(m)) } : deps);
   const owner = s.client();
-  await owner('POST', '/auth/register', { name: 'Petani Demo', phone: '081111111111', pin: '246810' });
+  const email = mail ? 'petani@gmail.com' : undefined;
+  if (email) await owner('POST', '/auth/code', { phone: '081111111111', email });
+  await owner('POST', '/auth/register', { name: 'Petani Demo', phone: '081111111111', pin: '246810', email, emailCode: codes[0] });
   await owner('PUT', '/farm', { name: 'Tambak Sidat Mitra' });
   const ponds: { id: number; name: string }[] = [];
   for (const name of pondNames) ponds.push((await owner('POST', '/ponds', { name })).json.pond);

@@ -18,6 +18,8 @@ export interface SmtpConfig {
 export interface Mail {
   subject: string;
   text: string;
+  /** Someone other than the team, e.g. a farmer's sign-up code. */
+  to?: string[];
 }
 
 export type SendMail = (mail: Mail) => Promise<void>;
@@ -107,7 +109,7 @@ export function buildMessage(cfg: Pick<SmtpConfig, 'from' | 'to'>, mail: Mail, d
   const body = Buffer.from(mail.text.replace(/\r?\n/g, '\r\n')).toString('base64').replace(/.{76}/g, '$&\r\n');
   return [
     `From: ${cfg.from}`,
-    `To: ${cfg.to.join(', ')}`,
+    `To: ${(mail.to ?? cfg.to).join(', ')}`,
     `Subject: ${encodeHeader(mail.subject)}`,
     `Date: ${date.toUTCString().replace('GMT', '+0000')}`,
     `Message-ID: <${randomBytes(12).toString('hex')}@${domain}>`,
@@ -173,7 +175,7 @@ export async function sendMail(cfg: SmtpConfig, mail: Mail): Promise<void> {
       await send('AUTH', Buffer.from(cfg.pass).toString('base64'), 235);
     }
     await send('MAIL FROM', `MAIL FROM:<${address(cfg.from)}>`, 250);
-    for (const to of cfg.to) await send('RCPT TO', `RCPT TO:<${address(to)}>`, 250);
+    for (const to of mail.to ?? cfg.to) await send('RCPT TO', `RCPT TO:<${address(to)}>`, 250);
     await send('DATA', 'DATA', 354);
     await send('message', `${dotStuff(buildMessage(cfg, mail))}\r\n.`, 250);
     socket.write('QUIT\r\n');

@@ -5,7 +5,8 @@ import { Field, fmtPhone, Glyph, GLYPH, Icon, LangSwitch, Notice, PinBoxes, role
 import type { SignInMode } from './welcome.tsx';
 import { lang, siteInAppLanguage, t } from '../i18n.ts';
 
-type Mode = SignInMode;
+/** 'reset': Lupa PIN, a code to the account's e-mail and a new PIN. */
+type Mode = SignInMode | 'reset';
 
 const SUBS: Record<'login' | 'register', string> = {
   login: t('Nomor HP dan PIN 6 angka.', 'Phone number and 6-digit PIN.'),
@@ -15,7 +16,9 @@ const BUTTONS: Record<Mode, string> = {
   login: t('Masuk', 'Sign in'),
   register: t('Daftar dan siapkan tambak', 'Create account and set up farm'),
   join: t('Gabung ke tambak', 'Join the farm'),
+  reset: t('Simpan PIN baru dan masuk', 'Save the new PIN and sign in'),
 };
+const SEND_CODE = t('Kirim kode ke email', 'Send a code to my e-mail');
 const PIN_SHORT = t('PIN harus 6 angka', 'The PIN must be 6 digits');
 
 /** How long the server locks the PIN when it gives no time (matches its limiter). */
@@ -41,6 +44,7 @@ class Locked extends Error {
 const isPhoneTaken = (e: unknown) => e instanceof ApiError && (e.code === 'phone_taken' || e.status === 409);
 const isInviteInvalid = (e: unknown) => e instanceof ApiError && (e.code === 'invite_invalid' || [400, 404, 410].includes(e.status));
 const isWrongPin = (e: unknown) => e instanceof ApiError && (e.status === 401 || e.status === 403);
+const hasNoEmail = (e: unknown) => e instanceof ApiError && (e.code === 'no_email' || e.code === 'no_mail');
 
 /** Compact navy header: logo, wordmark, the eel strip and the promise. */
 function Header() {
@@ -66,6 +70,64 @@ function Header() {
       </div>
       <p style={{ fontSize: '1.125rem', fontWeight: 800, lineHeight: 1.3 }}>{t('Jaga kolam sidat, siang dan malam', 'Look after your eel ponds, day and night')}</p>
     </header>
+  );
+}
+
+/** "contoh: nama@gmail.com" with an envelope drawn inside the field. */
+function EmailInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <span style={{ position: 'relative', display: 'block' }}>
+      <span style={{ position: 'absolute', left: 16, top: 18, color: 'var(--ink-2)', display: 'flex' }}>
+        <Glyph d={GLYPH.mail} size={20} />
+      </span>
+      <input
+        type="email"
+        inputMode="email"
+        autoComplete="email"
+        autoCapitalize="off"
+        spellcheck={false}
+        value={value}
+        onInput={(e) => onChange(e.currentTarget.value)}
+        placeholder={t('contoh: nama@gmail.com', 'example: name@gmail.com')}
+        required
+        style={{ paddingLeft: 48 }}
+      />
+    </span>
+  );
+}
+
+/** The 6 digits from the e-mail, with where it went and a way to send it again. */
+function EmailCode({ sentTo, value, onChange, onResend, busy }: { sentTo: string; value: string; onChange: (v: string) => void; onResend: () => void; busy: boolean }) {
+  return (
+    <div class="stack-sm">
+      <div class="note ok" style={{ alignItems: 'center' }}>
+        <Glyph d={GLYPH.mail} size={20} />
+        <span style={{ display: 'flex', flexDirection: 'column' }}>
+          <b>{t(`Kode dikirim ke ${sentTo}`, `Code sent to ${sentTo}`)}</b>
+          <span class="label">{t('Belum ada? Cek folder Spam atau Promosi.', 'Not there? Check the Spam or Promotions folder.')}</span>
+        </span>
+      </div>
+      <Field label={t('Kode dari email', 'Code from the e-mail')}>
+        <input
+          class="code-input"
+          value={value}
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          maxLength={6}
+          onInput={(e) => {
+            const v = e.currentTarget.value.replace(/\D/g, '').slice(0, 6);
+            e.currentTarget.value = v;
+            onChange(v);
+          }}
+          placeholder={t('6 angka', '6 digits')}
+          style={{ textTransform: 'none' }}
+          required
+        />
+      </Field>
+      <button type="button" class="link-btn" style={{ alignSelf: 'flex-start', fontWeight: 800, minHeight: 44 }} disabled={busy} onClick={onResend}>
+        {t('Kirim ulang kode', 'Send the code again')}
+      </button>
+    </div>
   );
 }
 
@@ -110,6 +172,13 @@ export function SignIn({
 }) {
   const [mode, setMode] = useState<Mode>(initialMode);
   const [demo, setDemo] = useState(false);
+  /** The server can send mail: Daftar asks for an e-mail code, Lupa PIN works by e-mail. */
+  const [emailOn, setEmailOn] = useState(false);
+  const [email, setEmail] = useState('');
+  /** Where the code went ("sa•••@gmail.com"), once it was sent. */
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [emailCode, setEmailCode] = useState('');
+  const [noEmail, setNoEmail] = useState(false);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState(lastPhone ? fmtPhone(lastPhone) : '');
   const [pin, setPin] = useState('');
@@ -126,7 +195,13 @@ export function SignIn({
   const [pinKey, setPinKey] = useState(0);
 
   useEffect(() => {
-    api.authOptions().then((o) => setDemo(o.demo), () => {});
+    api.authOptions().then(
+      (o) => {
+        setDemo(o.demo);
+        setEmailOn(Boolean(o.email));
+      },
+      () => {},
+    );
   }, []);
 
   // Unlock the form by itself when the lockout ends.
@@ -157,6 +232,9 @@ export function SignIn({
   const choose = (m: Mode) => {
     setMode(m);
     setError('');
+    setSentTo(null);
+    setEmailCode('');
+    setNoEmail(false);
     setTaken(false);
     setWrong(false);
     setPin('');
@@ -181,26 +259,51 @@ export function SignIn({
     }
   };
 
+  /** Asks the server to e-mail a code; a number already taken or without an e-mail shows its own note. */
+  const sendCode = async () => {
+    setBusy(true);
+    setError('');
+    setNoEmail(false);
+    try {
+      const { sentTo } = await (mode === 'reset' ? api.sendCode('reset', phone) : api.sendCode('register', phone, email));
+      setSentTo(sentTo);
+      setEmailCode('');
+    } catch (err) {
+      if (mode === 'register' && isPhoneTaken(err)) setTaken(true);
+      else if (mode === 'reset' && hasNoEmail(err)) setNoEmail(true);
+      else setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const submit = (e: Event) => {
     e.preventDefault();
     if (locked || busy) return;
     if (taken) return choose('login');
+    if (mode === 'reset' && !sentTo) return sendCode();
     if (pin.length !== 6) return setError(PIN_SHORT);
     if (mode === 'login') return run(() => login(phone, pin));
-    if (mode === 'register') return run(() => api.register(name, phone, pin), pin);
+    if (mode === 'register' && emailOn && !sentTo) return sendCode();
+    if ((mode === 'register' && emailOn) || mode === 'reset') {
+      if (emailCode.length !== 6) return setError(t('Masukkan 6 angka dari email', 'Enter the 6 digits from the e-mail'));
+    }
+    if (mode === 'reset') return run(() => api.forgotPin(phone, emailCode, pin));
+    if (mode === 'register') return run(() => (emailOn ? api.register(name, phone, pin, email, emailCode) : api.register(name, phone, pin)), pin);
     if (!invite) return setError(t('Masukkan kode undangan yang berlaku', 'Enter a valid invite code'));
     return run(() => api.join(code, name, phone, pin));
   };
 
   const locked = mode === 'login' && lockedUntil !== null;
   const join = mode === 'join';
+  const reset = mode === 'reset';
   const showForm = !join || invite !== null;
   const askOwner = t(
     `Halo, kode undangan Synteel ${code} sudah tidak berlaku. Boleh minta kode baru?`,
     `Hello, the Synteel invite code ${code} no longer works. Could I have a new code?`,
   );
   const pinHint =
-    mode === 'register'
+    mode === 'register' || reset
       ? t('PIN terlihat supaya tidak salah ketik. Mudah diingat, tapi jangan 123456 atau 111111.', 'The PIN is shown so you do not mistype it. Easy to remember, but not 123456 or 111111.')
       : join
         ? t('PIN terlihat supaya tidak salah ketik.', 'The PIN is shown so you do not mistype it.')
@@ -228,13 +331,17 @@ export function SignIn({
           alignSelf: 'center',
         }}
       >
-        {join ? (
+        {join || reset ? (
           <div class="stack-xs">
             <button type="button" class="link-btn row" style={{ alignSelf: 'flex-start', gap: 8, fontWeight: 600 }} onClick={() => choose('login')}>
               <Icon name="back" size={20} /> {t('Kembali ke Masuk', 'Back to Sign in')}
             </button>
-            <h1>{t('Gabung dengan kode', 'Join with a code')}</h1>
-            <p class="ink2">{t('Kode undangan didapat dari pemilik tambak.', 'You get the invite code from the farm owner.')}</p>
+            <h1>{join ? t('Gabung dengan kode', 'Join with a code') : t('Buat PIN baru', 'Set a new PIN')}</h1>
+            <p class="ink2">
+              {join
+                ? t('Kode undangan didapat dari pemilik tambak.', 'You get the invite code from the farm owner.')
+                : t('Kode dikirim ke email yang dipakai saat daftar.', 'A code goes to the e-mail used when the account was made.')}
+            </p>
           </div>
         ) : (
           <div class="stack-sm">
@@ -324,7 +431,7 @@ export function SignIn({
           </div>
         )}
 
-        {showForm && mode !== 'login' && !taken && (
+        {showForm && mode !== 'login' && !reset && !taken && (
           <Field label={t('Nama', 'Name')} hint={join ? t('Sudah punya akun? Isi nomor HP dan PIN yang biasa dipakai.', 'Already have an account? Enter your usual phone number and PIN.') : undefined}>
             <input autoComplete="name" value={name} onInput={(e) => setName(e.currentTarget.value)} placeholder={t('contoh: Pak Joko', 'example: Pak Joko')} required={mode === 'register'} />
           </Field>
@@ -338,16 +445,38 @@ export function SignIn({
                 setPhone(v);
                 setTaken(false);
                 setWrong(false);
+                setNoEmail(false);
+                if (sentTo) setSentTo(null);
               }}
             />
           </Field>
+        )}
+        {mode === 'register' && emailOn && !taken && (
+          <Field label={t('Email', 'E-mail')} hint={t('Kode dikirim ke sini. Dipakai juga kalau lupa PIN.', 'The code goes here. Also used if the PIN is forgotten.')}>
+            <EmailInput
+              value={email}
+              onChange={(v) => {
+                setEmail(v);
+                if (sentTo) setSentTo(null);
+              }}
+            />
+          </Field>
+        )}
+        {reset && noEmail && (
+          <Notice tone="info" icon="info" title={t('Nomor ini belum punya email', 'This number has no e-mail')} role="status">
+            {t(
+              'Pekerja: minta pemilik tambak mengatur ulang PIN. Pemilik tambak: hubungi bantuan.',
+              'Workers: ask the farm owner to reset the PIN. Farm owners: contact support.',
+            )}
+          </Notice>
         )}
         {taken && (
           <Notice tone="info" icon="userCheck" title={t('Nomor ini sudah punya akun', 'This number already has an account')} role="status">
             {t('Tidak perlu daftar lagi. Masuk dengan PIN yang biasa dipakai.', 'No need to sign up again. Sign in with your usual PIN.')}
           </Notice>
         )}
-        {showForm && !taken && (
+        {reset && sentTo && <EmailCode sentTo={sentTo} value={emailCode} onChange={setEmailCode} onResend={sendCode} busy={busy} />}
+        {showForm && !taken && (!reset || sentTo) && (
           <div class="stack-sm">
             <PinBoxes
               key={`${mode}:${pinKey}`}
@@ -370,6 +499,7 @@ export function SignIn({
             )}
           </div>
         )}
+        {mode === 'register' && emailOn && sentTo && !taken && <EmailCode sentTo={sentTo} value={emailCode} onChange={setEmailCode} onResend={sendCode} busy={busy} />}
         {locked && (
           <Notice tone="info" icon="lock" title={t('Terlalu banyak percobaan', 'Too many tries')} role="alert">
             {lockText(Math.max(1, Math.ceil((lockedUntil! - Date.now()) / 60_000)), fmtClock(lockedUntil!))}
@@ -410,13 +540,13 @@ export function SignIn({
                 t('Tunggu…', 'Wait…')
               ) : (
                 <>
-                  {BUTTONS[mode]} <Icon name="arrow" size={20} stroke={2.2} />
+                  {(reset || (mode === 'register' && emailOn)) && !sentTo ? SEND_CODE : BUTTONS[mode]} <Icon name="arrow" size={20} stroke={2.2} />
                 </>
               )}
             </button>
           )
         )}
-        {showForm && mode !== 'login' && !taken && (
+        {showForm && mode !== 'login' && !reset && !taken && (
           <div class="label ink2 center" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <span>{t('Data dikelola PT Synt Tekno Multikarya.', 'Data is handled by PT Synt Tekno Multikarya.')}</span>
             <a
@@ -448,14 +578,20 @@ export function SignIn({
               type="button"
               class="inline-link"
               style={{ minHeight: 44, display: 'inline-flex', alignItems: 'center', textDecoration: 'underline', textUnderlineOffset: 3 }}
-              onClick={onHelp}
+              onClick={emailOn ? () => choose('reset') : onHelp}
             >
-              {t('Pemilik lupa PIN? Hubungi bantuan', 'Owner forgot the PIN? Contact support')}
+              {emailOn ? t('Pemilik lupa PIN? Buat PIN baru lewat email', 'Owner forgot the PIN? Set a new one by e-mail') : t('Pemilik lupa PIN? Hubungi bantuan', 'Owner forgot the PIN? Contact support')}
             </button>
           </div>
         )}
 
-        {!join && !taken && (
+        {reset && noEmail && (
+          <button type="button" class="btn" onClick={onHelp}>
+            <Icon name="headset" size={20} /> {t('Hubungi bantuan', 'Contact support')}
+          </button>
+        )}
+
+        {!join && !reset && !taken && (
           <div class="stack-sm" style={{ gap: 12 }}>
             <div class="row label ink2" style={{ gap: 12 }}>
               <span class="grow" style={{ height: 1, background: 'var(--line)' }} />

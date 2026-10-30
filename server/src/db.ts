@@ -165,6 +165,9 @@ export function openDb(path = process.env.SYNTEEL_DB ?? defaultPath) {
   // Tickets from the website's contact form can ask for a reply by e-mail.
   const ticketCols = (db.prepare('pragma table_info(support_tickets)').all() as { name: string }[]).map((c) => c.name);
   if (!ticketCols.includes('reply_email')) db.exec('alter table support_tickets add column reply_email text');
+  // E-mail for sign-up and "Lupa PIN" codes; accounts from before it have none.
+  const userCols = (db.prepare('pragma table_info(users)').all() as { name: string }[]).map((c) => c.name);
+  if (!userCols.includes('email')) db.exec('alter table users add column email text');
   // Briefings in more than one language: the language, 'lang' for a re-run in another language of the
   // briefing `basis`, 'copy' for one copied into a demo farm. Older rows: Indonesian originals.
   const briefingCols = (db.prepare('pragma table_info(briefings)').all() as { name: string }[]).map((c) => c.name);
@@ -636,15 +639,15 @@ export function repo(db: Db) {
     },
 
     // ---------- users ----------
-    createUser(u: { phone: string; name: string; pinHash: string }): User {
-      const { lastInsertRowid } = db.prepare('insert into users (phone, name, pin_hash) values (?, ?, ?)').run(u.phone, u.name, u.pinHash);
+    createUser(u: { phone: string; name: string; pinHash: string; email?: string | null }): User {
+      const { lastInsertRowid } = db.prepare('insert into users (phone, name, pin_hash, email) values (?, ?, ?, ?)').run(u.phone, u.name, u.pinHash, u.email ?? null);
       return { id: Number(lastInsertRowid), phone: u.phone, name: u.name };
     },
 
     // A "Coba demo" person keeps the default name in the language being shown, not the one at sign-in.
-    userByPhone(phone: string): (User & { pinHash: string }) | null {
+    userByPhone(phone: string): (User & { pinHash: string; email: string | null }) | null {
       const r = db.prepare('select * from users where phone = ?').get(phone) as Row | undefined;
-      return r ? { id: r.id as number, phone: r.phone as string, name: shownName(r), pinHash: r.pin_hash as string } : null;
+      return r ? { id: r.id as number, phone: r.phone as string, name: shownName(r), pinHash: r.pin_hash as string, email: (r.email as string | null) ?? null } : null;
     },
 
     user(id: number): User | null {
