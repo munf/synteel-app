@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
 import { test } from 'node:test';
 import { createAi } from '../src/ai.ts';
 import { resetArchiveRetries } from '../src/archive.ts';
@@ -47,7 +48,7 @@ async function setup(deps = {}) {
   await owner('POST', '/auth/register', { name: 'Petani Demo', phone: '081111111111', pin: '246810' });
   await owner('PUT', '/farm', { name: 'Tambak Uji', lat: -7.72, lon: 110.36 });
   const farmId = s.store.farmsOf(1)[0].id;
-  return { ...s, owner, calls, r: s.store.farm(farmId) };
+  return { ...s, owner, calls, r: s.store.farm(farmId), client: s.client };
 }
 
 test('pond photo: a labelled sample draft in mock mode, nothing saved to the pond', async () => {
@@ -77,6 +78,9 @@ test('pond photo: AI off answers 503 and the profile can still be picked by hand
   const changed = (await owner('PUT', `/ponds/${p.id}`, { place: 'indoor', light: 'dark' })).json.pond;
   assert.deepEqual([changed.setting, changed.light, changed.waterColor], ['indoor', 'dark', 'green']);
   assert.equal((await owner('PUT', `/ponds/${p.id}`, { light: 'neon' })).status, 400);
+  // Emptied on purpose in the editor: back to unknown, not the old answer.
+  const cleared = (await owner('PUT', `/ponds/${p.id}`, { place: null, light: null, depthCm: null })).json.pond;
+  assert.deepEqual([cleared.setting, cleared.shaded, cleared.light, cleared.depthCm, cleared.waterColor], [null, null, null, null, 'green']);
 });
 
 test('old notebook readings teach the model on day one, with archive weather fetched once', async () => {
@@ -132,4 +136,52 @@ test('pattern on demand: a labelled sample in mock mode, saved, shown, and limit
   // English asks get an English note.
   const en = (await owner('GET', `/ponds/${pond.id}/temperature`)).json;
   assert.ok(en.pattern);
+});
+
+test("an English viewer gets the agent's weekly note written again in English, in the background", async () => {
+  const call = (name: string, args: unknown) => ({ id: 'p', type: 'function', function: { name, arguments: JSON.stringify(args) } });
+  const asked: string[] = [];
+  let pondId = 0;
+  const srv = createServer((req, res) => {
+    let raw = '';
+    req.on('data', (d) => (raw += d));
+    req.on('end', () => {
+      asked.push(JSON.parse(raw).messages[1].content);
+      const text = 'Kolam B is warmer than the estimate in the afternoon, probably from the sun on the roof.';
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ choices: [{ message: { content: '', tool_calls: [call('submit_patterns', { ponds: [{ pond_id: pondId, text }] })] } }] }));
+    });
+  });
+  const base = await new Promise<string>((resolve) => srv.listen(0, '127.0.0.1', () => resolve(`http://127.0.0.1:${(srv.address() as { port: number }).port}`)));
+  try {
+    const { owner, r, client } = await setup({ ai: { mode: 'meta' }, agentProviders: [{ name: 'baseten', apiKey: 'k', base, model: 'open' }] });
+    const truth = POND_TYPES.find((p) => p.name.startsWith('Roofed tank'))!;
+    const pond = (await owner('POST', '/ponds', { name: 'Kolam B', kind: 'terpal', place: 'roofed' })).json.pond;
+    pondId = pond.id;
+    const { readings } = synthPond(truth, all.filter((h) => h.t <= now));
+    for (const x of readings.filter((x) => x.t >= now - 14 * DAY)) r.addLog({ pondId: pond.id, batchId: null, loggedAt: new Date(x.t).toISOString(), source: 'manual', data: { readings: { temperature: x.value } } }, 1);
+    // The weekly run wrote the note in Indonesian.
+    r.savePattern(pond.id, new Date(now - DAY).toISOString(), 'id', 'agent', { pondId: pond.id, text: 'Kolam B lebih hangat dari perkiraan pada siang hari.', checkTime: null, source: 'agent', generatedAt: now - DAY, lang: 'id' });
+    const headers = { 'x-lang': 'en' };
+    const en = client(headers);
+    await en('POST', '/auth/login', { phone: '081111111111', pin: '246810' });
+    const first = (await en('GET', `/ponds/${pond.id}/temperature`)).json;
+    assert.equal(first.running, true);
+    assert.equal(first.pattern.source, 'rules'); // the English rules note meanwhile
+    let shown = first;
+    for (let i = 0; i < 50 && shown.running; i++) {
+      await new Promise((ok) => setTimeout(ok, 20));
+      shown = (await en('GET', `/ponds/${pond.id}/temperature`)).json;
+    }
+    assert.equal(shown.running, false);
+    assert.equal(shown.pattern.source, 'agent');
+    assert.match(shown.pattern.text, /^Kolam B is warmer/);
+    assert.equal(asked.length, 1);
+    assert.match(asked[0], /In English/);
+    // The Indonesian viewer still sees the Indonesian note, and nothing is asked again.
+    assert.match((await owner('GET', `/ponds/${pond.id}/temperature`)).json.pattern.text, /^Kolam B lebih hangat/);
+    assert.equal(asked.length, 1);
+  } finally {
+    srv.close();
+  }
 });

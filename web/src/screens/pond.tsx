@@ -399,6 +399,12 @@ function WaterTempCard({ pond, nc, go }: { pond: PondSummary; nc: Nowcast | unde
   useEffect(() => {
     api.pondTemperature(pond.id).then(setData, () => {});
   }, [key]);
+  // The AI is writing the pattern note in this language: look again until it is there.
+  useEffect(() => {
+    if (!data?.running) return;
+    const timer = setTimeout(() => api.pondTemperature(pond.id).then(setData, () => {}), 4000);
+    return () => clearTimeout(timer);
+  }, [data]);
   const m = data?.model ?? nc?.basis.thermal;
   if (!m) return null;
   const temp = nc?.now.temp ?? null;
@@ -448,6 +454,7 @@ function WaterTempCard({ pond, nc, go }: { pond: PondSummary; nc: Nowcast | unde
             {pattern.source === 'mock' ? <span class="soon">{source}</span> : <span class="label ink2">{source}</span>}
           </div>
           <p>{pattern.text}</p>
+          {data?.running && <span class="label ink2">{t('AI sedang menulis catatan pola dalam bahasa ini…', 'The AI is writing the pattern note in this language…')}</span>}
           {pattern.checkTime && (
             <button type="button" class="link-row" style={{ justifyContent: 'flex-start', gap: 8, minHeight: 44 }} onClick={() => go({ name: 'record-pond', pondId: pond.id })}>
               <Icon name="clock" size={20} />

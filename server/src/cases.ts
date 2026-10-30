@@ -14,7 +14,7 @@
 // from the rules alone; SYNTEEL_AI_MOCK gives a labelled sample run.
 import { currentLang, dec, tx, type Lang } from './i18n.ts';
 import type { ChatProvider } from './ai.ts';
-import { clock, fn, overstated, searchGuidance, toolLoop, unsafeText, wordingRules, type Step } from './agentloop.ts';
+import { clock, degrees, fn, overstated, searchGuidance, toolLoop, unsafeText, wordingRules, type Step } from './agentloop.ts';
 import { nextTime } from './agent.ts';
 import { DAY_MS, localDate, type Log } from './domain.ts';
 import type { Nowcast } from './nowcast.ts';
@@ -418,11 +418,11 @@ export async function runCaseAgent(input: CaseInput, providers: ChatProvider[]):
 export function guardCase(input: CaseInput, p: Partial<Collected> & { summary?: unknown; watch?: unknown }, steps: Step[], model: string): CaseRun {
   const base = rulesCaseRun(input, steps);
   const fits = (s: string, min: number, max: number) => fitsText(s, min, max) && !overstated(s, input.weather);
-  const summary = String(p.summary ?? '').trim();
+  const summary = degrees(String(p.summary ?? '').trim());
   if (!fits(summary, 20, 500)) return base;
 
   const watch = (Array.isArray(p.watch) ? p.watch : [])
-    .map((w) => String(w).trim())
+    .map((w) => degrees(String(w).trim()))
     .filter((w) => fits(w, 3, 80))
     .slice(0, 3);
 
@@ -437,14 +437,14 @@ export function guardCase(input: CaseInput, p: Partial<Collected> & { summary?: 
   const extra: CaseCheck[] = [];
   for (const c of (p.checks ?? []).slice(0, MAX_AGENT_CHECKS)) {
     const t = nextTime(c.time, input.now);
-    const action = c.action.trim().slice(0, 80);
+    const action = degrees(c.action.trim()).slice(0, 80);
     if (t === null || t > end || !fits(action, 3, 80) || unsafeText(c.why) || overstated(c.why, input.weather)) continue;
     // A rule check at nearly the same time already covers it; rule checks are never moved.
     if (base.checks.some((r) => Math.abs(r.t - t) < CHECK_GAP)) continue;
-    extra.push({ t, action, source: 'agent', alarm: false, why: c.why.trim().slice(0, 140) || undefined });
+    extra.push({ t, action, source: 'agent', alarm: false, why: degrees(c.why.trim()).slice(0, 140) || undefined });
   }
 
-  const note = (p.ownerNote ?? '').trim();
+  const note = degrees((p.ownerNote ?? '').trim());
   return {
     ...base,
     summary,

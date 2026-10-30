@@ -18,6 +18,9 @@ const DIAGNOSIS =
   /((?<!(bukan|not a|no)\s)diagnos|terinfeksi|infeksi|infected|infection|terserang|terjangkit|terkena\s+(penyakit|jamur|infeksi|kutu|cacing)|\bdisease\b|virus|bakteri|bacteria|parasit|aeromonas|edwardsiella|pseudomonas|vibrio|saprolegni|ichthyophthir|white\s*spot|bintik\s+putih|trichodina|dactylogyr|gyrodactyl|columnaris|flavobacter|anguillicol|herpes|anghv|evex|dropsy|septi[ck]?a?emia|septikemia|red\s+(fin|pest)|sirip\s+merah|busuk\s+insang|gill\s+rot)/i;
 
 /** Text the app may not show: medicine, doses, or a diagnosis. */
+/** "30 C", "30C", "30 derajat C" → "30 °C", the way the app writes temperatures. */
+export const degrees = (text: string) => text.replace(/(\d)\s*(?:°|º|derajat\s*)?\s*C\b/g, '$1 °C');
+
 export const unsafeText = (text: string) => TREATMENT.test(text) || DIAGNOSIS.test(text);
 
 /** "21.30" (id) or "21:30" (en) in the farm's time zone. */

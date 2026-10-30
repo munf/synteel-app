@@ -25,6 +25,8 @@ export interface PondTemperature {
   model: ThermalModel;
   hours: MeasureHour[];
   pattern: PondPattern;
+  /** The agent is writing the note in this language (it had one only in the other); poll until done. */
+  running?: boolean;
   /** Who writes a new note on request, and how many requests the farm has left today. */
   ask: { mode: 'agent' | 'mock' | 'rules'; left: number };
 }

@@ -7,7 +7,7 @@
 // When the model is unavailable the briefing is written from the rules alone.
 import { currentLang, tx, type Lang } from './i18n.ts';
 import type { ChatProvider } from './ai.ts';
-import { clock, fn, overstated, searchGuidance, toolLoop, unsafeText, wordingRules } from './agentloop.ts';
+import { clock, degrees, fn, overstated, searchGuidance, toolLoop, unsafeText, wordingRules } from './agentloop.ts';
 import type { Nowcast } from './nowcast.ts';
 import { powerBackupLabel, type PowerNight } from './power.ts';
 
@@ -241,17 +241,17 @@ const rainSeen = (input: BriefingInput) => [...input.weather, ...(input.bmkg?.st
 /** Applies the guardrails to what the model submitted. */
 export function guard(input: BriefingInput, proposal: Record<string, any>, steps: Briefing['steps'], model: string): Briefing {
   const base = rulesBriefing(input, steps);
-  const summary = String(proposal.summary ?? '').trim();
+  const summary = degrees(String(proposal.summary ?? '').trim());
   const end = input.now + WINDOW_H * HOUR;
   const agentChecks: BriefingCheck[] = [];
   for (const c of Array.isArray(proposal.checks) ? proposal.checks.slice(0, MAX_AGENT_CHECKS) : []) {
     const pond = input.ponds.find((p) => p.id === Number(c?.pond_id));
     const t = typeof c?.time === 'string' ? nextTime(c.time, input.now) : null;
-    const action = String(c?.action ?? '').trim().slice(0, 80);
+    const action = degrees(String(c?.action ?? '').trim()).slice(0, 80);
     if (!pond || t === null || t > end || !action || unsafeText(action) || unsafeText(String(c?.why ?? '')) || overstated(`${action} ${c?.why ?? ''}`, rainSeen(input))) continue;
     // A rule check at nearly the same time on the same pond already covers it.
     if (base.checks.some((r) => r.pondId === pond.id && Math.abs(r.t - t) < 30 * 60_000)) continue;
-    agentChecks.push({ pondId: pond.id, t, action, alarm: Boolean(c.alarm), source: 'agent', why: String(c.why ?? '').slice(0, 140) || undefined });
+    agentChecks.push({ pondId: pond.id, t, action, alarm: Boolean(c.alarm), source: 'agent', why: degrees(String(c.why ?? '')).slice(0, 140) || undefined });
   }
   const usable = summary.length >= 20 && summary.length <= 500 && !unsafeText(summary) && !overstated(summary, rainSeen(input));
   // In the server log, so a summary the guard turned down can be looked into.

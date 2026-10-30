@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 import { demoStore } from './demo.ts';
 import { deviceStore } from './devices.ts';
+import { tx } from './i18n.ts';
 import type { Aeration, Batch, Farm, Log, LogData, Phase, Pond, Setting } from './domain.ts';
 import type { Outage } from './power.ts';
 import type { WeatherHour } from './weather.ts';
@@ -595,6 +596,10 @@ export interface Member extends User {
 }
 
 /** Farms, people and sessions. */
+const DEMO_NAMES = new Set(['Petani Demo', 'Demo Farmer']);
+/** A demo person (phone "demo…") with the default name shows it in the current language. */
+const shownName = (r: Row) => (String(r.phone).startsWith('demo') && DEMO_NAMES.has(r.name as string) ? tx('Petani Demo', 'Demo Farmer') : (r.name as string));
+
 export function repo(db: Db) {
   const now = () => new Date().toISOString();
   return {
@@ -636,14 +641,15 @@ export function repo(db: Db) {
       return { id: Number(lastInsertRowid), phone: u.phone, name: u.name };
     },
 
+    // A "Coba demo" person keeps the default name in the language being shown, not the one at sign-in.
     userByPhone(phone: string): (User & { pinHash: string }) | null {
       const r = db.prepare('select * from users where phone = ?').get(phone) as Row | undefined;
-      return r ? { id: r.id as number, phone: r.phone as string, name: r.name as string, pinHash: r.pin_hash as string } : null;
+      return r ? { id: r.id as number, phone: r.phone as string, name: shownName(r), pinHash: r.pin_hash as string } : null;
     },
 
     user(id: number): User | null {
       const r = db.prepare('select id, phone, name from users where id = ?').get(id) as Row | undefined;
-      return r ? { id: r.id as number, phone: r.phone as string, name: r.name as string } : null;
+      return r ? { id: r.id as number, phone: r.phone as string, name: shownName(r) } : null;
     },
 
     setPin(userId: number, pinHash: string) {
@@ -676,7 +682,7 @@ export function repo(db: Db) {
     members(farmId: number): Member[] {
       return (
         db.prepare('select u.id, u.phone, u.name, m.role from memberships m join users u on u.id = m.user_id where m.farm_id = ? order by m.role, u.name').all(farmId) as Row[]
-      ).map((r) => ({ id: r.id as number, phone: r.phone as string, name: r.name as string, role: r.role as Role }));
+      ).map((r) => ({ id: r.id as number, phone: r.phone as string, name: shownName(r), role: r.role as Role }));
     },
 
     // ---------- sessions ----------

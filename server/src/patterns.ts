@@ -10,7 +10,7 @@
 // ranked hours, medicine, diagnosis, or oxygen; that pond then gets the sentence the rules write.
 import { currentLang, dec, tx, type Lang } from './i18n.ts';
 import type { ChatProvider } from './ai.ts';
-import { fn, toolLoop, unsafeText, type Step } from './agentloop.ts';
+import { degrees, fn, toolLoop, unsafeText, type Step } from './agentloop.ts';
 import type { Exposure, MeasureHour, Part, ThermalModel } from './thermal.ts';
 
 /** A pond needs this many scored readings before a pattern is worth writing. */
@@ -189,7 +189,7 @@ const normTime = (s: unknown) => {
 
 /** Checks one pond's note from the agent; null when it must be replaced by the rules note. */
 export function guardPattern(p: PatternPond, proposal: { text?: unknown; check_time?: unknown }): { text: string; checkTime: string | null; checkSpread: number | null } | null {
-  const text = String(proposal.text ?? '').trim().replace(/\s+/g, ' ');
+  const text = degrees(String(proposal.text ?? '').trim().replace(/\s+/g, ' '));
   if (text.length < 15 || text.length > 300) return null;
   const sentences = text.split(/(?<=[.!?])\s+/).filter((x) => x.trim());
   if (sentences.length > 2) return null;

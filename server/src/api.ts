@@ -22,7 +22,7 @@ import { geocode as defaultGeocode, getWeather as defaultGetWeather } from './we
 import type { Fetcher } from './archive.ts';
 import { guardPondPhoto, placeToSetting, PLACES, type Place } from './pondphoto.ts';
 import { MAX_PATTERN_RUNS_PER_DAY, PATTERN_EVERY_MS, runPatterns, type PondPattern } from './patterns.ts';
-import { patternPond, patternView, thermalService, type PondThermal } from './pondtemp.ts';
+import { patternInOtherLang, patternPond, patternView, thermalService, type PondThermal } from './pondtemp.ts';
 import type { Light, WaterColor } from './thermal.ts';
 import { farmForecast, getBmkgForecast, regionCandidates, type BmkgForecast, type GetBmkg, type Region } from './bmkg.ts';
 import { findDesa, searchDesa, type Desa } from './desa.ts';
@@ -126,6 +126,8 @@ function pondProfile(body: Record<string, any>) {
   // A pond photo's "place" (indoor / roofed / open) is the setting plus the shade question.
   const place = oneOf<Place>(body.place, PLACES, 'tempat kolam');
   if (place) Object.assign(body, placeToSetting(place));
+  // Place cleared on purpose: the setting and the shade answer go back to unknown too.
+  else if ('place' in body) Object.assign(body, { setting: null, shaded: null });
   return {
     waterColor: oneOf<WaterColor>(body.waterColor, ['clear', 'green', 'brown', 'cloudy'], 'warna air') ?? null,
     light: oneOf<Light>(body.light, ['bright', 'dim', 'dark'], 'cahaya') ?? null,
@@ -1502,16 +1504,34 @@ export function createApi(
   const dayStartIso = (r: FarmRepo) => new Date(Date.parse(nextMidnight(clock(), timezone(r))) - DAY_MS).toISOString();
   const patternRunsLeft = (r: FarmRepo) => Math.max(0, MAX_PATTERN_RUNS_PER_DAY - r.patternRunsSince(dayStartIso(r)));
 
+  const patternJobs = new Map<number, Promise<unknown>>();
+
   // The pond page's water temperature card: "usually off by ±X °C", what it learned from, the pattern note.
+  // Like the briefing: when the agent's newest note is in the other language, it writes the note again in this
+  // one in the background (within the farm's daily allowance) and the card shows `running` meanwhile.
   api.get('/ponds/:id/temperature', async (c) => {
     const r = needFarm(c);
     const pond = r.getPond(Number(c.req.param('id')));
     if (!pond) return c.json({ error: tx('Kolam tidak ditemukan', 'Pond not found') }, 404);
     const { now, learned, facts } = await pondTemperature(r, pond);
+    let running = patternJobs.has(pond.id);
+    const original = running || ai?.mode !== 'meta' || !agentProviders.length || patternRunsLeft(r) <= 0 ? null : patternInOtherLang(r, pond.id, now);
+    if (original) {
+      running = true;
+      const lang = currentLang();
+      const job = withLang(lang, async () => {
+        const [note] = await runPatterns({ farmName: r.getFarm()?.name ?? '', now, timezone: timezone(r), ponds: [facts] }, agentProviders, false);
+        r.savePattern(pond.id, new Date(now).toISOString(), lang, note.source, { ...note, translatedFrom: original });
+      })
+        .catch((err) => console.error(`pattern pond ${pond.id} (${lang}):`, err))
+        .finally(() => patternJobs.delete(pond.id));
+      patternJobs.set(pond.id, job);
+    }
     return c.json({
       model: learned.model,
       hours: facts.hours,
       pattern: patternView(r, facts, now),
+      running,
       ask: { mode: ai?.mode === 'meta' && agentProviders.length ? 'agent' : ai?.mode === 'mock' ? 'mock' : 'rules', left: patternRunsLeft(r) },
     });
   });
@@ -1979,7 +1999,7 @@ export function createApi(
     },
     /**
      * The weekly pattern agent: every farm with real AI and a pond with enough readings gets new notes once
-     * a week (in Indonesian; the pond page asks again in English on demand). Demo farms get theirs from the template.
+     * a week (in Indonesian; an English viewer's pond page has the agent write it again in English). Demo farms get theirs from the template.
      */
     async patternFarms() {
       if (ai?.mode !== 'meta' || !agentProviders.length) return;

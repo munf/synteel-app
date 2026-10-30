@@ -80,3 +80,15 @@ export function patternView(r: FarmRepo, p: PatternPond, now: number): PondPatte
   if (saved && now - Date.parse(saved.createdAt) < PATTERN_EVERY_MS + DAY_MS) return saved.body;
   return rulesPattern(p, now);
 }
+
+/**
+ * The newest agent note (from the last week) is in another language and has no version in this one: the
+ * agent writes it again here. Returns when that note was written (the rewrite keeps it as `translatedFrom`), or null.
+ */
+export function patternInOtherLang(r: FarmRepo, pondId: number, now: number): string | null {
+  const notes = r.patterns<PondPattern & { translatedFrom?: string }>(pondId).filter((x) => x.source === 'agent');
+  const newest = notes[0];
+  if (!newest || newest.lang === currentLang() || now - Date.parse(newest.createdAt) >= PATTERN_EVERY_MS + DAY_MS) return null;
+  const original = newest.body.translatedFrom ?? newest.createdAt;
+  return notes.some((x) => x.lang === currentLang() && (x.body.translatedFrom ?? x.createdAt) === original) ? null : original;
+}

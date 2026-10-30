@@ -60,7 +60,8 @@ export const profileBody = (v: ProfileValue) => ({
   place: v.place,
   waterColor: v.waterColor,
   light: v.light,
-  depthCm: v.depthCm ? Number(v.depthCm.replace(',', '.')) : undefined,
+  // null, not undefined: an emptied depth must reach the server to be cleared.
+  depthCm: v.depthCm ? Number(v.depthCm.replace(',', '.')) : null,
 });
 
 type Field = 'kind' | 'place' | 'waterColor' | 'light';

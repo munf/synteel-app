@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { test } from 'node:test';
 import { guard, nextTime, runBriefing, type BriefingInput } from '../src/agent.ts';
+import { degrees } from '../src/agentloop.ts';
 import type { Nowcast } from '../src/nowcast.ts';
 
 const NOW = Date.parse('2026-10-28T10:00:00Z'); // 17.00 WIB
@@ -149,4 +150,11 @@ test('wording: heavy rain only above 7.6 mm per hour, oxygen only as an estimate
   assert.equal(guard(heavy, { ...base, summary: 'Kolam B rawan malam ini karena hujan deras dan sidat naik ke permukaan.' }, [], 'm').source, 'agent');
   assert.equal(guard(input(), { ...base, summary: 'Oksigen air sangat rendah di Kolam B, nyalakan aerator cadangan sekarang.' }, [], 'm').source, 'rules');
   assert.equal(guard(input(), { ...base, summary: 'Perkiraan oksigen rendah di Kolam B sekitar jam 01.00, pastikan aerator nyala.' }, [], 'm').source, 'agent');
+});
+
+test('temperatures from the model get the degree sign the app uses', () => {
+  assert.equal(degrees('Air 30 C sore ini, 29,5C malam, naik 2 derajat C.'), 'Air 30 °C sore ini, 29,5 °C malam, naik 2 °C.');
+  assert.equal(degrees('Suhu 28 °C dan 27°C.'), 'Suhu 28 °C dan 27 °C.');
+  // Not a temperature: left alone.
+  assert.equal(degrees('Kolam C dan CAPE 2500 tinggi.'), 'Kolam C dan CAPE 2500 tinggi.');
 });

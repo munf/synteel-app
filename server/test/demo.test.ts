@@ -48,7 +48,8 @@ test('the template carries AI results in both languages; each "Coba demo" gets i
 
     // A judge two days later, at 20:30 WIB.
     s.now.t = new Date(Date.parse(BUILT) + 2 * 24 * H + 3 * H);
-    const a = s.client({ 'x-lang': 'en', 'cf-connecting-ip': '1.1.1.1' });
+    const aHeaders = { 'x-lang': 'en', 'cf-connecting-ip': '1.1.1.1' };
+    const a = s.client(aHeaders);
     const b = s.client({ 'cf-connecting-ip': '1.1.1.1' });
     const meA = (await a('POST', '/auth/demo')).json;
     const meB = (await b('POST', '/auth/demo')).json;
@@ -57,6 +58,10 @@ test('the template carries AI results in both languages; each "Coba demo" gets i
     assert.notEqual(meA.user.id, meB.user.id);
     assert.equal(meA.user.name, 'Demo Farmer');
     assert.equal(meB.user.name, 'Petani Demo');
+    // The default name follows a later language switch.
+    aHeaders['x-lang'] = 'id';
+    assert.equal((await a('GET', '/auth/me')).json.user.name, 'Petani Demo');
+    aHeaders['x-lang'] = 'en';
 
     // English at once, from the copy: no model call.
     const caseEn = (await a('GET', '/cases')).json.cases;
