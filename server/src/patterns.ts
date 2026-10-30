@@ -256,7 +256,11 @@ export async function runPatterns(input: PatternInput, providers: ChatProvider[]
         ready.map((p) => {
           const proposal = (Array.isArray(args.ponds) ? args.ponds : []).find((x: any) => Number(x?.pond_id) === p.id);
           const ok = proposal ? guardPattern(p, proposal) : null;
-          if (!ok) return rulesPattern(p, input.now, 'rules', steps);
+          // In the server log, so a note the guard turned down can be looked into.
+          if (!ok) {
+            console.warn(`pattern agent: note for pond ${p.id} refused: ${JSON.stringify(proposal ?? null).slice(0, 400)}`);
+            return rulesPattern(p, input.now, 'rules', steps);
+          }
           return { pondId: p.id, ...ok, source: 'agent' as const, model, steps, generatedAt: input.now, lang: currentLang(), readings: p.model.backtest.n };
         }),
     }),
