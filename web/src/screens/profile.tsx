@@ -7,7 +7,7 @@ import { askNotifyPermission } from '../alarms.ts';
 import { setPrefs, usePrefs, type Prefs, type Theme } from '../prefs.ts';
 import { isEn, lang, LOCALE, setLang, t, type Lang, siteInAppLanguage } from '../i18n.ts';
 import { Field, Icon, initialOf, roleLabel, Shape, Soon, Switch, Tick, Glyph, GLYPH } from '../ui.tsx';
-import { ChangePin, Members } from './members.tsx';
+import { ChangePin, DeleteAccount, Members } from './members.tsx';
 import { MediaDone, QuotaBar } from './quota.tsx';
 import { LocateButton, useLocate } from './setup.tsx';
 import { BackupCard } from './power.tsx';
@@ -263,7 +263,6 @@ export function Profile({
     { label: t('Telepon penyuluh', 'Call an extension officer'), sub: t('Penyuluh perikanan', 'Fisheries extension officer') },
     { label: t('Laporan mingguan', 'Weekly report'), sub: t('Ringkasan mati, suhu dan pakan seminggu', 'A week of deaths, temperature and feed') },
     { label: t('Teruskan alarm ke pemilik', 'Forward alarms to the owner'), sub: t('Kalau alarm cek malam tidak dijawab', 'If the night check alarm is not answered') },
-    { label: t('Lihat atau hapus data', 'View or delete data'), sub: t('Data yang dipakai melatih AI', 'Data used to train the AI') },
   ];
 
   return (
@@ -465,13 +464,13 @@ export function Profile({
 
       <section class="card row" style={{ flexDirection: 'row', padding: '16px 20px', gap: 12 }}>
         <span class="icon-box">
-          <Icon name="heart" />
+          <Icon name="camera" />
         </span>
         <div class="grow stack-xs">
-          <span class="strong">{t('Bantu kembangkan Synteel', 'Help improve Synteel')}</span>
-          <span class="label ink2">{t('Foto, video dan catatan untuk melatih AI. Nama dan nomor HP tidak ikut.', 'Photos, videos and records to train the AI. Name and phone number are not shared.')}</span>
+          <span class="strong">{t('Simpan foto dan rekaman', 'Keep photos and recordings')}</span>
+          <span class="label ink2">{t('Untuk mengukur ketepatan AI. Kalau mati, dihapus dari server setelah dibaca.', 'To measure how well the AI reads. When off, they are deleted from the server after reading.')}</span>
         </div>
-        <Switch checked={prefs.shareData} label={t('Bantu kembangkan Synteel', 'Help improve Synteel')} onChange={(v) => setPrefs({ shareData: v })} />
+        <Switch checked={prefs.shareData} label={t('Simpan foto dan rekaman', 'Keep photos and recordings')} onChange={(v) => setPrefs({ shareData: v })} />
       </section>
 
       <section class="card list" aria-labelledby="alat-title">
@@ -499,6 +498,7 @@ export function Profile({
       </section>
 
       {!me.demo && <ChangePin />}
+      {!me.demo && <DeleteAccount owner={owner} onDeleted={onLogout} />}
 
       {me.demo && (
         <p class="note info">
@@ -522,6 +522,21 @@ export function Profile({
           <Icon name="next" size={20} />
         </span>
       </button>
+
+      <a class="go-row help-row" href="https://eel.synt.fun/privasi/" target="_blank" rel="noopener" onClick={siteInAppLanguage}>
+        <span style={{ color: 'var(--accent)', display: 'flex' }}>
+          <Icon name="lock" />
+        </span>
+        <span class="grow stack-xs" style={{ gap: 0 }}>
+          <span class="strong" style={{ color: 'var(--ink)' }}>
+            {t('Kebijakan privasi', 'Privacy policy')}
+          </span>
+          <span class="meta">{t('Data apa yang disimpan, dikirim ke mana, dan cara menghapusnya', 'What is kept, where it goes, and how to delete it')}</span>
+        </span>
+        <span style={{ color: 'var(--muted)', display: 'flex' }}>
+          <Icon name="next" size={20} />
+        </span>
+      </a>
 
       <section class="stack-sm">
         <button type="button" class="btn secondary" onClick={logout} disabled={leaving}>

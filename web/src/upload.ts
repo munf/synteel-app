@@ -1,8 +1,8 @@
 
 // Uploads with progress. On weak signal a video or a long round recording can take minutes:
 // the farmer sees how far it got instead of a frozen screen. Same errors as api.ts (ApiError).
-import { API, ApiError, api, type Draft, type NotebookPage, type RoundResult } from './api.ts';
-import { lang, t } from './i18n.ts';
+import { API, ApiError, api, baseHeaders, type Draft, type NotebookPage, type RoundResult } from './api.ts';
+import { t } from './i18n.ts';
 import { Retryable, type Job } from './capture/queue.ts';
 
 /** No connection at all: keep the recording and try again when there is signal. */
@@ -27,8 +27,8 @@ function post<T>(path: string, form: FormData, onProgress?: (p: Progress) => voi
     const xhr = new XMLHttpRequest();
     const started = Date.now();
     xhr.open('POST', `${API}${path}`);
-    // The server answers (drafts, errors) in the chosen language, as for every api.ts request.
-    xhr.setRequestHeader('x-lang', lang);
+    // The same headers as every api.ts request: the chosen language, and the keep-photos choice.
+    for (const [k, v] of Object.entries(baseHeaders())) xhr.setRequestHeader(k, v);
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.({ sent: e.loaded, total: e.total, started });
     xhr.onerror = () => reject(new Offline(t('Belum ada sinyal', 'No signal yet')));
     xhr.ontimeout = () => reject(new Offline(t('Sinyal terputus', 'Signal lost')));

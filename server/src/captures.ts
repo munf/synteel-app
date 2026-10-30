@@ -1,5 +1,6 @@
 // Keeps what farmers sent alongside the AI draft, so field accuracy can be measured
-// later against what the farmer actually saved. Local only: data/ is gitignored.
+// later against what the farmer actually saved. Only for phones that opted in (Profil →
+// Simpan foto dan rekaman, api.ts keptBy). Local only: data/ is gitignored.
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -19,7 +20,7 @@ export function captureStore(dir = captureDir()) {
   };
 }
 
-/** Deletes every capture of one farm (a demo farm that expired). */
+/** Deletes every capture and cover of one farm (a demo farm that expired, or a deleted account's farm). */
 export function removeFarmCaptures(farmId: number, dir = captureDir()) {
   if (!existsSync(dir)) return;
   const mark = `-farm${farmId}-`;

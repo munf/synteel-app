@@ -336,3 +336,65 @@ export function ChangePin() {
     </details>
   );
 }
+
+/** Profil → Hapus akun: confirmed with the PIN; afterwards the phone is signed out. */
+export function DeleteAccount({ owner, onDeleted }: { owner: boolean; onDeleted: () => void }) {
+  const [pin, setPin] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: Event) => {
+    e.preventDefault();
+    if (pin.length !== 6) return setError(t('PIN harus 6 angka', 'The PIN must be 6 digits'));
+    setBusy(true);
+    setError('');
+    try {
+      await api.deleteAccount(pin);
+      onDeleted();
+    } catch (err) {
+      setError((err as Error).message);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <details class="card more">
+      <summary>
+        <span class="row">
+          <span class="icon-box">
+            <Icon name="trash" />
+          </span>
+          <span class="stack-xs">
+            <span class="strong">{t('Hapus akun', 'Delete account')}</span>
+            <span class="meta">{t('Akun dan datanya dihapus dari server', 'The account and its data are deleted from the server')}</span>
+          </span>
+        </span>
+        <Icon name="down" />
+      </summary>
+      <form class="stack" style={{ marginTop: 16 }} onSubmit={submit}>
+        <p class="body">
+          {owner
+            ? t(
+                'Nama, nomor HP dan PIN dihapus. Tambak tanpa pemilik lain ikut terhapus: semua kolam, catatan, foto dan akses anggotanya. Tidak bisa dibatalkan.',
+                'Name, phone number and PIN are deleted. A farm with no other owner goes too: all its ponds, records, photos and members’ access. This cannot be undone.',
+              )
+            : t(
+                'Nama, nomor HP dan PIN dihapus. Catatan yang sudah dibuat tetap ada di tambak, tanpa nama. Tidak bisa dibatalkan.',
+                'Name, phone number and PIN are deleted. Records already made stay with the farm, without a name. This cannot be undone.',
+              )}
+        </p>
+        <Field label={t('PIN untuk memastikan', 'PIN to confirm')}>
+          <PinInput value={pin} onChange={setPin} />
+        </Field>
+        {error && (
+          <p class="error" role="alert">
+            {error}
+          </p>
+        )}
+        <button class="btn danger" disabled={busy}>
+          {t('Hapus akun selamanya', 'Delete account for good')}
+        </button>
+      </form>
+    </details>
+  );
+}

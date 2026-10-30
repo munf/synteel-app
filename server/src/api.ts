@@ -164,7 +164,7 @@ export interface ApiDeps {
   mail?: SendMail | null;
   /** Abuse limits for "Coba demo": new copies per address per day, and copies alive at once. */
   demoLimits?: { perIp: number; maxLive: number };
-  /** Deletes what a demo farm left on disk (captures and pond cover pictures) once it expires. */
+  /** Deletes what a farm left on disk (captures and pond cover pictures): an expired demo farm, or a deleted account's farm. */
   removeFarmFiles?: (farmId: number) => void;
   /** Where pond cover pictures are kept (captures.ts coverStore); null = covers cannot be saved. */
   covers?: CoverStore | null;
@@ -1039,6 +1039,8 @@ export function createApi(
     if (c.get('farmId') === null) throw new AuthError(tx('Tambak belum dibuat', 'No farm set up yet'), 409);
     return c.get('r');
   };
+  // Photos and recordings stay on the server after the AI read them only when the phone opted in (Profil → Simpan foto dan rekaman).
+  const keptBy = (c: Context<Env>) => (c.req.header('x-keep-media') === '1' ? saveCapture : undefined);
   const needOwner = (c: Context<Env>) => {
     const r = needFarm(c);
     if (c.get('role') !== 'owner') throw new AuthError(tx('Hanya pemilik tambak yang bisa mengubah ini', 'Only the farm owner can change this'), 403);
@@ -1085,6 +1087,27 @@ export function createApi(
     store.setPin(user.id, hashPin(checkPin(body.newPin)));
     // setPin ended every session, including this one: start a fresh one here.
     startSession(c, user.id, c.get('farmId'));
+    return c.body(null, 204);
+  });
+
+  // Profil → Hapus akun, confirmed with the PIN. Farms where this person is the only owner are deleted with their photos.
+  api.post('/auth/delete', async (c) => {
+    const body = await c.req.json();
+    const user = store.userByPhone(store.user(c.get('userId'))!.phone)!;
+    const keys = [`phone:${user.phone}`];
+    limiter.check(...keys);
+    if (!verifyPin(String(body.pin ?? ''), user.pinHash)) {
+      limiter.fail(...keys);
+      throw new AuthError(tx('PIN salah', 'Wrong PIN'), 403);
+    }
+    for (const farmId of store.deleteAccount(user.id)) {
+      try {
+        removeFarmFiles?.(farmId);
+      } catch (err) {
+        console.error(`deleted farm ${farmId} files:`, err);
+      }
+    }
+    deleteCookie(c, cookieName, { path: '/' });
     return c.body(null, 204);
   });
 
@@ -1443,7 +1466,7 @@ export function createApi(
     const started = Date.now();
     const read = await ai.pondPhoto({ image });
     const draft = guardPondPhoto(read.raw, { model: read.model, mode: read.mode });
-    await saveCapture?.({ farmId: r.farmId, pondId: Number(form.pondId) || 0, userId: c.get('userId'), kind: 'pondphoto', at: clock().toISOString(), ms: Date.now() - started, raw: read.raw, draft }, [{ name: 'image-0.jpg', blob: image }]).catch((err) =>
+    await keptBy(c)?.({ farmId: r.farmId, pondId: Number(form.pondId) || 0, userId: c.get('userId'), kind: 'pondphoto', at: clock().toISOString(), ms: Date.now() - started, raw: read.raw, draft }, [{ name: 'image-0.jpg', blob: image }]).catch((err) =>
       console.error('capture not stored:', err),
     );
     return c.json({ draft });
@@ -1611,7 +1634,7 @@ export function createApi(
     const batch = r.activeBatch(pond.id);
     const started = Date.now();
     const draft = await ai.draft({ kind, field, images, audio, pondName: pond.name, phase: batch?.phase });
-    await saveCapture?.(
+    await keptBy(c)?.(
       { farmId: r.farmId, pondId: pond.id, kind, field, at: clock().toISOString(), ms: Date.now() - started, draft },
       [...images.map((blob, i) => ({ name: `image-${i}.jpg`, blob })), ...(audio ? [{ name: `audio.${audio.type.includes('wav') ? 'wav' : 'webm'}`, blob: audio }] : [])],
     ).catch((err) => console.error('capture not stored:', err));
@@ -1632,7 +1655,7 @@ export function createApi(
     if (ai?.mode !== 'meta' || !sam?.apiKey) throw new AiUnavailable(tx('Hitung otomatis belum aktif. Hitung manual dulu.', 'Automatic counting is not on yet. Count by hand for now.'));
     // Part of an emergency report: it does not use the farm's daily AI quota (the app promises that).
     const result = await countDeadEels(image, sam, r.activeBatch(pond.id)?.phase ?? 'glass_eel');
-    await saveCapture?.({ farmId: r.farmId, pondId: pond.id, kind: 'count', at: clock().toISOString(), ms: result.ms, count: result.count, low: result.low, high: result.high, review: result.review }, [{ name: 'image-0.jpg', blob: image }]).catch((err) =>
+    await keptBy(c)?.({ farmId: r.farmId, pondId: pond.id, kind: 'count', at: clock().toISOString(), ms: result.ms, count: result.count, low: result.low, high: result.high, review: result.review }, [{ name: 'image-0.jpg', blob: image }]).catch((err) =>
       console.error('capture not stored:', err),
     );
     return c.json({ result });
@@ -1800,7 +1823,7 @@ export function createApi(
     const { rows, problems } = guardNotebook(read.raw, ponds, { today, page, defaultPondId });
     const dates = rows.flatMap((row) => [row.date, ...row.checks.map((ch) => (ch.field === 'date' && typeof ch.suggestion === 'string' ? ch.suggestion : null))]).filter((d): d is string => !!d);
     const result: NotebookPage = { rows, problems, recorded: recordedOn(r, dates), model: read.model, mode: read.mode };
-    await saveCapture?.({ farmId: r.farmId, pondId: defaultPondId ?? 0, userId: c.get('userId'), kind: 'notebook', at: clock().toISOString(), ms: Date.now() - started, raw: read.raw, rows }, [{ name: 'image-0.jpg', blob: image }]).catch((err) =>
+    await keptBy(c)?.({ farmId: r.farmId, pondId: defaultPondId ?? 0, userId: c.get('userId'), kind: 'notebook', at: clock().toISOString(), ms: Date.now() - started, raw: read.raw, rows }, [{ name: 'image-0.jpg', blob: image }]).catch((err) =>
       console.error('capture not stored:', err),
     );
     return c.json({ page: result });
@@ -1874,7 +1897,7 @@ export function createApi(
     const started = Date.now();
     const result = await ai.round({ ...input, ponds });
     const audio = input.audio;
-    await saveCapture?.(
+    await keptBy(c)?.(
       { farmId: r.farmId, pondId: 0, userId: c.get('userId'), kind: 'round', at: clock().toISOString(), ms: Date.now() - started, transcript: input.transcript, round: result },
       audio ? [{ name: `audio.${audio.type.includes('wav') ? 'wav' : 'webm'}`, blob: audio }] : [],
     ).catch((err) => console.error('capture not stored:', err));

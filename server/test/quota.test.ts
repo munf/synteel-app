@@ -87,10 +87,10 @@ test('every 7th day in a row earns +10 on that day', async () => {
   assert.equal(q.cap, 15);
 });
 
-test('voice round: the farm’s ponds with their other names go to the AI; the recording is kept', async () => {
+test('voice round: the farm’s ponds with their other names go to the AI; the recording is kept only for a phone that opted in', async () => {
   const { ai, rounds } = fakeAi();
   const saved: Record<string, unknown>[] = [];
-  const { owner, worker, ponds } = await farmWithWorker(undefined, {
+  const { owner, worker, ponds, client } = await farmWithWorker(undefined, {
     ai,
     saveCapture: async (meta, files) => {
       saved.push({ ...meta, files: files.map((f) => f.name) });
@@ -107,12 +107,17 @@ test('voice round: the farm’s ponds with their other names go to the AI; the r
     { id: ponds[2].id, name: 'Kolam C', nicknames: [] },
   ]);
 
+  // Profil → Simpan foto dan rekaman is off on this phone: nothing stays on the server.
+  assert.equal(saved.length, 0);
+
+  const keeping = client({ 'x-keep-media': '1' });
+  await keeping('POST', '/auth/login', { phone: '082222222222', pin: '135790' });
   const form = new FormData();
   form.append('audio', new Blob(['fake'], { type: 'audio/webm' }), 'round.webm');
-  assert.equal((await worker('POST', '/round', form)).status, 200);
+  assert.equal((await keeping('POST', '/round', form)).status, 200);
   assert.ok(rounds[1].audio instanceof Blob);
-  assert.equal(saved[1].kind, 'round');
-  assert.deepEqual(saved[1].files, ['audio.webm']);
+  assert.equal(saved[0].kind, 'round');
+  assert.deepEqual(saved[0].files, ['audio.webm']);
   assert.equal((await owner('GET', '/quota')).json.used, 2);
 
   assert.equal((await worker('POST', '/round', new FormData())).status, 400);

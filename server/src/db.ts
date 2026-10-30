@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
-import { demoStore } from './demo.ts';
+import { demoStore, eraseFarm, eraseUser } from './demo.ts';
 import { deviceStore } from './devices.ts';
 import { tx } from './i18n.ts';
 import type { Aeration, Batch, Farm, Log, LogData, Phase, Pond, Setting } from './domain.ts';
@@ -656,6 +656,29 @@ export function repo(db: Db) {
       db.prepare('update users set pin_hash = ? where id = ?').run(pinHash, userId);
       // A new PIN signs the person out everywhere else.
       db.prepare('delete from sessions where user_id = ?').run(userId);
+    },
+
+    /**
+     * Profil → Hapus akun. A farm where this person is the only owner goes with everything in it; on other farms only
+     * the membership goes (records stay without the maker's name). Their support messages go too. Returns the deleted
+     * farms, whose photos the caller removes from disk.
+     */
+    deleteAccount(userId: number): number[] {
+      db.exec('begin');
+      try {
+        const owned = db
+          .prepare("select farm_id from memberships m where user_id = ? and role = 'owner' and not exists (select 1 from memberships o where o.farm_id = m.farm_id and o.role = 'owner' and o.user_id != m.user_id)")
+          .all(userId) as Row[];
+        const farms = owned.map((r) => r.farm_id as number);
+        for (const id of farms) eraseFarm(db, id);
+        db.prepare('delete from support_tickets where user_id = ?').run(userId);
+        eraseUser(db, userId);
+        db.exec('commit');
+        return farms;
+      } catch (err) {
+        db.exec('rollback');
+        throw err;
+      }
     },
 
     // ---------- memberships ----------

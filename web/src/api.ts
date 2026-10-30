@@ -13,6 +13,7 @@ import type { PondPhotoDraft, Place } from '../../server/src/pondphoto.ts';
 import type { PondPattern } from '../../server/src/patterns.ts';
 import type { Light, MeasureHour, ThermalModel, WaterColor } from '../../server/src/thermal.ts';
 import { lang, t } from './i18n.ts';
+import { getPrefs } from './prefs.ts';
 
 export type { Aeration, Batch, Behavior, Farm, Finding, Level, Log, LogData, Phase, Pond, Setting };
 export type { Limits, Nowcast, NowcastPoint, RiskFactor, RiskLevel, SuggestedCheck };
@@ -200,10 +201,13 @@ export const onSessionLost = (fn: (() => void) | null) => {
   sessionLost = fn;
 };
 
+/** Sent with every request: the language the server answers in, and whether this phone agreed (Profil) to keep its photos and recordings on the server. */
+export const baseHeaders = (): Record<string, string> => ({ 'x-lang': lang, ...(getPrefs().shareData ? { 'x-keep-media': '1' } : {}) });
+
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${API}${path}`, {
     method,
-    headers: body === undefined ? { 'x-lang': lang } : { 'content-type': 'application/json', 'x-lang': lang },
+    headers: body === undefined ? baseHeaders() : { 'content-type': 'application/json', ...baseHeaders() },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (res.status === 204) return undefined as T;
@@ -216,7 +220,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 }
 
 async function upload<T>(path: string, form: FormData): Promise<T> {
-  const res = await fetch(`${API}${path}`, { method: 'POST', body: form, headers: { 'x-lang': lang } });
+  const res = await fetch(`${API}${path}`, { method: 'POST', body: form, headers: baseHeaders() });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     if (res.status === 401) sessionLost?.();
@@ -238,6 +242,8 @@ export const api = {
   /** Signed in: join the farm of an invite code (after the person saw its name) and switch to it. */
   joinFarm: (code: string) => call<Me>('POST', '/farm/join', { code }),
   changePin: (pin: string, newPin: string) => call<void>('PUT', '/auth/pin', { pin, newPin }),
+  /** Profil → Hapus akun: the account, and every farm it is the only owner of. */
+  deleteAccount: (pin: string) => call<void>('POST', '/auth/delete', { pin }),
   members: () => call<{ members: Member[] }>('GET', '/farm/members'),
   createInvite: (role: Role) => call<{ code: string; role: Role; expiresInDays: number }>('POST', '/farm/invites', { role }),
   removeMember: (userId: number) => call<void>('DELETE', `/farm/members/${userId}`),

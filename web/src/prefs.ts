@@ -6,7 +6,7 @@ export interface Prefs {
   textSize: TextSize;
   /** Owners who always want charts and numbers open. */
   techOpen: boolean;
-  /** Opt-in: photos, videos and saved numbers may be used to improve the AI. */
+  /** Opt-in (Profil): the server keeps this phone's photos and recordings after the AI read them, to measure how well it reads (api.ts baseHeaders). */
   shareData: boolean;
   /** Light, dark, or follow the phone's own setting; chosen in Profil → Tampilan. */
   theme: Theme;

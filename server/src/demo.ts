@@ -35,6 +35,43 @@ function dayStart(date: string, tz: string): number {
   return guess - (wall - guess);
 }
 
+/** Removes a farm and everything in it. People stay, minus their membership. */
+export function eraseFarm(db: Db, farmId: number) {
+  const ponds = `(select id from ponds where farm_id = ${Number(farmId)})`;
+  db.prepare(`delete from case_events where case_id in (select id from cases where farm_id = ?)`).run(farmId);
+  db.prepare('delete from pond_patterns where farm_id = ?').run(farmId);
+  db.prepare('delete from cases where farm_id = ?').run(farmId);
+  db.prepare('delete from device_links where farm_id = ?').run(farmId);
+  db.exec(`delete from logs where pond_id in ${ponds}`);
+  db.exec(`delete from batches where pond_id in ${ponds}`);
+  db.prepare('delete from ponds where farm_id = ?').run(farmId);
+  db.prepare('delete from briefings where farm_id = ?').run(farmId);
+  db.prepare('delete from outages where farm_id = ?').run(farmId);
+  db.prepare('delete from ai_usage where farm_id = ?').run(farmId);
+  db.prepare('delete from invites where farm_id = ?').run(farmId);
+  db.prepare('delete from sessions where farm_id = ?').run(farmId);
+  db.prepare('delete from memberships where farm_id = ?').run(farmId);
+  db.prepare('update support_tickets set farm_id = null where farm_id = ?').run(farmId);
+  db.prepare('delete from demo_farms where farm_id = ?').run(farmId);
+  db.prepare('delete from farms where id = ?').run(farmId);
+}
+
+/** Removes a person (a demo visitor, or Profil → Hapus akun); anything of theirs left on other farms loses its maker. */
+export function eraseUser(db: Db, userId: number) {
+  db.prepare('update logs set created_by = null where created_by = ?').run(userId);
+  db.prepare('update case_events set user_id = null where user_id = ?').run(userId);
+  db.prepare('update cases set closed_by = null where closed_by = ?').run(userId);
+  db.prepare('update outages set started_by = null where started_by = ?').run(userId);
+  db.prepare('update outages set ended_by = null where ended_by = ?').run(userId);
+  db.prepare('update invites set used_by = null where used_by = ?').run(userId);
+  db.prepare('delete from invites where created_by = ?').run(userId);
+  db.prepare('update support_tickets set user_id = null where user_id = ?').run(userId);
+  db.prepare('delete from ai_usage where user_id = ?').run(userId);
+  db.prepare('delete from memberships where user_id = ?').run(userId);
+  db.prepare('delete from sessions where user_id = ?').run(userId);
+  db.prepare('delete from users where id = ?').run(userId);
+}
+
 export function demoStore(db: Db) {
   db.exec(`
     -- Demo farms: the template "Coba demo" copies, and the copies themselves (deleted after expires_at).
@@ -62,40 +99,8 @@ export function demoStore(db: Db) {
     }
   };
 
-  /** Removes a farm and everything in it. People stay, minus their membership. */
-  function deleteFarm(farmId: number) {
-    const ponds = `(select id from ponds where farm_id = ${Number(farmId)})`;
-    db.prepare(`delete from case_events where case_id in (select id from cases where farm_id = ?)`).run(farmId);
-    db.prepare('delete from pond_patterns where farm_id = ?').run(farmId);
-    db.prepare('delete from cases where farm_id = ?').run(farmId);
-    db.prepare('delete from device_links where farm_id = ?').run(farmId);
-    db.exec(`delete from logs where pond_id in ${ponds}`);
-    db.exec(`delete from batches where pond_id in ${ponds}`);
-    db.prepare('delete from ponds where farm_id = ?').run(farmId);
-    db.prepare('delete from briefings where farm_id = ?').run(farmId);
-    db.prepare('delete from outages where farm_id = ?').run(farmId);
-    db.prepare('delete from ai_usage where farm_id = ?').run(farmId);
-    db.prepare('delete from invites where farm_id = ?').run(farmId);
-    db.prepare('delete from sessions where farm_id = ?').run(farmId);
-    db.prepare('delete from memberships where farm_id = ?').run(farmId);
-    db.prepare('update support_tickets set farm_id = null where farm_id = ?').run(farmId);
-    db.prepare('delete from demo_farms where farm_id = ?').run(farmId);
-    db.prepare('delete from farms where id = ?').run(farmId);
-  }
-
-  /** Removes a demo person; anything of theirs left on other farms loses its maker. */
-  function deleteUser(userId: number) {
-    db.prepare('update logs set created_by = null where created_by = ?').run(userId);
-    db.prepare('update case_events set user_id = null where user_id = ?').run(userId);
-    db.prepare('update cases set closed_by = null where closed_by = ?').run(userId);
-    db.prepare('update invites set used_by = null where used_by = ?').run(userId);
-    db.prepare('delete from invites where created_by = ?').run(userId);
-    db.prepare('update support_tickets set user_id = null where user_id = ?').run(userId);
-    db.prepare('delete from ai_usage where user_id = ?').run(userId);
-    db.prepare('delete from memberships where user_id = ?').run(userId);
-    db.prepare('delete from sessions where user_id = ?').run(userId);
-    db.prepare('delete from users where id = ?').run(userId);
-  }
+  const deleteFarm = (farmId: number) => eraseFarm(db, farmId);
+  const deleteUser = (userId: number) => eraseUser(db, userId);
 
   return {
     /** The ready template: its farm, owner and the farm day its data is anchored to. */

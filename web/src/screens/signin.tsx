@@ -3,7 +3,7 @@ import { api, API, ApiError, type Me, type Role } from '../api.ts';
 import { fmtClock } from '../labels.ts';
 import { Field, fmtPhone, Glyph, GLYPH, Icon, LangSwitch, Notice, PinBoxes, roleLabel } from '../ui.tsx';
 import type { SignInMode } from './welcome.tsx';
-import { lang, t } from '../i18n.ts';
+import { lang, siteInAppLanguage, t } from '../i18n.ts';
 
 type Mode = SignInMode;
 
@@ -415,6 +415,21 @@ export function SignIn({
               )}
             </button>
           )
+        )}
+        {showForm && mode !== 'login' && !taken && (
+          <div class="label ink2 center" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <span>{t('Data dikelola PT Synt Tekno Multikarya.', 'Data is handled by PT Synt Tekno Multikarya.')}</span>
+            <a
+              class="inline-link"
+              href="https://eel.synt.fun/privasi/"
+              target="_blank"
+              rel="noopener"
+              onClick={siteInAppLanguage}
+              style={{ minHeight: 44, display: 'inline-flex', alignItems: 'center', textDecoration: 'underline', textUnderlineOffset: 3 }}
+            >
+              {t('Baca kebijakan privasi', 'Read the privacy policy')}
+            </a>
+          </div>
         )}
 
         {join && inviteBad && (
