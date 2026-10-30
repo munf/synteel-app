@@ -189,10 +189,13 @@ const normTime = (s: unknown) => {
 
 /** Checks one pond's note from the agent; null when it must be replaced by the rules note. */
 export function guardPattern(p: PatternPond, proposal: { text?: unknown; check_time?: unknown }): { text: string; checkTime: string | null; checkSpread: number | null } | null {
-  const text = degrees(String(proposal.text ?? '').trim().replace(/\s+/g, ' '));
+  const raw = degrees(String(proposal.text ?? '').trim().replace(/\s+/g, ' '));
+  const sentences = raw.split(/(?<=[.!?])\s+/).filter((x) => x.trim());
+  if (sentences.length > 3) return null;
+  // A third sentence in the middle is filler (usually "not enough readings yet for midday"): the pattern and
+  // the time to measure, first and last, are what the farmer needs.
+  const text = (sentences.length === 3 ? [sentences[0], sentences[2]] : sentences).join(' ');
   if (text.length < 15 || text.length > 300) return null;
-  const sentences = text.split(/(?<=[.!?])\s+/).filter((x) => x.trim());
-  if (sentences.length > 2) return null;
   // Decision support about temperature only: no medicine, no diagnosis, never an oxygen figure.
   if (unsafeText(text) || /oksigen|oxygen|\bDO\b|mg\/l/i.test(text)) return null;
   if (!numbersOk(text, allowedNumbers(p))) return null;
@@ -209,7 +212,7 @@ const SYSTEM = (input: PatternInput) =>
     'Langkah: get_ponds, lalu get_pond_errors untuk tiap kolam yang diminta, lalu submit_patterns.',
     'Aturan:',
     '- Satu atau dua kalimat per kolam. Kalimat pertama: pola selisih menurut bagian hari (mean_miss_c positif = kolam lebih panas dari perkiraan) dan kemungkinan sebabnya dari profil kolam (matahari langsung, atap, tempat terbuka, kedalaman). Pakai "kemungkinan", bukan kepastian.',
-    '- Bagian hari dengan mean_miss_c null belum punya cukup ukuran: jangan menyimpulkan apa pun tentang bagian itu.',
+    '- Bagian hari dengan mean_miss_c null belum punya cukup ukuran: jangan menyimpulkan apa pun tentang bagian itu, dan tidak perlu menyebutnya.',
     '- Kalimat kedua: jam ukur yang disarankan, pilih dari suggested_times (yang pertama paling berguna). Isi check_time dengan jam itu.',
     '- Jangan mengarang angka: pakai hanya angka dari alat, dibulatkan seperti di alat. Bila selisih kecil di semua bagian hari, katakan tidak ada pola jam tertentu.',
     '- Ini soal suhu air saja: jangan menyebut oksigen, penyakit, obat atau dosis.',

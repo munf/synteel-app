@@ -238,7 +238,10 @@ test('pattern guard: invented numbers, wrong times, oxygen and long texts are re
   assert.equal(guardPattern(p, { text: 'Kolam B selalu 3,7 °C lebih panas dari perkiraan di siang hari.', check_time: null }), null);
   assert.equal(guardPattern(p, { text: 'Kolam B lebih panas di siang hari. Ukur sekitar jam 03.00.', check_time: '03:00' }), null);
   assert.equal(guardPattern(p, { text: 'Kolam B lebih panas di siang hari, oksigen air turun.', check_time: null }), null);
-  assert.equal(guardPattern(p, { text: 'Satu. Dua kalimat. Tiga kalimat terlalu banyak.', check_time: null }), null);
+  assert.equal(guardPattern(p, { text: 'Satu kalimat. Dua kalimat. Tiga kalimat. Empat terlalu banyak.', check_time: null }), null);
+  // Three sentences: the middle one (filler) is dropped, the pattern and the time to measure stay.
+  const three = guardPattern(p, { text: `Kolam B biasanya meleset ±${typical} °C. Siang dan malam belum cukup ukuran. Ukur sekitar jam ${time.replace(':', '.')}.`, check_time: time });
+  assert.equal(three?.text, `Kolam B biasanya meleset ±${typical} °C. Ukur sekitar jam ${time.replace(':', '.')}.`);
   assert.equal(guardPattern(p, { text: 'Beri obat antibiotik ke Kolam B setiap siang hari.', check_time: null }), null);
   assert.ok(numbersOk('jam 13.00, 1,5 °C', [13, 0, 1.5]));
   // A time of day with fewer than 3 readings gives the agent no number to use.
