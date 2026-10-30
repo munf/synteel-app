@@ -1,6 +1,7 @@
 // Foto buku catatan: photos of a handwritten notebook page → rows the farmer checks → saved as history.
 // Each page is one AI read. Nothing is saved until the farmer taps Simpan; cells the AI could not read,
 // or that cannot be right, stay empty and are marked "Cek lagi" until the farmer fills or clears them.
+// As in the voice round, the clear rows can be saved first: rows still marked "Cek lagi" wait here.
 import { useRef, useState } from 'preact/hooks';
 import { api, ApiError, type LogData, type NotebookCheck, type NotebookField, type NotebookPage, type NotebookRow, type NotebookSaveResult, type NotebookSaveRow, type NotebookValueField, type PondSummary } from '../api.ts';
 import type { Go } from '../app.tsx';
@@ -78,7 +79,10 @@ interface Session {
   pages: Page[];
   rows: Row[];
   recorded: Record<string, number[]>;
-  saved: (NotebookSaveResult & { rows: Row[] }) | null;
+  /** What earlier saves of this import did: the clear rows go first while rows to check wait. */
+  done: (NotebookSaveResult & { rows: Row[] }) | null;
+  /** Nothing is left to check: the import is over. */
+  finished: boolean;
 }
 
 let session: Session | null = null;
@@ -130,7 +134,7 @@ const isRecorded = (row: Row, recorded: Session['recorded']) => !!row.date && ro
 export function Notebook({ ponds, pondId, onSaved, go }: { ponds: PondSummary[]; pondId?: number; onSaved: () => void; go: Go }) {
   // The import left half-checked comes back as it was; after a save, or from another pond, a new one starts.
   const [s, setS] = useState<Session>(() => {
-    if (!session || session.saved || (session.rows.length === 0 && session.pondId !== pondId)) session = { pondId, pages: [], rows: [], recorded: {}, saved: null };
+    if (!session || session.finished || (session.rows.length === 0 && !session.done && session.pondId !== pondId)) session = { pondId, pages: [], rows: [], recorded: {}, done: null, finished: false };
     return session;
   });
   const [reading, setReading] = useState<Progress | true | null>(null);
@@ -180,20 +184,38 @@ export function Notebook({ ponds, pondId, onSaved, go }: { ponds: PondSummary[];
   const openCount = live.reduce((n, r) => n + r.open.length, 0);
   const problems = live.map((r) => ({ r, ...readRow(r) }));
   const badRow = problems.find((p) => p.error);
-  const empty = problems.filter((p) => !p.error && !p.data.readings && !p.data.mortality && !p.data.note);
-  const toSave = problems.filter((p) => !p.error && !empty.includes(p) && !(isRecorded(p.r, s.recorded) && !p.r.also));
-  const skipping = live.filter((r) => isRecorded(r, s.recorded) && !r.also);
-  const ready = openCount === 0 && !badRow && toSave.length > 0;
+  // A row with a cell still marked "Cek lagi", or a number that cannot be right, waits; the rest is clear.
+  const waiting = problems.filter((p) => p.r.open.length > 0 || p.error);
+  const clear = problems.filter((p) => !waiting.includes(p));
+  const empty = clear.filter((p) => !p.data.readings && !p.data.mortality && !p.data.note);
+  const skipping = clear.filter((p) => !empty.includes(p) && isRecorded(p.r, s.recorded) && !p.r.also).map((p) => p.r);
+  const toSave = clear.filter((p) => !empty.includes(p) && !skipping.includes(p.r));
+  const savedN = s.done?.saved.length ?? 0;
+  const finish = () => {
+    update({ ...session!, finished: true });
+    window.scrollTo(0, 0);
+  };
 
   async function save() {
     setSaving(true);
     setSaveError('');
     try {
       const rows: NotebookSaveRow[] = toSave.map(({ r, data }) => ({ key: r.key, pondId: r.pondId!, date: r.date!, time: r.time, data, alsoIfRecorded: r.also }));
-      const result = await api.saveNotebook(rows);
-      s.pages.forEach((p) => URL.revokeObjectURL(p.url));
+      const result = await api.saveNotebook(rows, s.done?.saved.map((x) => x.logId));
       const skippedHere = skipping.map((r) => ({ key: r.key, reason: 'recorded' as const }));
-      update({ ...s, pages: [], saved: { saved: result.saved, skipped: [...skippedHere, ...result.skipped], rows: live } });
+      // Only the rows to check stay; a page with none of them left goes too.
+      const left = new Set(waiting.map((p) => p.r.key));
+      const rows2 = s.rows.filter((r) => left.has(r.key));
+      const pages = s.pages.filter((p) => rows2.some((r) => r.page === p.n));
+      s.pages.filter((p) => !pages.includes(p)).forEach((p) => URL.revokeObjectURL(p.url));
+      const prev = s.done ?? { saved: [], skipped: [], rows: [] };
+      update({
+        ...s,
+        pages,
+        rows: rows2,
+        done: { saved: [...prev.saved, ...result.saved], skipped: [...prev.skipped, ...skippedHere, ...result.skipped], rows: [...prev.rows, ...clear.map((p) => p.r)] },
+        finished: rows2.length === 0,
+      });
       onSaved();
       window.scrollTo(0, 0);
     } catch (err) {
@@ -210,8 +232,8 @@ export function Notebook({ ponds, pondId, onSaved, go }: { ponds: PondSummary[];
         <Icon name="back" />
       </button>
       <div class="grow stack-xs" style={{ gap: 0 }}>
-        <h1>{s.rows.length && !s.saved ? t('Cek buku catatan', 'Check the notebook') : t('Foto buku catatan', 'Notebook photo')}</h1>
-        {s.rows.length > 0 && !s.saved && (
+        <h1>{(s.rows.length || s.done) && !s.finished ? t('Cek buku catatan', 'Check the notebook') : t('Foto buku catatan', 'Notebook photo')}</h1>
+        {s.rows.length > 0 && !s.finished && (
           <span class="meta num">
             {t(`${s.pages.length} halaman · ${live.length} baris`, `${s.pages.length} ${s.pages.length === 1 ? 'page' : 'pages'} · ${live.length} ${live.length === 1 ? 'row' : 'rows'}`)}
           </span>
@@ -247,8 +269,8 @@ export function Notebook({ ponds, pondId, onSaved, go }: { ponds: PondSummary[];
   );
 
   // ---------- saved ----------
-  if (s.saved) {
-    const done = s.saved;
+  if (s.finished && s.done) {
+    const done = s.done;
     const byPond = new Map<number, { n: number; oldest: string }>();
     for (const sv of done.saved) {
       const r = done.rows.find((x) => x.key === sv.key);
@@ -293,7 +315,7 @@ export function Notebook({ ponds, pondId, onSaved, go }: { ponds: PondSummary[];
             type="button"
             class="btn secondary"
             onClick={() => {
-              update({ pondId: s.pondId, pages: [], rows: [], recorded: {}, saved: null });
+              update({ pondId: s.pondId, pages: [], rows: [], recorded: {}, done: null, finished: false });
             }}
           >
             <Icon name="book" /> {t('Foto halaman lain', 'Take another page')}
@@ -304,7 +326,7 @@ export function Notebook({ ponds, pondId, onSaved, go }: { ponds: PondSummary[];
   }
 
   // ---------- start ----------
-  if (s.rows.length === 0 && s.pages.length === 0) {
+  if (s.rows.length === 0 && s.pages.length === 0 && !s.done) {
     return (
       <div class="screen">
         {header}
@@ -349,7 +371,7 @@ export function Notebook({ ponds, pondId, onSaved, go }: { ponds: PondSummary[];
   }
 
   // ---------- review ----------
-  const firstOpenKey = live.find((r) => r.open.length)?.key;
+  const firstOpenKey = waiting[0]?.r.key;
   const mock = s.pages.some((p) => p.mode === 'mock');
   return (
     <div class="screen">
@@ -362,8 +384,25 @@ export function Notebook({ ponds, pondId, onSaved, go }: { ponds: PondSummary[];
       )}
 
       <section class="card" style={{ gap: 12 }}>
+        {s.done && (
+          <div class="note ok" role="status" style={{ alignItems: 'center' }}>
+            <Icon name="check" />
+            <span class="stack-xs">
+              <span class="num" style={{ fontSize: '1rem' }}>{t(`${savedN} catatan tersimpan dari buku.`, `${savedN} ${savedN === 1 ? 'record' : 'records'} saved from the notebook.`)}</span>
+              {s.done.skipped.length > 0 && (
+                <span class="label ink2 num">
+                  {t(`${s.done.skipped.length} baris dilewati: sudah ada catatan di tanggal itu.`, `${s.done.skipped.length} ${s.done.skipped.length === 1 ? 'row' : 'rows'} skipped: already recorded that day.`)}
+                </span>
+              )}
+            </span>
+          </div>
+        )}
         <div class="stack-xs">
-          <h2 class="num">{t(`AI menyalin ${live.length} baris`, `AI copied ${live.length} ${live.length === 1 ? 'row' : 'rows'}`)}</h2>
+          <h2 class="num">
+            {s.done
+              ? t(`${live.length} baris belum disimpan`, `${live.length} ${live.length === 1 ? 'row' : 'rows'} not saved yet`)
+              : t(`AI menyalin ${live.length} baris`, `AI copied ${live.length} ${live.length === 1 ? 'row' : 'rows'}`)}
+          </h2>
           <span class="label ink2 num">
             {openCount
               ? t(`${openCount} sel perlu dicek lagi. Sel itu kosong sampai diisi.`, `${openCount} ${openCount === 1 ? 'cell needs' : 'cells need'} checking. ${openCount === 1 ? 'It stays' : 'They stay'} empty until filled.`)
@@ -371,6 +410,14 @@ export function Notebook({ ponds, pondId, onSaved, go }: { ponds: PondSummary[];
           </span>
         </div>
         <span class="label ink2">{t('Bandingkan dengan buku. Angka bisa diubah, baris bisa dihapus.', 'Compare with the notebook. Numbers can be changed, rows can be deleted.')}</span>
+        {waiting.length > 0 && toSave.length > 0 && !s.done && (
+          <span class="label ink2 num">
+            {t(
+              `${waiting.length} baris yang perlu dicek belum disimpan, tetap di sini sampai dicek.`,
+              `${waiting.length} ${waiting.length === 1 ? 'row' : 'rows'} to check ${waiting.length === 1 ? 'is' : 'are'} not saved yet and ${waiting.length === 1 ? 'stays' : 'stay'} here until checked.`,
+            )}
+          </span>
+        )}
         {status}
         {errorNote}
         <button type="button" class="btn secondary" disabled={!!reading} onClick={() => camera.current?.click()}>
@@ -404,9 +451,23 @@ export function Notebook({ ponds, pondId, onSaved, go }: { ponds: PondSummary[];
           <span class="label ink2 num">{t(`${skipping.length} baris dilewati: sudah ada catatan di tanggal itu.`, `${skipping.length} ${skipping.length === 1 ? 'row' : 'rows'} skipped: already recorded that day.`)}</span>
         ) : null}
         {saveError && <span class="error label">{saveError}</span>}
-        <button type="button" class="btn primary num" disabled={!ready || saving} onClick={save}>
-          {saving ? t('Menyimpan…', 'Saving…') : t(`Simpan ${toSave.length} baris`, `Save ${toSave.length} ${toSave.length === 1 ? 'row' : 'rows'}`)}
-        </button>
+        {s.done && toSave.length === 0 && waiting.length === 0 ? (
+          <button type="button" class="btn primary" onClick={finish}>
+            {t('Selesai', 'Done')}
+          </button>
+        ) : (
+          (toSave.length > 0 || waiting.length === 0) && (
+            <button type="button" class="btn primary num" disabled={toSave.length === 0 || saving} onClick={save}>
+              {saving
+                ? t('Menyimpan…', 'Saving…')
+                : s.done
+                  ? t(`Simpan ${toSave.length} lagi`, `Save ${toSave.length} more`)
+                  : waiting.length
+                    ? t(`Simpan ${toSave.length} yang jelas`, toSave.length === 1 ? 'Save the clear one' : `Save the ${toSave.length} clear ones`)
+                    : t(`Simpan ${toSave.length} baris`, `Save ${toSave.length} ${toSave.length === 1 ? 'row' : 'rows'}`)}
+            </button>
+          )
+        )}
       </ActionBar>
     </div>
   );

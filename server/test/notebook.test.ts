@@ -222,3 +222,44 @@ test('saving checks every row first: a future date or a bad value saves nothing'
   assert.equal(now.status, 201);
   assert.equal((await s.owner('GET', `/ponds/${a.id}/history`)).json.logs[0].loggedAt, '2026-10-29T03:00:00.000Z');
 });
+
+test('the clear rows can be saved first; a later save of the same import is not "already recorded" by them', async () => {
+  const s = await farmWithWorker('2026-10-29T03:00:00Z');
+  const [a, b] = s.ponds;
+  // Kolam B has a record of its own on 21 October.
+  await s.owner('POST', `/ponds/${b.id}/logs`, { readings: { temperature: 28 }, loggedAt: '2026-10-21T02:00:00Z' });
+  // First save: only the morning row; the afternoon row of the same pond and day waited for a check.
+  const morning = { key: 'r1', pondId: a.id, date: '2026-10-20', time: '07:00', data: { readings: { temperature: 27.5 } } };
+  const first = await s.worker('POST', '/notebook/save', { rows: [morning] });
+  assert.equal(first.status, 201);
+  const firstIds = first.json.saved.map((x: { logId: number }) => x.logId);
+  const afternoon = { key: 'r2', pondId: a.id, date: '2026-10-20', time: '17:00', data: { readings: { temperature: 28.6, ph: 7.4 } } };
+  const ownB = { key: 'r3', pondId: b.id, date: '2026-10-21', time: '07:00', data: { readings: { ph: 7.1 } } };
+  // The same morning row again, sent by mistake, is a repeat; the pond's own record still skips Kolam B.
+  const second = await s.worker('POST', '/notebook/save', { rows: [afternoon, { ...morning, key: 'r1b' }, ownB], savedBefore: firstIds });
+  assert.equal(second.status, 201);
+  assert.deepEqual(second.json.saved.map((x: { key: string }) => x.key), ['r2']);
+  assert.deepEqual(second.json.skipped, [
+    { key: 'r1b', reason: 'repeat' },
+    { key: 'r3', reason: 'recorded' },
+  ]);
+  // Without savedBefore the afternoon row counts as already recorded that day.
+  const third = await s.worker('POST', '/notebook/save', { rows: [{ ...afternoon, key: 'r4', data: { readings: { tds: 120 } } }] });
+  assert.deepEqual(third.json.skipped, [{ key: 'r4', reason: 'recorded' }]);
+  // savedBefore only lifts logs saved from a notebook: a typed record still counts.
+  const typed = (await s.owner('GET', `/ponds/${b.id}/history?days=30`)).json.logs[0].id;
+  const fourth = await s.worker('POST', '/notebook/save', { rows: [{ ...ownB, key: 'r5' }], savedBefore: [typed, 99999, 'x'] });
+  assert.deepEqual(fourth.json.skipped, [{ key: 'r5', reason: 'recorded' }]);
+});
+
+test('a later save of the same import still checks every row it receives', async () => {
+  const s = await farmWithWorker('2026-10-29T03:00:00Z');
+  const [a] = s.ponds;
+  const good = { key: 'r1', pondId: a.id, date: '2026-10-20', time: null, data: { readings: { ph: 7.2 } } };
+  const first = await s.owner('POST', '/notebook/save', { rows: [good] });
+  const savedBefore = first.json.saved.map((x: { logId: number }) => x.logId);
+  const after = { ...good, key: 'r2', data: { readings: { temperature: 28 } } };
+  for (const bad of [{ ...after, date: '2026-10-30' }, { ...after, data: { readings: { ph: 74 } } }, { ...after, date: '20 Okt' }, { ...after, pondId: 999 }])
+    assert.equal((await s.owner('POST', '/notebook/save', { rows: [after, bad], savedBefore })).status, 400);
+  assert.equal((await s.owner('GET', `/ponds/${a.id}/history?days=30`)).json.logs.length, 1);
+});

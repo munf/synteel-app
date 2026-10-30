@@ -16,3 +16,6 @@
 .case-links .link-row + .link-row { border-top: 1px solid var(--line); }
 .case-card .chips .chip svg { flex: none; }
 .case-q { font-size: 1rem; }
+.case-brief { gap: 12px; }
+.case-brief-sum { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.case-asked { display: flex; align-items: center; gap: 8px; min-height: 44px; color: var(--ink); }

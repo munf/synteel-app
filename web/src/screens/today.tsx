@@ -5,7 +5,7 @@ import { fmtAgo, fmtClock, fmtNum, fmtTemp, greeting, phaseLabel, readingWord } 
 import { EmptyState, Icon, initialOf, PondThumb, pondMeta, Shape, SimChip, StatusPill, type IconName } from '../ui.tsx';
 import { alarmReason, sensorCritical, silenceSensorAlarm, useSensorRinging } from '../sensor-alarm.ts';
 import { DueRechecks, useRechecks } from './recheck.tsx';
-import { CaseCard, useCases } from './case.tsx';
+import { CaseBrief, useCases } from './case.tsx';
 import { LOCALE, t } from '../i18n.ts';
 import './today.css';
 
@@ -439,7 +439,7 @@ export function Today({
       <DueRechecks due={rechecks.due} update={rechecks.update} go={go} />
 
       {cases.list.map((c) => (
-        <CaseCard key={c.id} c={c} go={go} onChanged={cases.replace} />
+        <CaseBrief key={c.id} c={c} go={go} />
       ))}
 
       {soon && rechecks.due.length === 0 && (

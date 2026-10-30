@@ -240,7 +240,8 @@ export const api = {
   /** `days`: how far back (14 by default; older notebook pages need more). */
   history: (pondId: number, days?: number) => call<{ logs: HistoryLog[]; days: number }>('GET', `/ponds/${pondId}/history${days ? `?days=${days}` : ''}`),
   /** Rows the farmer checked from notebook photos. Skips a pond+date that already has a record unless asked. */
-  saveNotebook: (rows: NotebookSaveRow[]) => call<NotebookSaveResult>('POST', '/notebook/save', { rows }),
+  /** `savedBefore`: log ids an earlier save of the same import made (they do not make its other rows "already recorded"). */
+  saveNotebook: (rows: NotebookSaveRow[], savedBefore: number[] = []) => call<NotebookSaveResult>('POST', '/notebook/save', { rows, savedBefore }),
   editLog: (logId: number, data: LogData) => call<{ log: HistoryLog }>('PUT', `/logs/${logId}`, data),
   moveLog: (logId: number, pondId: number) => call<{ log: HistoryLog }>('POST', `/logs/${logId}/move`, { pondId }),
   deleteLog: (logId: number) => call<void>('DELETE', `/logs/${logId}`),

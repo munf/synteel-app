@@ -1,4 +1,4 @@
-// Dead-eel case card (cases.ts on the server): on Beranda and on the pond page.
+// Dead-eel case (cases.ts on the server): the full card on the pond page, a short one (CaseBrief) on Beranda.
 // Facts and decisions come from the rules (dead per day, rising compared with yesterday, re-check
 // unanswered, close after 2 days without deaths); the case agent adds a short summary, what to
 // watch, at most 2 questions and extra checks. Sending to the owner is always a manual WhatsApp tap.
@@ -286,6 +286,70 @@ export function CaseCard({ c, go, onChanged, onPond = false }: { c: CaseView; go
       </div>
       {error && <p class="error">{error}</p>}
       <span class="label ink2">{t('Saran, bukan diagnosis. Aplikasi ini tidak memberi obat atau dosis.', 'Advice, not a diagnosis. This app does not give medicine or doses.')}</span>
+    </section>
+  );
+}
+
+/** "Hari ini 8 ekor, kemarin 6": the last two days of the case in one line. */
+function stateLine(c: CaseView) {
+  const [prev, last] = c.days.length > 1 ? c.days.slice(-2) : [null, c.days[0]];
+  const n = (d: CaseView['days'][number]) => (d.dead > 0 || d.recorded ? eels(d.dead) : t('belum dicatat', 'not recorded'));
+  // A day and its number stay on one line.
+  const first = `${last.label}\u00a0${n(last).replace(' ', '\u00a0')}`;
+  return prev ? `${first}, ${since(prev.label)}\u00a0${prev.dead > 0 || prev.recorded ? prev.dead : n(prev)}` : first;
+}
+
+/** The case on Beranda: only what is needed now. Questions, the days, what the AI looked at and the
+ *  check times are on the pond page (CaseCard with onPond). */
+export function CaseBrief({ c, go }: { c: CaseView; go: Go }) {
+  const trend = TREND[c.trend];
+  const asked = c.running ? 0 : c.openQuestions.length;
+  return (
+    <section class="card case-card case-brief" aria-label={t(`Kasus sidat mati ${c.pondName}`, `Dead eel case ${c.pondName}`)}>
+      <div class="row top">
+        <span class="icon-box bad">
+          <Icon name="dead" />
+        </span>
+        <div class="stack-xs grow">
+          <h2>{t(`Kasus sidat mati ${c.pondName}`, `Dead eel case, ${c.pondName}`)}</h2>
+          <span class="meta num">{stateLine(c)}</span>
+        </div>
+        <span class={`pill ${trend.tone}`}>
+          <Shape tone={trend.tone} />
+          {trend.word}
+        </span>
+      </div>
+
+      <div class="stack-xs">
+        <span class="label ink2">{c.running ? t('AI sedang membaca kasus…', 'The AI is reading the case…') : sourceLine(c.run)}</span>
+        <p class="case-brief-sum">{c.run.summary}</p>
+      </div>
+
+      {c.escalate && (
+        <div class="stack-xs">
+          <a class="btn danger" href={c.escalate.waUrl} target="_blank" rel="noopener">
+            <Icon name="chat" size={20} /> {t('Kirim ke pemilik', 'Send to the owner')}
+          </a>
+          <span class="label ink2">
+            {c.escalate.reasons.includes('recheck_missed') && c.recheck
+              ? t(`Cek ulang jam ${fmtClock(c.recheck.dueAt)} belum dijawab. `, `The ${fmtClock(c.recheck.dueAt)} re-check has no answer yet. `)
+              : ''}
+            {t('Pesan siap kirim lewat WhatsApp, tidak terkirim sendiri.', 'The WhatsApp message is ready; nothing is sent by itself.')}
+          </span>
+        </div>
+      )}
+
+      <div class="case-links">
+        {asked > 0 && (
+          <span class="case-asked label semi">
+            <Icon name="chat" size={18} />
+            {t(`${asked} pertanyaan menunggu jawaban`, `${asked} ${asked === 1 ? 'question is' : 'questions are'} waiting for an answer`)}
+          </span>
+        )}
+        <button type="button" class="link-row" onClick={() => go({ name: 'pond', id: c.pondId })}>
+          {t('Lihat kasus lengkap', 'See the full case')} <Icon name="next" size={20} />
+        </button>
+      </div>
     </section>
   );
 }

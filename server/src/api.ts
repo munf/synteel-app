@@ -1390,7 +1390,8 @@ export function createApi(
   // ---------- notebook import: photos of a handwritten notebook → rows the farmer checks ----------
 
   /** Ponds that already have a record (sensor readings aside) on each of these farm-local dates. */
-  function recordedOn(r: FarmRepo, dates: string[]): Record<string, number[]> {
+  /** Ponds with a record (not from a sensor) per farm day. `ignore`: logs saved earlier from the same import. */
+  function recordedOn(r: FarmRepo, dates: string[], ignore: Set<number> = new Set()): Record<string, number[]> {
     const out: Record<string, number[]> = {};
     const wanted = new Set(dates);
     if (!wanted.size) return out;
@@ -1398,7 +1399,7 @@ export function createApi(
     const first = [...wanted].sort()[0];
     const since = new Date(Date.parse(`${first}T00:00:00Z`) - DAY_MS).toISOString();
     for (const l of r.farmLogsSince(since)) {
-      if (l.source === 'sensor') continue;
+      if (l.source === 'sensor' || ignore.has(l.id)) continue;
       const day = localDate(new Date(l.loggedAt), tz);
       if (!wanted.has(day)) continue;
       const list = (out[day] ??= []);
@@ -1432,8 +1433,11 @@ export function createApi(
     return c.json({ page: result });
   });
 
-  // The rows the farmer checked and confirmed. A pond that already has a record that day is skipped
-  // unless the farmer chose to save the row too; the same row twice in one import is saved once.
+  // The rows the farmer checked and confirmed: all of them, or the clear ones first while rows marked
+  // "Cek lagi" wait. A pond that already has a record that day is skipped unless the farmer chose to
+  // save the row too; the same row twice in one import is saved once. `savedBefore` lists the logs an
+  // earlier save of the same import made: those do not count as "already recorded" (a page's morning
+  // row saved first does not skip its afternoon row), but an identical row is still a repeat.
   api.post('/notebook/save', async (c) => {
     const r = needFarm(c);
     const body = await c.req.json();
@@ -1456,9 +1460,12 @@ export function createApi(
       const data = parseLogData(row.data ?? {});
       return { key: String(row.key ?? i).slice(0, 40), pond, date, at, data, also: row.alsoIfRecorded === true };
     });
-    const recorded = recordedOn(r, checked.map((x: { date: string }) => x.date));
+    const before = (Array.isArray(body.savedBefore) ? body.savedBefore.slice(0, MAX_NOTEBOOK_ROWS) : [])
+      .map((id: unknown) => r.getLog(Number(id)))
+      .filter((l: LogRecord | null): l is LogRecord => !!l && l.source === 'notebook' && !l.deletedAt);
+    const recorded = recordedOn(r, checked.map((x: { date: string }) => x.date), new Set(before.map((l: LogRecord) => l.id)));
     const result: NotebookSaveResult = { saved: [], skipped: [] };
-    const seen = new Set<string>();
+    const seen = new Set<string>(before.map((l: LogRecord) => `${l.pondId}|${l.loggedAt}|${JSON.stringify(l.data)}`));
     for (const x of checked) {
       const same = `${x.pond.id}|${x.at}|${JSON.stringify(x.data)}`;
       if (seen.has(same)) {
