@@ -8,10 +8,7 @@ import { lang, siteInAppLanguage, t } from '../i18n.ts';
 /** 'reset': Lupa PIN, a code to the account's e-mail and a new PIN. */
 type Mode = SignInMode | 'reset';
 
-const SUBS: Record<'login' | 'register', string> = {
-  login: t('Nomor HP dan PIN 6 angka.', 'Phone number and 6-digit PIN.'),
-  register: t('Buat akun pemilik tambak, lalu siapkan tambak.', 'Create a farm owner account, then set up your farm.'),
-};
+const REGISTER_SUB = t('Buat akun pemilik tambak, lalu siapkan tambak.', 'Create a farm owner account, then set up your farm.');
 const BUTTONS: Record<Mode, string> = {
   login: t('Masuk', 'Sign in'),
   register: t('Daftar dan siapkan tambak', 'Create account and set up farm'),
@@ -375,7 +372,7 @@ export function SignIn({
                 );
               })}
             </div>
-            <h1 style={{ fontSize: '1rem', fontWeight: 400, color: 'var(--ink-2)' }}>{SUBS[mode]}</h1>
+            {mode === 'register' && <h1 style={{ fontSize: '1rem', fontWeight: 400, color: 'var(--ink-2)' }}>{REGISTER_SUB}</h1>}
           </div>
         )}
 
@@ -573,14 +570,13 @@ export function SignIn({
 
         {mode === 'login' && (
           <div class="label ink2 center" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <span>{t('Pekerja lupa PIN: minta pemilik tambak mengatur ulang.', 'Worker forgot the PIN: ask the farm owner to reset it.')}</span>
             <button
               type="button"
               class="inline-link"
               style={{ minHeight: 44, display: 'inline-flex', alignItems: 'center', textDecoration: 'underline', textUnderlineOffset: 3 }}
               onClick={emailOn ? () => choose('reset') : onHelp}
             >
-              {emailOn ? t('Pemilik lupa PIN? Buat PIN baru lewat email', 'Owner forgot the PIN? Set a new one by e-mail') : t('Pemilik lupa PIN? Hubungi bantuan', 'Owner forgot the PIN? Contact support')}
+              {t('Lupa PIN?', 'Forgot the PIN?')}
             </button>
           </div>
         )}
@@ -604,18 +600,12 @@ export function SignIn({
                 <span class="strong" style={{ lineHeight: 1.25 }}>
                   {t('Punya kode undangan', 'Have an invite code')}
                 </span>
-                <span class="label ink2" style={{ lineHeight: 1.25 }}>
-                  {t('Untuk pekerja', 'For workers')}
-                </span>
               </button>
               {demo && (
                 <button type="button" style={TILE} disabled={busy} onClick={() => run(api.demo)}>
                   <Glyph d={GLYPH.play} />
                   <span class="strong" style={{ lineHeight: 1.25 }}>
                     {t('Coba demo', 'Try the demo')}
-                  </span>
-                  <span class="label ink2" style={{ lineHeight: 1.25 }}>
-                    {t('Tambak contoh sendiri, tanpa akun', 'Your own sample farm, no account')}
                   </span>
                 </button>
               )}
