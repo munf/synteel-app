@@ -50,7 +50,7 @@
   --pin-filled: #5e7bb0;
   color-scheme: light;
   font-family: 'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', system-ui, sans-serif;
-  font-size: 16px; /* "Normal" by default; Profil switches to Kecil, Besar or Sangat besar */
+  font-size: 14px; /* "Kecil" by default; Profil switches to Normal, Besar or Sangat besar */
   line-height: 1.5;
   color: var(--ink);
 }
