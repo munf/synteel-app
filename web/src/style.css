@@ -96,8 +96,11 @@
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--ink); -webkit-tap-highlight-color: transparent; }
+/* text-wrap: pretty keeps a single word from sitting alone on the last line of a card or sentence. */
+body { margin: 0; background: var(--bg); color: var(--ink); -webkit-tap-highlight-color: transparent; text-wrap: pretty; }
 h1, h2, h3 { margin: 0; line-height: 1.25; text-wrap: balance; }
+/* Short captions in narrow tiles: pretty can still leave one word alone, balance cannot. */
+.meta, .label, .field-hint { text-wrap: balance; }
 h1 { font-size: 1.5rem; font-weight: 800; }
 h2 { font-size: 1.125rem; font-weight: 800; }
 h3 { font-size: 1rem; font-weight: 800; }
