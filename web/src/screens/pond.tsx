@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'preact/hooks';
 import { StepList, useSteps } from '../steps.tsx';
 import { CaseCard, ClosedCases, useCases } from './case.tsx';
-import { api, ApiError, type Limits, type Log, type NowcastState, type PondProfile, type PondSummary, type Role } from '../api.ts';
+import { api, ApiError, type Limits, type Log, type Nowcast, type NowcastState, type PondPhotoDraft, type PondProfile, type PondSummary, type PondTemperature, type Role } from '../api.ts';
+import { applyDraft, errorWords, PondPhoto, profileBody, ProfileFields, profileLine, profileOf } from '../pondprofile.tsx';
 import type { Go } from '../app.tsx';
-import { aerationLabel, fmtAgo, fmtNum, fmtTemp, fmtTime, phaseLabel, readingWord, settingLabel, sourceLabel, summarizeLog } from '../labels.ts';
+import { aerationLabel, fmtAgo, fmtNum, fmtTemp, fmtTime, phaseLabel, readingWord, sourceLabel, summarizeLog } from '../labels.ts';
 import { usePrefs } from '../prefs.ts';
-import { ActionBar, Icon, kindLabel, Notice, Shape, SimChip, Soon, StatusPill, tankPath, toneOf, type Tone } from '../ui.tsx';
+import { ActionBar, Icon, kindLabel, Notice, Shape, SimChip, StatusPill, tankPath, toneOf, type Tone } from '../ui.tsx';
 import { isEn, LOCALE, t } from '../i18n.ts';
 import './pond.css';
 
@@ -383,6 +384,129 @@ function Nicknames({ pond, role, onSaved }: { pond: PondSummary; role?: Role | n
   );
 }
 
+/** "13:00" → "13.00" in Indonesian. */
+const hourText = (hhmm: string) => (isEn ? hhmm : hhmm.replace(':', '.'));
+
+/**
+ * Water temperature: the estimate now, how far off it usually is for this pond (from its own
+ * readings), what it learned from, and the weekly pattern note with an optional extra reading time.
+ */
+function WaterTempCard({ pond, nc, go }: { pond: PondSummary; nc: Nowcast | undefined; go: Go }) {
+  const [data, setData] = useState<PondTemperature | null>(null);
+  const [asking, setAsking] = useState(false);
+  const [error, setError] = useState('');
+  const key = `${pond.id}|${pond.lastLogAt}|${profileLine(pond)}`;
+  useEffect(() => {
+    api.pondTemperature(pond.id).then(setData, () => {});
+  }, [key]);
+  const m = data?.model ?? nc?.basis.thermal;
+  if (!m) return null;
+  const temp = nc?.now.temp ?? null;
+  const pattern = data?.pattern;
+  const ask = async () => {
+    setAsking(true);
+    setError('');
+    try {
+      const r = await api.pondPattern(pond.id);
+      setData(data && { ...data, pattern: r.pattern, ask: { ...data.ask, left: r.left } });
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setAsking(false);
+    }
+  };
+  const enough = m.backtest.n >= 6;
+  const source =
+    pattern?.source === 'agent'
+      ? t('Ditulis AI dari angka kolam ini', "Written by the AI from this pond's numbers")
+      : pattern?.source === 'mock'
+        ? t('Mode contoh, bukan hasil AI', 'Sample mode, not an AI result')
+        : t('Dari hitungan aplikasi', "From the app's calculation");
+  return (
+    <section class="card">
+      <div class="row top">
+        <span class="icon-box">
+          <Icon name="thermo" />
+        </span>
+        <div class="stack-xs grow">
+          <span class="label semi ink2">{t('Perkiraan suhu air sekarang', 'Estimated water temperature now')}</span>
+          <span class="big num">{temp === null ? '–' : fmtTemp(temp)}</span>
+          <span class="strong">{errorWords(m, true)}</span>
+        </div>
+      </div>
+      <span class="label ink2">
+        {m.readings === 0
+          ? t('Belum ada ukuran suhu untuk belajar. Perkiraan memakai profil kolam dan cuaca.', 'No temperature readings to learn from yet. The estimate uses the pond profile and the weather.')
+          : m.oldReadings > 0
+            ? t(`Belajar dari ${m.readings} ukuran suhu, ${m.oldReadings} di antaranya dari buku catatan lama.`, `Learned from ${m.readings} temperature readings, ${m.oldReadings} of them from the old notebook.`)
+            : t(`Belajar dari ${m.readings} ukuran suhu kolam ini.`, `Learned from ${m.readings} temperature readings of this pond.`)}
+      </span>
+      {pattern && (
+        <div class="box stack-sm" style={{ background: 'var(--bg)' }}>
+          <div class="row between" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <span class="label semi ink2">{t('Pola suhu kolam ini', "This pond's temperature pattern")}</span>
+            {pattern.source === 'mock' ? <span class="soon">{source}</span> : <span class="label ink2">{source}</span>}
+          </div>
+          <p>{pattern.text}</p>
+          {pattern.checkTime && (
+            <button type="button" class="link-row" style={{ justifyContent: 'flex-start', gap: 8, minHeight: 44 }} onClick={() => go({ name: 'record-pond', pondId: pond.id })}>
+              <Icon name="clock" size={20} />
+              <span class="grow" style={{ textAlign: 'left' }}>
+                {t(`Ukur tambahan sekitar jam ${hourText(pattern.checkTime)}`, `Extra reading around ${hourText(pattern.checkTime)}`)}
+              </span>
+              <span class="soon">{t('Pilihan', 'Optional')}</span>
+            </button>
+          )}
+        </div>
+      )}
+      {data && enough && data.ask.mode !== 'rules' && (
+        <button type="button" class="btn secondary" disabled={asking || data.ask.left <= 0} onClick={ask}>
+          <Icon name="sparkle" size={20} /> {asking ? t('AI membaca pola…', 'The AI is reading the pattern…') : t('Baca pola sekarang', 'Read the pattern now')}
+        </button>
+      )}
+      {data && enough && data.ask.mode !== 'rules' && data.ask.left <= 0 && <span class="label ink2">{t('Sudah dibaca beberapa kali hari ini. Besok bisa lagi.', 'Read several times today. Again tomorrow.')}</span>}
+      {error && <p class="error">{error}</p>}
+    </section>
+  );
+}
+
+/** The pond profile with a pond photo option: the farmer checks the AI's draft and saves it. */
+function ProfileEditor({ pond, onSaved, onClose, go }: { pond: PondSummary; onSaved: (p: PondSummary) => void; onClose: () => void; go: Go }) {
+  const [value, setValue] = useState(profileOf(pond));
+  const [draft, setDraft] = useState<PondPhotoDraft | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const save = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      onSaved((await api.updatePond(pond.id, profileBody(value) as PondProfile)).pond);
+    } catch (err) {
+      setError((err as Error).message);
+      setBusy(false);
+    }
+  };
+  return (
+    <section class="card" id="pond-profile">
+      <div class="stack-xs">
+        <h2>{t('Profil kolam', 'Pond profile')}</h2>
+        <span class="meta">{t('Dasar perkiraan suhu air. Foto kolam bisa mengisinya; cek dulu sebelum disimpan.', 'The water temperature estimate starts from this. A pond photo can fill it in; check before saving.')}</span>
+      </div>
+      <PondPhoto pondId={pond.id} draft={draft} onDraft={(d) => (setDraft(d), setValue(applyDraft(value, d)))} onQuota={() => go({ name: 'quota' })} />
+      <ProfileFields value={value} onChange={setValue} draft={draft} />
+      {error && <p class="error">{error}</p>}
+      <div class="grid2" style={{ gap: 8 }}>
+        <button type="button" class="btn primary" disabled={busy} onClick={save}>
+          {busy ? t('Menyimpan…', 'Saving…') : t('Simpan', 'Save')}
+        </button>
+        <button type="button" class="btn secondary" disabled={busy} onClick={onClose}>
+          {t('Batal', 'Cancel')}
+        </button>
+      </div>
+    </section>
+  );
+}
+
 export function PondDetail({
   id,
   nowcast,
@@ -404,6 +528,7 @@ export function PondDetail({
   const [data, setData] = useState<{ pond: PondSummary; logs: Log[] } | null>(null);
   const [error, setError] = useState('');
   const [tech, setTech] = useState(prefs.techOpen);
+  const [editing, setEditing] = useState(false);
   const { done, toggle } = useSteps(id);
   const cases = useCases(id, data?.logs.length);
 
@@ -454,12 +579,13 @@ export function PondDetail({
         <button class="icon-btn" aria-label={t('Kembali ke Beranda', 'Back to Home')} onClick={() => go({ name: 'today' })}>
           <Icon name="back" />
         </button>
-        <span class="cover-action stack-xs" style={{ alignItems: 'flex-end' }}>
-          <span class="pill grey" style={{ background: 'var(--surface)', minHeight: 44 }}>
-            <Icon name="camera" size={18} /> {t('Foto kolam', 'Pond photo')}
+        {role !== 'worker' && (
+          <span class="cover-action stack-xs" style={{ alignItems: 'flex-end' }}>
+            <button type="button" class="pill grey" style={{ background: 'var(--surface)', minHeight: 44, border: 0 }} onClick={() => setEditing(true)}>
+              <Icon name="camera" size={18} /> {t('Foto kolam', 'Pond photo')}
+            </button>
           </span>
-          <Soon />
-        </span>
+        )}
       </section>
 
       <header class="row top between">
@@ -481,6 +607,19 @@ export function PondDetail({
         </div>
         <StatusPill level={pond.level} />
       </header>
+
+      {editing && (
+        <ProfileEditor
+          pond={pond}
+          go={go}
+          onClose={() => setEditing(false)}
+          onSaved={(p) => {
+            setData({ ...data, pond: p });
+            setEditing(false);
+            onChanged();
+          }}
+        />
+      )}
 
       {cases.list
         .filter((c) => c.status === 'open')
@@ -578,6 +717,8 @@ export function PondDetail({
           })}
         </section>
       )}
+
+      <WaterTempCard pond={pond} nc={nc} go={go} />
 
       <MetricCard pond={pond} logs={logs} />
 
@@ -715,11 +856,21 @@ export function PondDetail({
                 </span>
               </div>
             )}
+            <div class="row" style={{ background: 'var(--bg)', borderRadius: 16, padding: '8px 8px 8px 16px' }}>
+              <span class="grow stack-xs" style={{ gap: 0 }}>
+                <span class="meta">{t('Wadah, tempat, air dan cahaya', 'Container, place, water and light')}</span>
+                <span class="strong">{profileLine(pond) || t('Belum diisi', 'Not filled in yet')}</span>
+              </span>
+              {role !== 'worker' && (
+                <button type="button" class="nick-btn" onClick={() => (setEditing(true), window.scrollTo(0, 0))}>
+                  <Icon name="pencil" size={16} stroke={2.5} />
+                  {t('Ubah', 'Edit')}
+                </button>
+              )}
+            </div>
             <p class="ink2">
               {[
-                pond.setting && settingLabel[pond.setting] + (pond.setting === 'outdoor' && pond.shaded ? t(', berpeneduh', ', shaded') : ''),
                 pond.aeration && t(`aerasi ${aerationLabel[pond.aeration].toLowerCase()}`, `aeration: ${aerationLabel[pond.aeration].toLowerCase()}`),
-                pond.depthCm && t(`kedalaman ${fmtNum(pond.depthCm)} cm`, `${fmtNum(pond.depthCm)} cm deep`),
                 pond.areaM2 && `${fmtNum(pond.areaM2)} m²`,
                 pond.program?.density != null &&
                   t(`kepadatan sekitar ${fmtNum(Math.round(pond.program.density))} ekor/m²`, `about ${fmtNum(Math.round(pond.program.density))} eels/m²`),

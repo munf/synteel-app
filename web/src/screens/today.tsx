@@ -7,6 +7,7 @@ import { alarmReason, sensorCritical, silenceSensorAlarm, useSensorRinging } fro
 import { DueRechecks, useRechecks } from './recheck.tsx';
 import { CaseBrief, useCases } from './case.tsx';
 import { LOCALE, t } from '../i18n.ts';
+import { errorWords } from '../pondprofile.tsx';
 import { BmkgPanel, OutageBanner, PowerNightCard } from './power.tsx';
 import './today.css';
 
@@ -298,6 +299,7 @@ function WeatherCard({
               </span>
             )}
           </div>
+          {focus?.basis.thermal && <span class="label ink2">{errorWords(focus.basis.thermal, true)}</span>}
         </div>
       )}
       <div class="row" style={{ gap: 8, ...(water?.temp != null ? { borderTop: '1px solid var(--line)', paddingTop: 16 } : {}) }}>

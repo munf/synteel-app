@@ -7,8 +7,9 @@
 // temperature reading and learns a per-pond offset from how wrong it was before.
 import { dec, tx } from './i18n.ts';
 import { DAY_MS, type Log, type Phase, type Pond } from './domain.ts';
-import { limitsFor, median, type Threshold } from './rules.ts';
+import { limitsFor, type Threshold } from './rules.ts';
 import type { WeatherHour } from './weather.ts';
+import { learn, prior, sigmaAt, simulate as thermalSimulate, weatherAt, type ThermalModel, type ThermalParams, type Reading } from './thermal.ts';
 
 const HOUR_MS = 3600_000;
 
@@ -47,6 +48,8 @@ export interface Nowcast {
     offset: number;
     /** How far the calibrated model missed each recent reading (°C), oldest first. */
     fit: { t: number; error: number }[];
+    /** What the pond taught the water temperature model, and how far off it usually is (thermal.ts). */
+    thermal?: ThermalModel;
   };
   now: NowcastPoint;
   hours: NowcastPoint[]; // from 12 h ago to 24 h ahead, on the hour
@@ -62,76 +65,42 @@ export interface NowcastInput {
   density?: number;
   logs: Log[]; // newest first, at least the last 7 days
   weather: WeatherHour[]; // may be empty when the forecast is unavailable
+  /** The pond's model learned from its longer history (api.ts); learned here from `logs` when absent. */
+  thermal?: ThermalModel;
   thresholds: Threshold[];
   now: number;
   timezone: string;
 }
 
 // ---------- water temperature ----------
+// The model itself lives in thermal.ts: profile priors, learning per pond, the rolling backtest.
 
-interface ThermalParams {
-  k: number; // fraction of the gap to equilibrium closed per hour
-  solarGain: number; // °C above air temperature at 1000 W/m²
-}
-
-/**
- * Starting points, not fitted constants: a 30 cm outdoor pond follows the air with a
- * time constant of about 16 hours (concrete walls and the ground hold heat) and is
- * warmed by the sun; an indoor tank barely moves. Per-pond calibration absorbs most
- * of the remaining error.
- */
+/** Starting values for a pond (kept for the demo seed and older callers). */
 export function thermalParams(pond: Pond): ThermalParams {
-  if (pond.setting === 'indoor') return { k: 0.04, solarGain: 0.3 };
-  const depth = pond.depthCm ?? 30;
-  return {
-    k: Math.min(0.2, Math.max(0.02, (0.06 * 30) / depth)),
-    solarGain: pond.shaded ? 1.5 : 3.5,
-  };
+  return prior(pond).params;
 }
 
-function weatherAt(weather: Map<number, WeatherHour>, t: number): WeatherHour | undefined {
-  return weather.get(Math.floor(t / HOUR_MS) * HOUR_MS);
-}
-
-/** Step the water temperature from (t0, temp0) to t1 through the hourly weather. */
+/** Step the water temperature from (t0, temp0) to t1 through the hourly weather, with an extra offset. */
 export function simulate(weather: Map<number, WeatherHour>, p: ThermalParams, offset: number, t0: number, temp0: number, t1: number): number | null {
-  let t = t0;
-  let temp = temp0;
-  while (t < t1) {
-    const w = weatherAt(weather, t);
-    if (!w) return null;
-    const dt = Math.min(HOUR_MS, t1 - t) / HOUR_MS;
-    const equilibrium = w.airTemp + (p.solarGain * w.radiation) / 1000 + offset;
-    const k = p.k * (1 + w.wind / 80);
-    temp += (equilibrium - temp) * (1 - Math.pow(1 - Math.min(k, 0.9), dt));
-    t += dt * HOUR_MS;
-  }
-  return temp;
+  return thermalSimulate(weather, { ...p, offset: p.offset + offset }, t0, temp0, t1);
 }
 
 /**
- * Learn a constant offset on the equilibrium temperature from consecutive readings:
- * simulate each gap without offset and see how far off it lands.
+ * Temperature readings of a pond for the model. Notebook rows without a written time were saved
+ * at 12:00 farm time: their time of day is not known, so they teach the model only a little and
+ * are never scored.
  */
-function calibrate(weather: Map<number, WeatherHour>, p: ThermalParams, readings: { t: number; value: number }[]) {
-  const estimates: number[] = [];
-  const used: [{ t: number; value: number }, { t: number; value: number }][] = [];
-  for (let i = 1; i < readings.length; i++) {
-    const a = readings[i - 1];
-    const b = readings[i];
-    const gapH = (b.t - a.t) / HOUR_MS;
-    if (gapH < 2 || gapH > 36) continue;
-    const predicted = simulate(weather, p, 0, a.t, a.value, b.t);
-    if (predicted === null) continue;
-    // An offset on equilibrium moves the result by offset × (fraction of the gap closed).
-    const reach = 1 - Math.pow(1 - p.k, gapH);
-    if (reach < 0.2) continue;
-    estimates.push((b.value - predicted) / reach);
-    used.push([a, b]);
-  }
-  const offset = estimates.length ? Math.max(-4, Math.min(4, median(estimates))) : 0;
-  const fit = used.slice(-7).map(([a, b]) => ({ t: b.t, error: Math.round((b.value - (simulate(weather, p, offset, a.t, a.value, b.t) ?? b.value)) * 10) / 10 }));
-  return { offset, pairs: estimates.length, fit };
+export function thermalReadings(logs: Log[], timezone: string, now = Infinity): Reading[] {
+  return logs
+    .filter((l) => l.data.readings?.temperature !== undefined)
+    .map((l) => {
+      const t = Date.parse(l.loggedAt);
+      const old = l.source === 'notebook';
+      const p = old ? localParts(t, timezone) : null;
+      return { t, value: l.data.readings!.temperature!, ...(old && { old: true }), ...(p && p.hour === 12 && p.minute === 0 && { timeUnsure: true }) };
+    })
+    .filter((r) => r.t <= now)
+    .sort((a, b) => a.t - b.t);
 }
 
 // ---------- local time ----------
@@ -167,33 +136,28 @@ export function riskLevel(score: number): RiskLevel {
 export function computeNowcast(input: NowcastInput): Nowcast {
   const { pond, phase, density, logs, thresholds, now, timezone } = input;
   const weather = new Map(input.weather.map((w) => [w.t, w]));
-  const params = thermalParams(pond);
   const outdoor = pond.setting !== 'indoor';
 
-  const readings = logs
-    .filter((l) => l.data.readings?.temperature !== undefined)
-    .map((l) => ({ t: Date.parse(l.loggedAt), value: l.data.readings!.temperature! }))
-    .filter((r) => r.t <= now)
-    .sort((a, b) => a.t - b.t);
-  const { offset, pairs, fit } = calibrate(weather, params, readings);
-  const calibrated = pairs >= 2;
+  const readings = thermalReadings(logs, timezone, now);
+  const model = input.thermal ?? learn(weather, pond, readings, timezone);
+  const params = model.params;
 
   function estimate(t: number): { temp: number | null; sigma: number | null } {
     const anchor = [...readings].reverse().find((r) => r.t <= t && t - r.t <= 2 * DAY_MS);
     if (anchor) {
       const hours = (t - anchor.t) / HOUR_MS;
-      const temp = weather.size ? simulate(weather, params, offset, anchor.t, anchor.value, t) : null;
-      const growth = Math.sqrt(hours);
-      if (temp !== null) return { temp, sigma: (calibrated ? 0.3 : 0.6) + (calibrated ? 0.2 : 0.35) * growth };
+      const temp = weather.size ? thermalSimulate(weather, params, anchor.t, anchor.value, t) : null;
+      // The spread comes from how far this pond's own readings were missed before.
+      if (temp !== null) return { temp, sigma: sigmaAt(model, hours) };
       // No forecast: assume the water stayed where it was, with fast-growing doubt.
-      return { temp: anchor.value, sigma: 0.5 + 0.5 * growth };
+      return { temp: anchor.value, sigma: 0.5 + 0.5 * Math.sqrt(hours) };
     }
     // No recent reading: spin the model up from the weather alone.
     const start = t - 2 * DAY_MS;
     const w = weatherAt(weather, start);
     if (!w) return { temp: null, sigma: null };
-    const temp = simulate(weather, params, offset, start, w.airTemp + offset, t);
-    return { temp, sigma: temp === null ? null : 2 };
+    const temp = thermalSimulate(weather, params, start, w.airTemp + params.offset, t);
+    return { temp, sigma: temp === null ? null : Math.max(1.5, (2 * model.typicalError) / 1.28) };
   }
 
   // What the farmer logged that matters for oxygen.
@@ -280,9 +244,10 @@ export function computeNowcast(input: NowcastInput): Nowcast {
     basis: {
       weather: weather.size > 0,
       anchor: anchor && now - anchor.t <= 2 * DAY_MS ? { value: anchor.value, at: anchor.t } : null,
-      calibrationPairs: pairs,
-      offset: round1(offset),
-      fit,
+      calibrationPairs: model.readings,
+      offset: round1(params.offset),
+      fit: model.recent,
+      thermal: model,
     },
     now: nowPoint,
     hours,

@@ -8,6 +8,8 @@ export interface WeatherHour {
   cloud: number; // %
   wind: number; // km/h
   rain: number; // mm in this hour
+  humidity?: number; // relative humidity, % (water temperature model: evaporative cooling)
+  et0?: number; // FAO reference evaporation, mm in this hour
 }
 
 export interface Weather {
@@ -31,7 +33,7 @@ export async function getWeather(lat: number, lon: number, now = Date.now()): Pr
   url.search = new URLSearchParams({
     latitude: String(lat),
     longitude: String(lon),
-    hourly: 'temperature_2m,shortwave_radiation,cloud_cover,wind_speed_10m,precipitation',
+    hourly: 'temperature_2m,shortwave_radiation,cloud_cover,wind_speed_10m,precipitation,relative_humidity_2m,et0_fao_evapotranspiration',
     past_days: '7',
     forecast_days: '2',
     timezone: 'UTC',
@@ -50,6 +52,8 @@ export async function getWeather(lat: number, lon: number, now = Date.now()): Pr
       cloud: h.cloud_cover[i] ?? 0,
       wind: h.wind_speed_10m[i] ?? 0,
       rain: h.precipitation[i] ?? 0,
+      ...(h.relative_humidity_2m?.[i] != null && { humidity: h.relative_humidity_2m[i] }),
+      ...(h.et0_fao_evapotranspiration?.[i] != null && { et0: h.et0_fao_evapotranspiration[i] }),
     });
   }
   const weather = { hours, fetchedAt: now };

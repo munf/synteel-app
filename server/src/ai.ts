@@ -18,6 +18,7 @@ import type { RoundResult } from './contract.ts';
 import { READING_LIMITS, type Behavior, type LogData, type Phase, type ReadingKey } from './domain.ts';
 import { guardRound, mockRound, ROUND_SCHEMA, roundInstructions, type RoundPond } from './round.ts';
 import { mockNotebook, NOTEBOOK_SCHEMA, notebookInstructions } from './notebook.ts';
+import { mockPondPhoto, POND_PHOTO_SCHEMA, pondPhotoInstructions } from './pondphoto.ts';
 
 export type CaptureKind = 'photo' | 'voice' | 'video';
 export type DraftField = 'temperature' | 'ph' | 'tds' | 'mortality' | 'behavior' | 'leftover' | 'color' | 'smell' | 'aeration';
@@ -74,6 +75,8 @@ export interface Ai {
   round(input: RoundInput): Promise<RoundResult>;
   /** A notebook page photo → its rows as written (checked later by guardNotebook). */
   notebook(input: NotebookInput): Promise<NotebookRaw>;
+  /** A pond photo → container, place, water colour and light as seen (checked later by guardPondPhoto). */
+  pondPhoto(input: { image: Blob }): Promise<NotebookRaw>;
   /** Speech to plain text (a help message said instead of typed). Free: not counted against the quota. */
   transcribe(audio: Blob): Promise<string>;
 }
@@ -296,6 +299,17 @@ function liveAi(chat: ChatProvider[], transcriber?: Transcriber): Ai {
         mode: 'meta' as const,
       }));
     },
+    async pondPhoto(input) {
+      const content = [
+        { type: 'text', text: 'Isi profil kolam dari foto ini.' },
+        { type: 'image_url', image_url: { url: await blobToDataUrl(input.image) } },
+      ];
+      return firstAnswer(chat, async (provider) => ({
+        raw: await chatJson(provider, pondPhotoInstructions(), content, 'pond_profile', POND_PHOTO_SCHEMA, 4000),
+        model: `${provider.name}/${provider.model}`,
+        mode: 'meta' as const,
+      }));
+    },
   };
 }
 
@@ -339,6 +353,9 @@ function mockAi(): Ai {
     async notebook(input) {
       return { raw: mockNotebook(input.ponds, input.today), model: 'mock', mode: 'mock' };
     },
+    async pondPhoto() {
+      return { raw: mockPondPhoto(), model: 'mock', mode: 'mock' };
+    },
   };
 }
 
@@ -369,6 +386,10 @@ export function withDailyCap(ai: Ai, cap: number, now = () => new Date()): Ai {
       take();
       return ai.notebook(input);
     },
+    async pondPhoto(input) {
+      take();
+      return ai.pondPhoto(input);
+    },
   };
 }
 
@@ -380,5 +401,5 @@ export function createAi(opts: { chat: ChatProvider[]; transcriber?: Transcriber
   const off = async (): Promise<never> => {
     throw new AiUnavailable(tx('AI belum aktif. Isi manual dulu, atau coba lagi nanti.', 'The AI is not on yet. Type it in for now, or try again later.'));
   };
-  return { mode: 'off', draft: off, round: off, notebook: off, transcribe: off };
+  return { mode: 'off', draft: off, round: off, notebook: off, pondPhoto: off, transcribe: off };
 }

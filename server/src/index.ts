@@ -74,6 +74,9 @@ setInterval(expireDemos, 30 * 60_000);
 // Evening briefing: check every 10 minutes; each farm gets one from 17.00 local time.
 setInterval(() => api.briefFarms().catch((err) => console.error('briefings:', err)), 10 * 60_000);
 
+// Weekly water temperature pattern notes per farm (patterns.ts): checked every hour, each farm once a week.
+setInterval(() => api.patternFarms().catch((err) => console.error('patterns:', err)), 60 * 60_000);
+
 serve({ fetch: app.fetch, port: env.port, hostname: env.host }, (info) => {
   console.log(`synteel server listening on http://${env.host ?? 'localhost'}:${info.port}`);
 });

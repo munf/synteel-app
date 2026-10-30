@@ -43,10 +43,10 @@ test('the estimate starts exactly at the latest reading', () => {
   assert.equal(nc.basis.anchor?.value, 28.4);
 });
 
-test('an outdoor pond warms through a sunny afternoon, an indoor tank much less', () => {
+test('an open tarp pond warms through a sunny afternoon, an indoor tank much less', () => {
   const logs = [log(0, { readings: { temperature: 28 } })];
   const at = (nc: ReturnType<typeof run>, h: number) => nc.hours.find((p) => p.t === now + h * HOUR)!.temp!;
-  const outdoor = run({ logs, pond: pond({ shaded: false }) });
+  const outdoor = run({ logs, pond: pond({ shaded: false, kind: 'terpal' }) });
   const indoor = run({ logs, pond: pond({ setting: 'indoor' }) });
   assert.ok(at(outdoor, 5) - 28 > 1.5, `outdoor rose only to ${at(outdoor, 5)}`);
   assert.ok(Math.abs(at(indoor, 5) - 28) < 1, `indoor moved to ${at(indoor, 5)}`);

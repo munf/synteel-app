@@ -66,6 +66,7 @@ export function demoStore(db: Db) {
   function deleteFarm(farmId: number) {
     const ponds = `(select id from ponds where farm_id = ${Number(farmId)})`;
     db.prepare(`delete from case_events where case_id in (select id from cases where farm_id = ?)`).run(farmId);
+    db.prepare('delete from pond_patterns where farm_id = ?').run(farmId);
     db.prepare('delete from cases where farm_id = ?').run(farmId);
     db.prepare('delete from device_links where farm_id = ?').run(farmId);
     db.exec(`delete from logs where pond_id in ${ponds}`);
@@ -186,8 +187,8 @@ export function demoStore(db: Db) {
 
         for (const p of db.prepare('select * from ponds where farm_id = ? and archived = 0 order by id').all(t.farmId) as Row[]) {
           const id = db
-            .prepare('insert into ponds (farm_id, name, kind, volume_l, area_m2, setting, shaded, aeration, depth_cm, nicknames) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-            .run(farmId, p.name as string, p.kind as string | null, p.volume_l as number | null, p.area_m2 as number | null, p.setting as string | null, p.shaded as number | null, p.aeration as string | null, p.depth_cm as number | null, p.nicknames as string | null).lastInsertRowid;
+            .prepare('insert into ponds (farm_id, name, kind, volume_l, area_m2, setting, shaded, aeration, depth_cm, nicknames, water_color, light) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+            .run(farmId, p.name as string, p.kind as string | null, p.volume_l as number | null, p.area_m2 as number | null, p.setting as string | null, p.shaded as number | null, p.aeration as string | null, p.depth_cm as number | null, p.nicknames as string | null, (p.water_color as string | null) ?? null, (p.light as string | null) ?? null).lastInsertRowid;
           pondMap.set(p.id as number, Number(id));
         }
         const pondIds = [...pondMap.keys()].join(',') || '0';
@@ -218,6 +219,18 @@ export function demoStore(db: Db) {
             .prepare('insert into briefings (farm_id, local_date, created_at, body, lang, kind, basis) values (?, ?, ?, ?, ?, ?, ?)')
             .run(farmId, today, at(b.created_at as string), JSON.stringify(rebase(JSON.parse(b.body as string))), b.lang as string | null, b.kind === 'lang' ? 'lang' : 'copy', b.basis === null ? null : (briefingMap.get(b.basis as number) ?? null)).lastInsertRowid;
           briefingMap.set(b.id as number, Number(id));
+        }
+        // The weekly pattern notes the template got when it was built (patterns.ts).
+        for (const p of db.prepare(`select * from pond_patterns where pond_id in (${pondIds}) order by id`).all() as Row[]) {
+          db.prepare('insert into pond_patterns (farm_id, pond_id, created_at, lang, source, body) values (?, ?, ?, ?, ?, ?)').run(
+            farmId,
+            pondMap.get(p.pond_id as number)!,
+            at(p.created_at as string),
+            p.lang as string,
+            p.source as string,
+            // Precomputed notes do not count towards the visitor's own runs.
+            JSON.stringify({ ...rebase(JSON.parse(p.body as string)), precomputed: true }),
+          );
         }
         return { userId, farmId };
       });
@@ -264,22 +277,23 @@ export function seedDemoFarm(store: Repo, ownerId: number, now: Date, weather: M
 
   const ponds = [
     // Glass eels in indoor fiber tanks.
-    { pond: r.addPond({ name: 'Kolam A', kind: 'fiber', volumeL: 870, areaM2: 2.9, setting: 'indoor', shaded: null, aeration: 'full', depthCm: 30 }), phase: 'glass_eel' as const, stocked: 23, count: 500 },
+    { pond: r.addPond({ name: 'Kolam A', kind: 'fiber', volumeL: 870, areaM2: 2.9, setting: 'indoor', shaded: null, aeration: 'full', depthCm: 30, waterColor: 'clear', light: 'dim' }), phase: 'glass_eel' as const, stocked: 23, count: 500 },
     // Farmers call it by where it is; the voice round knows both names.
-    { pond: r.addPond({ name: 'Kolam B', kind: 'fiber', volumeL: 870, areaM2: 2.9, setting: 'indoor', shaded: null, aeration: 'full', depthCm: 30, nicknames: ['kolam dekat pintu'] }), phase: 'glass_eel' as const, stocked: 23, count: 500 },
+    { pond: r.addPond({ name: 'Kolam B', kind: 'fiber', volumeL: 870, areaM2: 2.9, setting: 'indoor', shaded: null, aeration: 'full', depthCm: 30, waterColor: 'clear', light: 'dim', nicknames: ['kolam dekat pintu'] }), phase: 'glass_eel' as const, stocked: 23, count: 500 },
     // Elver pond as the partner farm runs it: outdoor, paranet, 24-hour aeration, 30 cm deep, about 50 eels per m².
-    { pond: r.addPond({ name: 'Kolam C', kind: 'beton', volumeL: 3600, areaM2: 12, setting: 'outdoor', shaded: true, aeration: 'full', depthCm: 30 }), phase: 'elver' as const, stocked: 60, count: 650 },
+    { pond: r.addPond({ name: 'Kolam C', kind: 'beton', volumeL: 3600, areaM2: 12, setting: 'outdoor', shaded: true, aeration: 'full', depthCm: 30, waterColor: 'green', light: 'bright' }), phase: 'elver' as const, stocked: 60, count: 650 },
   ];
 
   const caseLogs: { id: number; pondId: number; loggedAt: string; data: LogData }[] = [];
   for (const { pond, phase, stocked, count } of ponds) {
-    // Outdoor water temperature: the nowcast model run through the real weather, with the
-    // concrete pond about 3 °C warmer than air plus sun alone would make it.
+    // Outdoor water temperature: the water temperature model run through the real weather, with the
+    // concrete pond about 3.4 °C warmer than air plus sun alone would make it and more sun than its profile says.
     let water = 29;
     let waterAt = weather ? Math.min(...weather.keys()) : 0;
     const waterTemp = (at: Date) => {
       if (!weather || pond.setting !== 'outdoor' || at.getTime() < waterAt) return null;
-      const next = simulate(weather, thermalParams(pond), 3, waterAt, water, at.getTime());
+      // Under the paranet some sun still gets through: more than the profile's starting value, which the model learns.
+      const next = simulate(weather, { ...thermalParams(pond), sun: 3.2 }, 3.4, waterAt, water, at.getTime());
       if (next === null) return null;
       water = next;
       waterAt = at.getTime();

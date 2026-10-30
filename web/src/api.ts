@@ -9,12 +9,25 @@ import type { Draft, DraftField } from '../../server/src/ai.ts';
 import type { AutoFix, HistoryLog, LogEdit, QuotaState, ReadingField, RoundDraft, RoundIssue, RoundResult, SupportRequest, SupportTopic } from '../../server/src/contract.ts';
 import type { NotebookCheck, NotebookField, NotebookPage, NotebookRow, NotebookSaveResult, NotebookSaveRow, NotebookValueField } from '../../server/src/contract.ts';
 import type { LogSource } from '../../server/src/domain.ts';
+import type { PondPhotoDraft, Place } from '../../server/src/pondphoto.ts';
+import type { PondPattern } from '../../server/src/patterns.ts';
+import type { Light, MeasureHour, ThermalModel, WaterColor } from '../../server/src/thermal.ts';
 import { lang, t } from './i18n.ts';
 
 export type { Aeration, Batch, Behavior, Farm, Finding, Level, Log, LogData, Phase, Pond, Setting };
 export type { Limits, Nowcast, NowcastPoint, RiskFactor, RiskLevel, SuggestedCheck };
 export type { Outage, PowerBackup, PowerLevel, PowerNight, PowerReason };
 export type { Draft, DraftField, LogSource };
+export type { Light, MeasureHour, Place, PondPattern, PondPhotoDraft, ThermalModel, WaterColor };
+
+/** The pond page's water temperature card (GET /ponds/:id/temperature). */
+export interface PondTemperature {
+  model: ThermalModel;
+  hours: MeasureHour[];
+  pattern: PondPattern;
+  /** Who writes a new note on request, and how many requests the farm has left today. */
+  ask: { mode: 'agent' | 'mock' | 'rules'; left: number };
+}
 export type { Briefing, BriefingCheck, CountResult };
 export type { CaseCheck, CaseQuestion, CaseRun, CaseView };
 export type { NotebookCheck, NotebookField, NotebookPage, NotebookRow, NotebookSaveResult, NotebookSaveRow, NotebookValueField };
@@ -112,7 +125,10 @@ export interface BmkgView {
   error: string | null;
 }
 
-export type PondProfile = Partial<Pick<Pond, 'name' | 'kind' | 'volumeL' | 'areaM2' | 'setting' | 'shaded' | 'aeration' | 'depthCm' | 'nicknames'>>;
+export type PondProfile = Partial<Pick<Pond, 'name' | 'kind' | 'volumeL' | 'areaM2' | 'setting' | 'shaded' | 'aeration' | 'depthCm' | 'nicknames' | 'waterColor' | 'light'>> & {
+  /** Indoor / under a roof or shade net / open: sets the setting and the shade question together. */
+  place?: Place | null;
+};
 
 export interface Emergency {
   id: string;
@@ -226,6 +242,16 @@ export const api = {
   addPond: (pond: PondProfile & { name: string }) => call<{ pond: PondSummary }>('POST', '/ponds', pond),
   updatePond: (id: number, pond: PondProfile) => call<{ pond: PondSummary }>('PUT', `/ponds/${id}`, pond),
   nowcast: () => call<NowcastState>('GET', '/nowcast'),
+  /** A pond photo → a draft profile the farmer checks. Nothing is saved. Uses the farm's AI quota. */
+  pondPhoto: (image: Blob, pondId?: number) => {
+    const form = new FormData();
+    form.append('image', image, 'pond.jpg');
+    if (pondId) form.append('pondId', String(pondId));
+    return upload<{ draft: PondPhotoDraft }>('/pond-photo', form);
+  },
+  pondTemperature: (id: number) => call<PondTemperature>('GET', `/ponds/${id}/temperature`),
+  /** The pattern agent for this pond now, in the viewer's language. */
+  pondPattern: (id: number) => call<{ pattern: PondPattern; left: number }>('POST', `/ponds/${id}/pattern`),
   pond: (id: number) => call<{ pond: PondSummary; logs: Log[] }>('GET', `/ponds/${id}`),
   startBatch: (pondId: number, batch: { phase: Phase; stockedAt: string; initialCount?: number }) =>
     call<{ pond: PondSummary }>('POST', `/ponds/${pondId}/batches`, batch),

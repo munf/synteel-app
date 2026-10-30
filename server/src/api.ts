@@ -18,6 +18,12 @@ import type { SaveCapture } from './captures.ts';
 import { computeNowcast } from './nowcast.ts';
 import { assessPond, classifyReading, limitsFor, overallLevel, type Limits, type Threshold } from './rules.ts';
 import { geocode as defaultGeocode, getWeather as defaultGetWeather } from './weather.ts';
+// Pond profile from a photo, the learned water temperature model and the weekly pattern note.
+import type { Fetcher } from './archive.ts';
+import { guardPondPhoto, placeToSetting, PLACES, type Place } from './pondphoto.ts';
+import { MAX_PATTERN_RUNS_PER_DAY, PATTERN_EVERY_MS, runPatterns, type PondPattern } from './patterns.ts';
+import { patternPond, patternView, thermalService, type PondThermal } from './pondtemp.ts';
+import type { Light, WaterColor } from './thermal.ts';
 import { farmForecast, getBmkgForecast, regionCandidates, type BmkgForecast, type GetBmkg, type Region } from './bmkg.ts';
 import { findDesa, searchDesa, type Desa } from './desa.ts';
 import { applyPower, assessPowerNight, getStormHours, POWER_BACKUPS, type GetStorm, type PowerBackup, type PowerNight } from './power.ts';
@@ -49,7 +55,7 @@ const FIELD_EN: Record<string, string> = {
   'sisa pakan': 'Leftover feed', 'jumlah mati': 'Number dead', 'warna air': 'Water color', 'bau air': 'Water smell',
   'ganti air': 'Water change', 'luas kolam': 'Pond area', 'tempat kolam': 'Pond setting', 'kedalaman air': 'Water depth',
   'nama kolam': 'Pond name', 'jenis kolam': 'Pond type', 'jenis rekaman': 'Recording type', 'Nomor WhatsApp': 'WhatsApp number',
-  'Nomor HP akun': 'Account phone number', aerasi: 'Aeration', aerator: 'Aerator', fase: 'Phase',
+  'Nomor HP akun': 'Account phone number', aerasi: 'Aeration', aerator: 'Aerator', fase: 'Phase', cahaya: 'Light',
   'cadangan listrik': 'Power backup', wilayah: 'Region', 'lama padam': 'How long the power has been out',
 };
 const fieldName = (f: string) => tx(f, FIELD_EN[f] ?? f);
@@ -117,7 +123,12 @@ function parseLogData(body: Record<string, any>): LogData {
 }
 
 function pondProfile(body: Record<string, any>) {
+  // A pond photo's "place" (indoor / roofed / open) is the setting plus the shade question.
+  const place = oneOf<Place>(body.place, PLACES, 'tempat kolam');
+  if (place) Object.assign(body, placeToSetting(place));
   return {
+    waterColor: oneOf<WaterColor>(body.waterColor, ['clear', 'green', 'brown', 'cloudy'], 'warna air') ?? null,
+    light: oneOf<Light>(body.light, ['bright', 'dim', 'dark'], 'cahaya') ?? null,
     areaM2: num(body.areaM2, 'luas kolam', { min: 0.01 }) ?? null,
     setting: oneOf<Setting>(body.setting, ['outdoor', 'indoor'], 'tempat kolam') ?? null,
     shaded: typeof body.shaded === 'boolean' ? body.shaded : null,
@@ -145,6 +156,8 @@ export interface ApiDeps {
   /** BMKG village forecast (bmkg.ts) and Open-Meteo storm signs (power.ts); tests pass fakes, no network. */
   getBmkg?: GetBmkg;
   getStorm?: GetStorm;
+  /** Past weather for old readings (archive.ts). Default: the network, unless getWeather is a test fake; null = cached days only. */
+  fetchArchive?: Fetcher | null;
   /** Sends support tickets to the team; null = only stored. */
   mail?: SendMail | null;
   /** Abuse limits for "Coba demo": new copies per address per day, and copies alive at once. */
@@ -255,7 +268,7 @@ type Env = { Variables: { userId: number; farmId: number | null; tokenHash: stri
 
 export function createApi(
   store: Repo,
-  { clock = () => new Date(), getWeather = defaultGetWeather, geocode = defaultGeocode, ai, saveCapture, cookieName = 'synteel_session', demoPhone = null, farmAiCap = 0, agentProviders = [], sam = null, getBmkg = getBmkgForecast, getStorm = getStormHours, mail = null, demoLimits = { perIp: DEMO_PER_IP_PER_DAY, maxLive: DEMO_MAX_LIVE }, removeFarmFiles }: ApiDeps = {},
+  { clock = () => new Date(), getWeather = defaultGetWeather, geocode = defaultGeocode, ai, saveCapture, cookieName = 'synteel_session', demoPhone = null, farmAiCap = 0, agentProviders = [], sam = null, getBmkg = getBmkgForecast, getStorm = getStormHours, mail = null, demoLimits = { perIp: DEMO_PER_IP_PER_DAY, maxLive: DEMO_MAX_LIVE }, removeFarmFiles, fetchArchive }: ApiDeps = {},
 ) {
   const api = new Hono<Env>();
   // Every handler below answers in the language the app asked for (i18n.ts).
@@ -280,6 +293,8 @@ export function createApi(
   });
 
   const timezone = (r: FarmRepo) => r.getFarm()?.timezone ?? 'Asia/Jakarta';
+  // The water temperature model per pond (pondtemp.ts). Tests that fake the weather get no archive calls.
+  const thermal = thermalService({ archive: store.weatherArchive, fetchArchive: fetchArchive !== undefined ? fetchArchive : getWeather === defaultGetWeather ? fetch : null });
 
   function pondState(r: FarmRepo, pond: Pond, now: Date) {
     const tz = timezone(r);
@@ -421,19 +436,24 @@ export function createApi(
     } else {
       weatherError = tx('Lokasi tambak belum diatur', 'Farm location not set');
     }
-    const ponds = r.listPonds().map((pond) => {
-      const { batch, logs, program } = pondState(r, pond, now);
-      return computeNowcast({
-        pond,
-        phase: batch?.phase,
-        density: program?.density ?? undefined,
-        logs,
-        weather,
-        thresholds,
-        now: now.getTime(),
-        timezone: timezone(r),
-      });
-    });
+    const ponds = await Promise.all(
+      r.listPonds().map(async (pond) => {
+        const { batch, logs, program } = pondState(r, pond, now);
+        // The water temperature model learned from the pond's longer history; on failure, from the last week alone.
+        const learned = await thermal.forPond(r, pond, weather, now.getTime(), timezone(r)).catch((err) => (console.error(`thermal pond ${pond.id}:`, err), null));
+        return computeNowcast({
+          pond,
+          phase: batch?.phase,
+          density: program?.density ?? undefined,
+          logs,
+          weather,
+          thermal: learned?.model,
+          thresholds,
+          now: now.getTime(),
+          timezone: timezone(r),
+        });
+      }),
+    );
     // The next hours for the weather card; the full series stays on the server.
     const hours = weather
       .filter((h) => h.t >= now.getTime() - 3600_000 && h.t <= now.getTime() + 24 * 3600_000)
@@ -1402,6 +1422,80 @@ export function createApi(
     return c.body(null, 204);
   });
 
+  // ---------- pond photo → profile draft; water temperature model; weekly pattern note ----------
+
+  // A photo of the pond → a draft profile (container, place, water colour, light). Nothing is saved
+  // here: the farmer checks the choices and saves them with the pond. Uses the farm's AI quota.
+  api.post('/pond-photo', async (c) => {
+    const r = needFarm(c);
+    const form = await c.req.parseBody();
+    const image = form.image instanceof File ? form.image : null;
+    if (!image) throw new BadRequest(tx('Foto belum ada', 'No photo yet'));
+    if (image.size > MAX_IMAGE_BYTES) throw new BadRequest(tx('Foto terlalu besar', 'The photo is too large'));
+    if (!ai || ai.mode === 'off' || typeof ai.pondPhoto !== 'function') throw new AiUnavailable(tx('AI belum aktif. Pilih sendiri dulu.', 'The AI is not on yet. Pick them yourself for now.'));
+    useAi(r, c.get('userId'));
+    const started = Date.now();
+    const read = await ai.pondPhoto({ image });
+    const draft = guardPondPhoto(read.raw, { model: read.model, mode: read.mode });
+    await saveCapture?.({ farmId: r.farmId, pondId: Number(form.pondId) || 0, userId: c.get('userId'), kind: 'pondphoto', at: clock().toISOString(), ms: Date.now() - started, raw: read.raw, draft }, [{ name: 'image-0.jpg', blob: image }]).catch((err) =>
+      console.error('capture not stored:', err),
+    );
+    return c.json({ draft });
+  });
+
+  /** One pond's learned model, its best measuring hours and its pattern facts. */
+  async function pondTemperature(r: FarmRepo, pond: Pond) {
+    const now = clock().getTime();
+    const farm = r.getFarm();
+    const tz = timezone(r);
+    const forecast = farm?.lat != null && farm.lon != null ? (await getWeather(farm.lat, farm.lon, now).catch(() => ({ hours: [] }))).hours : [];
+    const learned: PondThermal = await thermal.forPond(r, pond, forecast, now, tz);
+    return { now, learned, facts: patternPond(pond, learned, forecast, now, tz) };
+  }
+
+  /** Farm-local midnight of today, as an instant (the pattern agent's daily allowance). */
+  const dayStartIso = (r: FarmRepo) => new Date(Date.parse(nextMidnight(clock(), timezone(r))) - DAY_MS).toISOString();
+  const patternRunsLeft = (r: FarmRepo) => Math.max(0, MAX_PATTERN_RUNS_PER_DAY - r.patternRunsSince(dayStartIso(r)));
+
+  // The pond page's water temperature card: "usually off by ±X °C", what it learned from, the pattern note.
+  api.get('/ponds/:id/temperature', async (c) => {
+    const r = needFarm(c);
+    const pond = r.getPond(Number(c.req.param('id')));
+    if (!pond) return c.json({ error: tx('Kolam tidak ditemukan', 'Pond not found') }, 404);
+    const { now, learned, facts } = await pondTemperature(r, pond);
+    return c.json({
+      model: learned.model,
+      hours: facts.hours,
+      pattern: patternView(r, facts, now),
+      ask: { mode: ai?.mode === 'meta' && agentProviders.length ? 'agent' : ai?.mode === 'mock' ? 'mock' : 'rules', left: patternRunsLeft(r) },
+    });
+  });
+
+  // "Baca pola sekarang": the pattern agent for this pond now, in the viewer's language (a few runs per farm a day).
+  api.post('/ponds/:id/pattern', async (c) => {
+    const r = needFarm(c);
+    const pond = r.getPond(Number(c.req.param('id')));
+    if (!pond) return c.json({ error: tx('Kolam tidak ditemukan', 'Pond not found') }, 404);
+    const { now, facts } = await pondTemperature(r, pond);
+    const left = patternRunsLeft(r);
+    if (left <= 0) throw new BadRequest(tx('Pola sudah dibaca beberapa kali hari ini. Coba lagi besok.', 'The pattern has been read several times today. Try again tomorrow.'));
+    const [note] = await runPatterns({ farmName: r.getFarm()?.name ?? '', now, timezone: timezone(r), ponds: [facts] }, ai?.mode === 'meta' ? agentProviders : [], ai?.mode === 'mock');
+    // Too few readings: nothing was asked, nothing is counted.
+    if (facts.model.backtest.n >= 6) r.savePattern(pond.id, new Date(now).toISOString(), currentLang(), note.source, note);
+    return c.json({ pattern: note, left: patternRunsLeft(r) });
+  });
+
+  /** Pattern notes for every pond of a farm (the weekly run and the demo template), in the current language. */
+  async function makePatterns(r: FarmRepo): Promise<PondPattern[]> {
+    const facts = await Promise.all(r.listPonds().map((p) => pondTemperature(r, p)));
+    const ready = facts.filter((f) => f.facts.model.backtest.n >= 6);
+    if (!ready.length) return [];
+    const now = clock().getTime();
+    const notes = await runPatterns({ farmName: r.getFarm()?.name ?? '', now, timezone: timezone(r), ponds: ready.map((f) => f.facts) }, ai?.mode === 'meta' ? agentProviders : [], ai?.mode === 'mock');
+    for (const n of notes) r.savePattern(n.pondId, new Date(now).toISOString(), currentLang(), n.source, n);
+    return notes;
+  }
+
   api.get('/ponds/:id', (c) => {
     const r = needFarm(c);
     const pond = r.getPond(Number(c.req.param('id')));
@@ -1795,8 +1889,10 @@ export function createApi(
       if (!demoPhone) throw new Error('SYNTEEL_DEMO_PHONE is not set');
       const owner = store.userByPhone(demoPhone) ?? store.createUser({ phone: demoPhone, name: 'Petani Demo', pinHash: hashPin(newToken()) });
       const now = clock();
+      // The forecast call's 7 past days, and the archive before that, so all two weeks of the outdoor pond follow real weather.
+      const past = await thermal.pastWeather(-7.72, 110.36, Array.from({ length: 10 }, (_, i) => now.getTime() - (16 - i) * DAY_MS), now.getTime());
       const weather = await getWeather(-7.72, 110.36, now.getTime()).then(
-        (w) => (w.hours.length ? new Map(w.hours.map((h) => [h.t, h])) : null),
+        (w) => (w.hours.length ? new Map([...past, ...w.hours].map((h) => [h.t, h])) : null),
         () => null,
       );
       if (!weather) console.warn('Weather unavailable: outdoor temperatures are synthetic.');
@@ -1814,7 +1910,12 @@ export function createApi(
           if (first?.data?.source === 'agent') await withLang('en', () => runCaseOnce(r, c.id, 'open', first.id));
         }),
       );
-      await Promise.all([briefings, cases]);
+      // The weekly pattern notes, so the pond pages show one at once (agent when available, else a labelled sample or nothing).
+      const patterns = ai && ai.mode !== 'off' ? (async () => {
+        const id = await withLang('id', () => makePatterns(r));
+        if (id.some((n) => n.source !== 'rules')) await withLang('en', () => makePatterns(r));
+      })().catch((err) => console.error('demo patterns:', err)) : Promise.resolve();
+      await Promise.all([briefings, cases, patterns]);
       store.demo.markTemplate(farmId);
       return farmId;
     },
@@ -1830,6 +1931,20 @@ export function createApi(
         }
       }
       return gone.length;
+    },
+    /**
+     * The weekly pattern agent: every farm with real AI and a pond with enough readings gets new notes once
+     * a week (in Indonesian; the pond page asks again in English on demand). Demo farms get theirs from the template.
+     */
+    async patternFarms() {
+      if (ai?.mode !== 'meta' || !agentProviders.length) return;
+      for (const id of store.farmIds()) {
+        if (store.demo.kindOf(id)) continue;
+        const r = store.farm(id);
+        const last = r.lastPatternAt();
+        if (r.listPonds().length === 0 || (last && clock().getTime() - Date.parse(last) < PATTERN_EVERY_MS)) continue;
+        await withLang('id', () => makePatterns(r)).catch((err) => console.error(`patterns farm ${id}:`, err));
+      }
     },
     /** The evening run: a briefing for every farm with ponds that has none yet today, from `hour` local time. */
     async briefFarms(hour = 17) {

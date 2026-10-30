@@ -11,6 +11,8 @@ import { checkReading, guardRound, matchPond, type RoundPond } from '../server/s
 import { guardDate, guardNotebook } from '../server/src/notebook.ts';
 import { assessPond, type Threshold } from '../server/src/rules.ts';
 import { combine, pairEyes, parseCount, type CountedEel } from '../server/src/sam.ts';
+import { learn, simulate } from '../server/src/thermal.ts';
+import { POND_TYPES, synthPond, synthWeather } from '../server/test/fixtures/thermal-synth.ts';
 
 const rows: { area: string; name: string; want: string; got: string; ok: boolean }[] = [];
 const show = (v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v));
@@ -128,6 +130,82 @@ check(rules, 'eels surfacing', 'critical', level({ behavior: ['surfacing'] }));
 check(rules, 'normal readings', 'ok', level({ readings: { temperature: 27.5, ph: 7.4, tds: 150 } }));
 check(rules, 'reading older than 24 h raises no threshold', 'ok', assessPond([{ ...log({ readings: { temperature: 31 } }), loggedAt: new Date(NOW - DAY_MS - H).toISOString() }], thresholds, at).find((f) => f.id === 'threshold:temperature')?.level ?? 'ok');
 
+// ---------- Water temperature model: old vs new on held-out readings (synthetic ponds) ----------
+// Five synthetic pond types (server/test/fixtures/thermal-synth.ts), 35 days of synthetic weather.
+// Days 1-28 teach the model; each reading in days 29-35 is then predicted from the reading before
+// it (10 or 14 hours earlier). "Midday" adds a 13:00 spot reading on the held-out days, predicted
+// from that morning's reading: the time the sun matters most and the farmer rarely measures.
+const water = 'Water temp';
+const HOUR = 3600_000;
+const tStart = Date.parse('2026-09-01T00:00:00Z');
+const synthW = synthWeather(tStart, 35);
+const wMap = new Map(synthW.map((h) => [h.t, h]));
+const split = tStart + 28 * DAY_MS;
+
+/** The model before 30 October 2026: fixed starting values, only a median offset learned. */
+function oldModel(profile: { setting: string; shaded: boolean | null; depthCm: number }, readings: { t: number; value: number }[]) {
+  const p = profile.setting === 'indoor' ? { k: 0.04, sun: 0.3 } : { k: Math.min(0.2, Math.max(0.02, (0.06 * 30) / profile.depthCm)), sun: profile.shaded ? 1.5 : 3.5 };
+  const sim = (offset: number, t0: number, v0: number, t1: number) => {
+    let t = t0;
+    let v = v0;
+    while (t < t1) {
+      const w = wMap.get(Math.floor(t / HOUR) * HOUR);
+      if (!w) return null;
+      const dt = Math.min(HOUR, t1 - t) / HOUR;
+      const k = p.k * (1 + w.wind / 80);
+      v += (w.airTemp + (p.sun * w.radiation) / 1000 + offset - v) * (1 - Math.pow(1 - Math.min(k, 0.9), dt));
+      t += dt * HOUR;
+    }
+    return v;
+  };
+  const est: number[] = [];
+  for (let i = 1; i < readings.length; i++) {
+    const [a, b] = [readings[i - 1], readings[i]];
+    const gapH = (b.t - a.t) / HOUR;
+    const pred = gapH >= 2 && gapH <= 36 ? sim(0, a.t, a.value, b.t) : null;
+    const reach = 1 - Math.pow(1 - p.k, gapH);
+    if (pred !== null && reach >= 0.2) est.push((b.value - pred) / reach);
+  }
+  const sorted = est.sort((x, y) => x - y);
+  const offset = sorted.length ? Math.max(-4, Math.min(4, sorted[Math.floor(sorted.length / 2)])) : 0;
+  return (t0: number, v0: number, t1: number) => sim(offset, t0, v0, t1);
+}
+
+const mae = (xs: number[]) => xs.reduce((a, x) => a + Math.abs(x), 0) / Math.max(1, xs.length);
+const p80 = (xs: number[]) => [...xs.map(Math.abs)].sort((a, b) => a - b)[Math.floor(0.8 * (xs.length - 1))] ?? 0;
+const f2 = (n: number) => n.toFixed(2);
+const tempRows: string[] = [];
+let oldAll: number[] = [];
+let newAll: number[] = [];
+for (const [i, truth] of POND_TYPES.entries()) {
+  const { water: trueWater, readings } = synthPond(truth, synthW, 11 + i);
+  const train = readings.filter((r) => r.t < split);
+  const held = readings.map((r, j) => ({ r, prev: readings[j - 1] })).filter((x) => x.r.t >= split && x.prev);
+  const old = oldModel(truth.profile, train);
+  const learned = learn(wMap, truth.profile, train, 'Asia/Jakarta');
+  const priorOnly = learn(wMap, truth.profile, [], 'Asia/Jakarta');
+  const errs = (f: (t0: number, v0: number, t1: number) => number | null, pairs: { t0: number; v0: number; t1: number; y: number }[]) => pairs.map((p) => p.y - (f(p.t0, p.v0, p.t1) ?? p.v0));
+  const pairs = held.map((x) => ({ t0: x.prev!.t, v0: x.prev!.value, t1: x.r.t, y: x.r.value }));
+  // Midday spot readings: the true water at 13:00 WIB on held-out days, from that day's morning reading.
+  const midday = held
+    .filter((x) => (new Date(x.r.t).getUTCHours() + 7) % 24 < 10)
+    .map((x) => {
+      const t1 = Math.floor(x.r.t / DAY_MS) * DAY_MS + 6 * HOUR; // 13:00 WIB
+      return { t0: x.r.t, v0: x.r.value, t1, y: trueWater.get(t1)! };
+    })
+    .filter((p) => p.y !== undefined);
+  const oE = errs(old, pairs);
+  const pE = errs((t0, v0, t1) => simulate(wMap, priorOnly.params, t0, v0, t1), pairs);
+  const nE = errs((t0, v0, t1) => simulate(wMap, learned.params, t0, v0, t1), pairs);
+  const oM = errs(old, midday);
+  const nM = errs((t0, v0, t1) => simulate(wMap, learned.params, t0, v0, t1), midday);
+  oldAll = [...oldAll, ...oE];
+  newAll = [...newAll, ...nE];
+  tempRows.push(`${truth.name.padEnd(40)} ${String(pairs.length).padStart(3)}  ${f2(mae(oE))} / ${f2(p80(oE))}   ${f2(mae(pE))}   ${f2(mae(nE))} / ${f2(p80(nE))}   ${f2(mae(oM))} -> ${f2(mae(nM))}   ±${learned.typicalError}`);
+  check(water, `${truth.name}: new error not above old (held-out)`, true, mae(nE) <= mae(oE) + 0.02);
+}
+check(water, 'all synthetic ponds: new mean error below old', true, mae(newAll) < mae(oldAll));
+
 // ---------- Print ----------
 const pad = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '…' : s.padEnd(n));
 console.log(`${pad('area', 15)} ${pad('case', 52)} ${pad('expected', 24)} ${pad('got', 24)} ok`);
@@ -139,5 +217,9 @@ for (const area of [...new Set(rows.map((r) => r.area))]) {
 }
 const failed = rows.filter((r) => !r.ok).length;
 console.log(`\n${rows.length - failed}/${rows.length} cases pass. SAM fixture parsed in ${parseMs.toFixed(0)} ms.`);
+console.log('\nWater temperature, SYNTHETIC ponds: mean / 80% error in °C on held-out readings (days 29-35)');
+console.log(`${'pond type'.padEnd(40)}   n  old model     prior  new model     midday old -> new   shown`);
+for (const row of tempRows) console.log(row);
+console.log(`${'all'.padEnd(40)} ${String(oldAll.length).padStart(3)}  ${f2(mae(oldAll))} / ${f2(p80(oldAll))}           ${f2(mae(newAll))} / ${f2(p80(newAll))}`);
 console.log('Live results (SAM on 14 photos, 6 agent runs, typed Javanese rounds): docs/evaluation.md');
 process.exitCode = failed ? 1 : 0;

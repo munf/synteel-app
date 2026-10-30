@@ -6,6 +6,7 @@ import { demoStore } from './demo.ts';
 import { deviceStore } from './devices.ts';
 import type { Aeration, Batch, Farm, Log, LogData, Phase, Pond, Setting } from './domain.ts';
 import type { Outage } from './power.ts';
+import type { WeatherHour } from './weather.ts';
 
 const defaultPath = fileURLToPath(new URL('../../data/synteel.sqlite', import.meta.url));
 
@@ -169,6 +170,33 @@ export function openDb(path = process.env.SYNTEEL_DB ?? defaultPath) {
   for (const [col, type] of [['lang', 'text'], ['kind', 'text'], ['basis', 'integer']]) {
     if (!briefingCols.includes(col)) db.exec(`alter table briefings add column ${col} ${type}`);
   }
+  // ---------- Pond profile from a photo, learned water temperature, weekly patterns (thermal.ts) ----------
+  // Additive only. Water colour and light at the pond (from a pond photo or picked by hand); past
+  // weather days from the Open-Meteo archive (archive.ts), kept for good; and the weekly pattern
+  // notes per pond (patterns.ts), newest per pond and language shown.
+  for (const [col, type] of [['water_color', 'text'], ['light', 'text']]) {
+    if (!pondCols.includes(col)) db.exec(`alter table ponds add column ${col} ${type}`);
+  }
+  db.exec(`
+    create table if not exists weather_archive (
+      location text not null,
+      day text not null,
+      hours text not null,
+      primary key (location, day)
+    );
+    create table if not exists pond_patterns (
+      id integer primary key,
+      farm_id integer not null references farms(id),
+      pond_id integer not null references ponds(id),
+      created_at text not null,
+      lang text not null,
+      source text not null,
+      body text not null
+    );
+    create index if not exists pond_patterns_pond on pond_patterns (pond_id, id);
+    create index if not exists pond_patterns_farm on pond_patterns (farm_id, created_at);
+  `);
+  // ---------- end of the pond profile block ----------
   // ---------- Farms: power backup, BMKG region, power cuts (power.ts, bmkg.ts) ----------
   // Additive only. power_backup: 'genset' | 'battery' | 'none' (null = not answered yet).
   // adm4: the BMKG village the owner picked (null = nearest to the farm's coordinates).
@@ -217,6 +245,8 @@ const toPond = (r: Row): Pond => ({
   shaded: r.shaded === null || r.shaded === undefined ? null : Boolean(r.shaded),
   aeration: r.aeration as Aeration | null,
   depthCm: r.depth_cm as number | null,
+  waterColor: (r.water_color as Pond['waterColor']) ?? null,
+  light: (r.light as Pond['light']) ?? null,
   nicknames: r.nicknames ? (JSON.parse(r.nicknames as string) as string[]) : [],
 });
 
@@ -348,15 +378,34 @@ export function farmRepo(db: Db, farmId: number) {
     addPond(p: Omit<Pond, 'id' | 'nicknames'> & { nicknames?: string[] }): Pond {
       const nicknames = p.nicknames ?? [];
       const { lastInsertRowid } = db
-        .prepare('insert into ponds (farm_id, name, kind, volume_l, area_m2, setting, shaded, aeration, depth_cm, nicknames) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .run(farmId, p.name, p.kind, p.volumeL, p.areaM2, p.setting, p.shaded === null ? null : Number(p.shaded), p.aeration, p.depthCm, JSON.stringify(nicknames));
-      return { id: Number(lastInsertRowid), ...p, nicknames };
+        .prepare('insert into ponds (farm_id, name, kind, volume_l, area_m2, setting, shaded, aeration, depth_cm, nicknames, water_color, light) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(farmId, p.name, p.kind, p.volumeL, p.areaM2, p.setting, p.shaded === null ? null : Number(p.shaded), p.aeration, p.depthCm, JSON.stringify(nicknames), p.waterColor ?? null, p.light ?? null);
+      return { id: Number(lastInsertRowid), ...p, waterColor: p.waterColor ?? null, light: p.light ?? null, nicknames };
     },
 
     updatePond(p: Pond) {
       db.prepare(
-        'update ponds set name = ?, kind = ?, volume_l = ?, area_m2 = ?, setting = ?, shaded = ?, aeration = ?, depth_cm = ?, nicknames = ? where id = ? and farm_id = ?',
-      ).run(p.name, p.kind, p.volumeL, p.areaM2, p.setting, p.shaded === null ? null : Number(p.shaded), p.aeration, p.depthCm, JSON.stringify(p.nicknames), p.id, farmId);
+        'update ponds set name = ?, kind = ?, volume_l = ?, area_m2 = ?, setting = ?, shaded = ?, aeration = ?, depth_cm = ?, nicknames = ?, water_color = ?, light = ? where id = ? and farm_id = ?',
+      ).run(p.name, p.kind, p.volumeL, p.areaM2, p.setting, p.shaded === null ? null : Number(p.shaded), p.aeration, p.depthCm, JSON.stringify(p.nicknames), p.waterColor ?? null, p.light ?? null, p.id, farmId);
+    },
+
+    // ---------- weekly pattern notes (patterns.ts) ----------
+    savePattern(pondId: number, at: string, lang: string, source: string, body: unknown): number {
+      return Number(db.prepare('insert into pond_patterns (farm_id, pond_id, created_at, lang, source, body) values (?, ?, ?, ?, ?, ?)').run(farmId, pondId, at, lang, source, JSON.stringify(body)).lastInsertRowid);
+    },
+
+    /** A pond's recent pattern notes, newest first. */
+    patterns<T>(pondId: number): { lang: string; createdAt: string; source: string; body: T }[] {
+      const rows = db.prepare('select * from pond_patterns where pond_id = ? and farm_id = ? order by id desc limit 20').all(pondId, farmId) as Row[];
+      return rows.map((r) => ({ lang: r.lang as string, createdAt: r.created_at as string, source: r.source as string, body: JSON.parse(r.body as string) as T }));
+    },
+
+    /** When the farm last got pattern notes (any pond), and notes written since an instant (the daily allowance). */
+    lastPatternAt(): string | null {
+      return ((db.prepare('select max(created_at) as at from pond_patterns where farm_id = ?').get(farmId) as Row).at as string | null) ?? null;
+    },
+    patternRunsSince(sinceIso: string): number {
+      return (db.prepare("select count(*) as n from pond_patterns where farm_id = ? and created_at >= ? and json_extract(body, '$.precomputed') is null").get(farmId, sinceIso) as Row).n as number;
     },
 
     archivePond(id: number) {
@@ -539,6 +588,21 @@ export function repo(db: Db) {
   const now = () => new Date().toISOString();
   return {
     farm: (farmId: number) => farmRepo(db, farmId),
+    /** Past weather days from the Open-Meteo archive (archive.ts). */
+    weatherArchive: {
+      days(location: string, dates: string[]) {
+        const out = new Map<string, WeatherHour[]>();
+        const get = db.prepare('select hours from weather_archive where location = ? and day = ?');
+        for (const d of dates) {
+          const r = get.get(location, d) as Row | undefined;
+          if (r) out.set(d, JSON.parse(r.hours as string));
+        }
+        return out;
+      },
+      save(location: string, day: string, hours: WeatherHour[]) {
+        db.prepare('insert or replace into weather_archive (location, day, hours) values (?, ?, ?)').run(location, day, JSON.stringify(hours));
+      },
+    },
     devices: deviceStore(db),
     demo: demoStore(db),
 

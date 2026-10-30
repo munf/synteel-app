@@ -1,8 +1,10 @@
 import { useState } from 'preact/hooks';
-import { api, type Aeration, type Farm, type Me, type Phase, type PondSummary, type PowerBackup, type Setting } from '../api.ts';
+import { api, type Aeration, type Farm, type Me, type Phase, type PondSummary, type PowerBackup } from '../api.ts';
 import { BackupChoice } from './power.tsx';
-import { aerationLabel, phaseLabel, settingLabel } from '../labels.ts';
-import { Chips, Field, Icon, initialOf, Soon, tankPath, Tick, Wordmark } from '../ui.tsx';
+import { aerationLabel, phaseLabel } from '../labels.ts';
+import { Chips, Field, Icon, initialOf, kindLabel, Tick, Wordmark } from '../ui.tsx';
+import { applyDraft, PondPhoto, profileBody, ProfileFields, type ProfileValue } from '../pondprofile.tsx';
+import type { PondPhotoDraft } from '../api.ts';
 import { JoinByCode } from '../join.tsx';
 import { LOCALE, t } from '../i18n.ts';
 
@@ -180,12 +182,6 @@ export function NoPonds({
   );
 }
 
-const TYPES = [
-  { id: 'bulat', label: t('Tangki bulat', 'Round tank') },
-  { id: 'terpal', label: t('Terpal / beton', 'Tarp or concrete') },
-  { id: 'fiber', label: t('Bak fiber', 'Fiber tub') },
-] as const;
-
 /** "Kolam D" after A, B and C. */
 function nextName(names: string[]) {
   // Either language's word counts as taken ("Kolam A" and "Pond A" are the same pond to the farmer).
@@ -207,7 +203,9 @@ function following(name: string, names: string[]) {
   return next;
 }
 
-const typeLabel = (kind: string) => TYPES.find((ty) => ty.id === kind)?.label ?? t('Kolam', 'Pond');
+const typeLabel = (kind: string | null) => (kind && kindLabel[kind]) || t('Kolam', 'Pond');
+/** A new pond starts as a tarp tank under a roof, 30 cm deep: the most common nursery set-up. */
+const NEW_PROFILE: ProfileValue = { kind: 'terpal', place: 'roofed', waterColor: null, light: null, depthCm: '30' };
 const longDate = (ymd: string) => new Date(`${ymd}T00:00:00`).toLocaleDateString(LOCALE, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
 interface Saved {
@@ -306,17 +304,15 @@ export function AddPond({
   const [name, setName] = useState(nextName(names));
   const [nicks, setNicks] = useState<string[]>([]);
   const [nickDraft, setNickDraft] = useState('');
-  const [kind, setKind] = useState<string>('terpal');
+  const [profile, setProfile] = useState<ProfileValue>(NEW_PROFILE);
+  const [photo, setPhoto] = useState<PondPhotoDraft | null>(null);
   const [phase, setPhase] = useState<Phase[]>(['elver']);
   const [stockedAt, setStockedAt] = useState(today);
   const [dateMode, setDateMode] = useState<'today' | 'yesterday' | 'pick'>('today');
   const [initialCount, setInitialCount] = useState('');
   const [volumeL, setVolumeL] = useState('');
   const [areaM2, setAreaM2] = useState('');
-  const [setting, setSetting] = useState<Setting[]>(['outdoor']);
-  const [shaded, setShaded] = useState<('yes' | 'no')[]>(['yes']);
   const [aeration, setAeration] = useState<Aeration[]>(['full']);
-  const [depthCm, setDepthCm] = useState('30');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -333,17 +329,14 @@ export function AddPond({
       const body = {
         name,
         nicknames,
-        kind,
+        ...profileBody(profile),
         volumeL: volumeL ? Number(volumeL) : undefined,
         areaM2: areaM2 ? Number(areaM2.replace(',', '.')) : undefined,
-        setting: setting[0],
-        shaded: setting[0] === 'outdoor' && shaded[0] ? shaded[0] === 'yes' : undefined,
         aeration: aeration[0],
-        depthCm: depthCm ? Number(depthCm.replace(',', '.')) : undefined,
       };
       const { pond } = await api.addPond(body);
       await api.startBatch(pond.id, { phase: phase[0] ?? 'elver', stockedAt, initialCount: initialCount ? Number(initialCount) : undefined });
-      const summary = [typeLabel(kind), phaseLabel[phase[0] ?? 'elver'], t(`tebar ${longDate(stockedAt)}`, `stocked ${longDate(stockedAt)}`).replace(/ /g, '\u00a0'), initialCount ? t(`${initialCount} ekor`, `${initialCount} eels`) : null]
+      const summary = [typeLabel(profile.kind), phaseLabel[phase[0] ?? 'elver'], t(`tebar ${longDate(stockedAt)}`, `stocked ${longDate(stockedAt)}`).replace(/ /g, '\u00a0'), initialCount ? t(`${initialCount} ekor`, `${initialCount} eels`) : null]
         .filter(Boolean)
         .join(' · ');
       setAdded([...added, pond.name]);
@@ -383,15 +376,13 @@ export function AddPond({
     setInitialCount('');
     setNicks([]);
     setNickDraft('');
-    setKind('terpal');
+    setProfile(NEW_PROFILE);
+    setPhoto(null);
     setPhase(['elver']);
     chooseDate('today');
     setVolumeL('');
     setAreaM2('');
-    setSetting(['outdoor']);
-    setShaded(['yes']);
     setAeration(['full']);
-    setDepthCm('30');
     setFormKey(formKey + 1);
     setSaved(null);
     window.scrollTo(0, 0);
@@ -460,19 +451,10 @@ export function AddPond({
             <span class="strong" style={{ fontSize: '1rem' }}>
               {t(`Isian disalin dari ${copied}`, `Details copied from ${copied}`)}
             </span>
-            <span>{t('Ganti nama dan jumlah benih. Jenis kolam, fase dan tanggal tebar sudah sama.', 'Change the name and the number stocked. Pond type, stage and stocking date stay the same.')}</span>
+            <span>{t('Ganti nama dan jumlah benih. Jenis wadah, tempat, fase dan tanggal tebar sudah sama.', 'Change the name and the number stocked. Container, place, stage and stocking date stay the same.')}</span>
           </span>
         </div>
       )}
-
-      <div class="card dashed" style={{ alignItems: 'center', textAlign: 'center' }}>
-        <span class="icon-box" style={{ width: 56, height: 56, borderRadius: 28 }}>
-          <Icon name="camera" size={26} />
-        </span>
-        <span class="strong">{t('Foto kolam', 'Pond photo')}</span>
-        <span class="meta">{t('Supaya mudah dikenali.', 'So it is easy to recognize.')}</span>
-        <Soon />
-      </div>
 
       <section class="card">
         <Field label={t('Nama kolam', 'Pond name')}>
@@ -480,27 +462,6 @@ export function AddPond({
         </Field>
 
         <Nicknames nicks={nicks} onChange={setNicks} draft={nickDraft} onDraft={setNickDraft} />
-
-        <div class="field">
-          <span class="field-label">{t('Jenis kolam', 'Pond type')}</span>
-          <div class="grid3">
-            {TYPES.map((ty) => (
-              <button type="button" key={ty.id} class={`type-tile${kind === ty.id ? ' on' : ''}`} aria-pressed={kind === ty.id} onClick={() => setKind(ty.id)}>
-                <span class="thumb sm" style={{ width: 48, height: 48, background: 'var(--bg)', color: 'var(--ink-2)' }}>
-                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d={tankPath(ty.id)} />
-                  </svg>
-                </span>
-                {ty.label}
-                {kind === ty.id && (
-                  <span class="corner-tick">
-                    <Icon name="check" size={14} stroke={3} />
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
 
         <div class="field">
           <span class="field-label">{t('Fase sidat', 'Eel stage')}</span>
@@ -543,11 +504,20 @@ export function AddPond({
         </Field>
       </section>
 
+      <section class="card">
+        <div class="stack-xs">
+          <h2>{t('Wadah dan tempat', 'Container and place')}</h2>
+          <span class="meta">{t('Dasar perkiraan suhu air. Foto kolam bisa mengisinya.', 'The water temperature estimate starts from this. A pond photo can fill it in.')}</span>
+        </div>
+        <PondPhoto draft={photo} onDraft={(d) => (setPhoto(d), setProfile(applyDraft(profile, d)))} />
+        <ProfileFields value={profile} onChange={setProfile} draft={photo} />
+      </section>
+
       <details class="card more">
         <summary>
           <span class="stack-xs">
             <span class="strong">{t('Detail lain', 'More details')}</span>
-            <span class="meta">{t('Membuat perkiraan suhu air lebih tepat', 'Makes the water temperature forecast more accurate')}</span>
+            <span class="meta">{t('Luas, aerasi dan volume air', 'Area, aeration and water volume')}</span>
           </span>
           <Icon name="down" />
         </summary>
@@ -556,22 +526,9 @@ export function AddPond({
             <input inputMode="decimal" value={areaM2} onInput={(e) => setAreaM2(e.currentTarget.value)} placeholder={t('contoh: 12', 'example: 12')} />
           </Field>
           <div class="field">
-            <span class="field-label">{t('Tempat', 'Location')}</span>
-            <Chips options={settingLabel} value={setting} onChange={setSetting} />
-          </div>
-          {setting[0] === 'outdoor' && (
-            <div class="field">
-              <span class="field-label">{t('Ada peneduh (paranet atau atap)?', 'Any shade (shade net or roof)?')}</span>
-              <Chips options={{ yes: t('Ya', 'Yes'), no: t('Tidak', 'No') }} value={shaded} onChange={setShaded} />
-            </div>
-          )}
-          <div class="field">
             <span class="field-label">{t('Aerasi', 'Aeration')}</span>
             <Chips options={aerationLabel} value={aeration} onChange={setAeration} />
           </div>
-          <Field label={t('Kedalaman air (cm)', 'Water depth (cm)')}>
-            <input inputMode="decimal" value={depthCm} onInput={(e) => setDepthCm(e.currentTarget.value)} placeholder="30" />
-          </Field>
           <Field label={t('Volume air (liter)', 'Water volume (liters)')}>
             <input inputMode="numeric" value={volumeL} onInput={(e) => setVolumeL(e.currentTarget.value)} placeholder={t('contoh: 870', 'example: 870')} />
           </Field>

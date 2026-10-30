@@ -28,6 +28,9 @@ export interface Pond {
   shaded: boolean | null; // paranet or roof over an outdoor pond
   aeration: Aeration | null; // 'full' = 24 hours a day
   depthCm: number | null;
+  /** From a pond photo or picked by hand: water colour and light at the pond (thermal.ts priors, husbandry notes). */
+  waterColor?: 'clear' | 'green' | 'brown' | 'cloudy' | null;
+  light?: 'bright' | 'dim' | 'dark' | null;
   /** Other names farmers use for the pond ("kolam dekat pintu"), for the voice round. */
   nicknames: string[];
 }

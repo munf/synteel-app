@@ -147,6 +147,27 @@ Thresholds, the oxygen-risk score, the check schedule and the night alarms are p
 - the briefing tests run with no model and with every provider failing, and the rule checks come out the same;
 - the guard keeps every rule check whatever the agent submits, so the agent can add checks but cannot remove or move one.
 
+## Water temperature model per pond (synthetic backtest)
+
+The water temperature estimate is plain arithmetic, no model call ([`server/src/thermal.ts`](../server/src/thermal.ts)). Each pond starts from its profile (container, indoors / under a roof / open, depth, light, water color) and then learns three numbers from the farmer's own readings: an offset, how fast it follows the weather, and how much the sun warms it, by a ridge regression pulled towards the profile's starting values. Evaporation uses Open-Meteo humidity and reference evaporation. Old notebook readings are matched with past weather from the Open-Meteo archive, so a pond can learn on its first day. The "usually off by ±X °C" each pond shows is the 80th percentile of its own rolling backtest: every reading predicted from the one before it, using only what was learned before it. With fewer than 6 scored readings the pond shows "still learning" and its profile's starting error.
+
+**Synthetic only.** Five pond types are simulated hour by hour with physics that is deliberately not the app's model (sun reaching one tank only between 11:00 and 14:00, a rougher evaporation rule, readings at 07:00 and 17:00 ± 40 minutes, 0.3 °C noise, rounded to 0.1, 10% of readings missed). Days 1-28 teach the model; each reading on days 29-35 is predicted from the reading before it. The old model is the one before 30 October 2026: fixed starting values and a median offset. `npm run eval` prints this table.
+
+| Pond type (synthetic) | Held-out readings | Old model, mean / 80% error | New model, prior only | New model, learned, mean / 80% | 13:00 spot check, old → new |
+|---|---|---|---|---|---|
+| Indoor fiber tank | 14 | 0.27 / 0.31 °C | 0.31 °C | 0.10 / 0.16 °C | 0.13 → 0.09 °C |
+| Aquarium indoors | 12 | 0.54 / 0.81 °C | 0.38 °C | 0.13 / 0.20 °C | 0.15 → 0.15 °C |
+| Concrete pond under shade net | 13 | 0.41 / 0.58 °C | 0.16 °C | 0.14 / 0.20 °C | 0.23 → 0.18 °C |
+| Open tarp tank in the sun | 12 | 1.21 / 1.40 °C | 1.35 °C | 0.09 / 0.11 °C | 1.24 → 0.97 °C |
+| Roofed tank, midday sun through a gap | 12 | 0.10 / 0.14 °C | 0.26 °C | 0.09 / 0.12 °C | 0.43 → 0.42 °C |
+| All | 63 | 0.50 / 0.83 °C | | 0.11 / 0.17 °C | |
+
+The biggest gain is the open tarp tank, whose sun response the old fixed values underestimated. The 13:00 column shows the limit: with readings only at 07:00 and 17:00, midday heat is still learned poorly, which is why each pond also gets a suggested extra measuring time (the awake hour where the estimate is least certain and least measured). These are synthetic ponds; no partner-farm readings have been scored yet.
+
+**Pond photo → profile (Muse Spark vision).** A photo of the pond gives a draft profile the farmer checks; fields the model is unsure of stay empty, and notes about light and water color come from fixed text in code ([`server/src/pondphoto.ts`](../server/src/pondphoto.ts)). Live check on 30 October 2026 with two public-domain/CC0 photos from Wikimedia Commons (not in the repo), Muse Spark 1.3 on the Meta API: an outdoor tarp tank with green water and sky reflection came back terpal, open, green, bright (4.2 s); a row of open concrete eel tanks with the water hidden under plants came back beton, open, bright, with water color left empty and "water surface covered by plants" reported (5.4 s). Two photos only: a smoke test, not an accuracy figure.
+
+**Weekly pattern agent (Muse Spark Open on Baseten).** Once a week per farm, and on request from a pond's page, the agent reads each pond's backtest misses by time of day through tools and writes one or two sentences plus a suggested measuring time ([`server/src/patterns.ts`](../server/src/patterns.ts)). Every number it may use comes from the tools; a guard refuses any number not in the pond's data, a time that is not one of the computed hours, more than two sentences, oxygen, medicine or diagnosis, and that pond then gets the rules sentence. Two live runs on the seeded demo farm on 30 October 2026: an Indonesian run over 3 ponds (6.2 s, 5 tool calls) gave 3 notes that passed the guard; an English run over one pond (4.5 s) passed but used the Indonesian names for parts of the day and drew a conclusion from a time of day with a single reading. Both were fixed in code afterwards (the tools now give the part names in the viewer's language and no number for a time of day with fewer than 3 readings), not re-measured.
+
 ## Limits
 
 - Small samples: 14 photos, 3 typed voice rounds, 6 agent runs. Treat them as spot checks.

@@ -120,15 +120,23 @@ const TANK: Record<string, string> = {
   bulat: 'M5 7c0-1.7 3.1-3 7-3s7 1.3 7 3v10c0 1.7-3.1 3-7 3s-7-1.3-7-3zM5 7c0 1.7 3.1 3 7 3s7-1.3 7-3M5 13c2 .8 4.3 1.2 7 1.2s5-.4 7-1.2',
   terpal: 'M3 8h18l-2 11H5zM6.5 12.5c1.4-.9 2.8-.9 4.2 0s2.8.9 4.2 0 2.4-.8 3.1-.4',
   fiber: 'M4 6h16v3H4zM5 9l1 10h12l1-10M8 14c1.3-.8 2.7-.8 4 0s2.7.8 4 0',
+  // Pond types a pond photo can name (pondprofile.tsx): glass tank, concrete tank, earth pond, other.
+  akuarium: 'M3 5h18v14H3zM3 9h18M7 14c1.2-1 2.6-1 3.8 0s2.6 1 3.8 0M17 13.5h.01',
+  beton: 'M3 6h18v13H3zM6 6v3M12 6v3M18 6v3M6 14c2-.9 4-.9 6 0s4 .9 6 0',
+  tanah: 'M2 9l4 9h12l4-9M5.5 13c2.2.9 4.4.9 6.5 0s4.3-.9 6.5 0',
+  lain: 'M5 7h14v12H5zM9 11.5h6M9 15h4',
   // A Synteel Nursery tank with its sensor probe.
   gen5: 'M4 8h16v12H4zM4 13c2.7-1 5.3-1 8 0s5.3 1 8 0M15 3v9M13 3h4',
 };
-export const tankPath = (kind: string | null) => TANK[kind === 'beton' ? 'terpal' : (kind ?? 'terpal')] ?? TANK.terpal;
+export const tankPath = (kind: string | null) => TANK[kind ?? 'terpal'] ?? TANK.terpal;
 export const kindLabel: Record<string, string> = {
   bulat: t('Tangki bulat', 'Round tank'),
   terpal: t('Terpal', 'Tarp'),
-  beton: t('Beton', 'Concrete'),
+  beton: t('Bak semen', 'Concrete tank'),
   fiber: t('Bak fiber', 'Fiber tub'),
+  akuarium: t('Akuarium', 'Aquarium'),
+  tanah: t('Kolam tanah', 'Earth pond'),
+  lain: t('Lainnya', 'Other'),
   gen5: 'Synteel Nursery Gen0',
 };
 
