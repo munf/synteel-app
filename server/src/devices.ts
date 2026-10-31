@@ -349,6 +349,10 @@ export function deviceStore(db: Db) {
     unlink(code: string) {
       db.prepare('delete from device_links where code = ?').run(code);
     },
+    /** A pond taken off the list stops taking readings; the device's other ponds keep theirs. */
+    unlinkPond(pondId: number) {
+      db.prepare('delete from device_links where pond_id = ?').run(pondId);
+    },
     /** The link of one pond, with its device. */
     forPond(pondId: number): (DeviceLink & { device: Device }) | null {
       const r = db.prepare('select l.*, d.* from device_links l join devices d on d.code = l.code where l.pond_id = ?').get(pondId) as Row | undefined;

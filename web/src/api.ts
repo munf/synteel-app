@@ -255,6 +255,10 @@ export const api = {
   saveFarm: (farm: Partial<Farm>) => call<{ farm: Farm }>('PUT', '/farm', farm),
   addPond: (pond: PondProfile & { name: string }) => call<{ pond: PondSummary }>('POST', '/ponds', pond),
   updatePond: (id: number, pond: PondProfile) => call<{ pond: PondSummary }>('PUT', `/ponds/${id}`, pond),
+  /** "Hapus kolam": off the list and Waspada, records kept; Profil can bring it back. */
+  archivePond: (id: number) => call<void>('DELETE', `/ponds/${id}`),
+  archivedPonds: () => call<{ ponds: { id: number; name: string }[] }>('GET', '/ponds/archived'),
+  restorePond: (id: number) => call<{ pond: PondSummary }>('POST', `/ponds/${id}/restore`),
   nowcast: () => call<NowcastState>('GET', '/nowcast'),
   /** A pond photo → a draft profile the farmer checks. Nothing is saved. Uses the farm's AI quota. */
   pondPhoto: (image: Blob, pondId?: number) => {

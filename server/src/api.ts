@@ -1559,9 +1559,22 @@ export function createApi(
 
   api.get('/nowcast', async (c) => c.json(await nowcastFull(needFarm(c))));
 
+  // "Hapus kolam": the pond leaves the list, Waspada and its device; its records stay and it can come back.
   api.delete('/ponds/:id', (c) => {
-    needOwner(c).archivePond(Number(c.req.param('id')));
+    const r = needOwner(c);
+    const pond = r.getPond(Number(c.req.param('id')));
+    if (!pond) return c.json({ error: tx('Kolam tidak ditemukan', 'Pond not found') }, 404);
+    store.devices.unlinkPond(pond.id);
+    r.archivePond(pond.id);
     return c.body(null, 204);
+  });
+
+  api.get('/ponds/archived', (c) => c.json({ ponds: needOwner(c).archivedPonds() }));
+
+  api.post('/ponds/:id/restore', (c) => {
+    const r = needOwner(c);
+    if (!r.restorePond(Number(c.req.param('id')))) return c.json({ error: tx('Kolam tidak ditemukan', 'Pond not found') }, 404);
+    return c.json({ pond: pondSummary(r, r.getPond(Number(c.req.param('id')))!) });
   });
 
   // ---------- pond photo → profile draft; water temperature model; weekly pattern note ----------

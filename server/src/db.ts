@@ -426,6 +426,13 @@ export function farmRepo(db: Db, farmId: number) {
     archivePond(id: number) {
       db.prepare('update ponds set archived = 1 where id = ? and farm_id = ?').run(id, farmId);
     },
+    /** Ponds taken off the list ("Hapus kolam"); their records stay and the owner can bring them back. */
+    archivedPonds(): { id: number; name: string }[] {
+      return (db.prepare('select id, name from ponds where farm_id = ? and archived = 1 order by name').all(farmId) as Row[]).map((r) => ({ id: r.id as number, name: r.name as string }));
+    },
+    restorePond(id: number): boolean {
+      return db.prepare('update ponds set archived = 0 where id = ? and farm_id = ? and archived = 1').run(id, farmId).changes > 0;
+    },
 
     // The pond-level calls below take a pond id the caller already checked with getPond.
     activeBatch(pondId: number): Batch | null {

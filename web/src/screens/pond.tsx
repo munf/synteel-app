@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'preact/hooks';
 import { StepList, useSteps } from '../steps.tsx';
 import { CaseCard, ClosedCases, useCases } from './case.tsx';
-import { api, ApiError, coverUrl, type Limits, type Log, type Nowcast, type NowcastState, type PondPhotoDraft, type PondProfile, type PondSummary, type PondTemperature, type Role } from '../api.ts';
+import { api, ApiError, coverUrl, type Aeration, type Limits, type Log, type Nowcast, type NowcastState, type PondPhotoDraft, type PondProfile, type PondSummary, type PondTemperature, type Role } from '../api.ts';
 import { applyDraft, errorWords, PondPhoto, profileBody, ProfileFields, profileLine, profileOf, saveCover, useCoverChange } from '../pondprofile.tsx';
 import type { Go } from '../app.tsx';
 import { aerationLabel, fmtAgo, fmtNum, fmtTemp, fmtTime, phaseLabel, readingWord, sourceLabel, summarizeLog } from '../labels.ts';
 import { usePrefs } from '../prefs.ts';
-import { ActionBar, Icon, kindLabel, Notice, Shape, SimChip, StatusPill, tankPath, toneOf, type Tone } from '../ui.tsx';
+import { ActionBar, Chips, Field, Icon, kindLabel, Notice, Shape, SimChip, StatusPill, tankPath, toneOf, type Tone } from '../ui.tsx';
 import { isEn, LOCALE, t } from '../i18n.ts';
 import './pond.css';
 
@@ -526,6 +526,120 @@ function ProfileEditor({ pond, onSaved, onClose, go }: { pond: PondSummary; onSa
   );
 }
 
+const SETTING_ROW = { color: 'var(--ink)', minHeight: 72, padding: '12px 0', gap: 12 };
+
+/** "Pengaturan kolam" (owner only): change the name, size and aeration, or take the pond off the list. */
+function PondSettings({ pond, onSaved, onArchived }: { pond: PondSummary; onSaved: (p: PondSummary) => void; onArchived: () => void }) {
+  const [mode, setMode] = useState<'edit' | 'archive' | null>(null);
+  const [name, setName] = useState(pond.name);
+  const [areaM2, setAreaM2] = useState(pond.areaM2 != null ? String(pond.areaM2).replace('.', isEn ? '.' : ',') : '');
+  const [aeration, setAeration] = useState<Aeration[]>(pond.aeration ? [pond.aeration] : []);
+  const [volumeL, setVolumeL] = useState(pond.volumeL != null ? String(pond.volumeL) : '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const open = (m: 'edit' | 'archive' | null) => {
+    setMode(m);
+    setError('');
+    setName(pond.name);
+    setAreaM2(pond.areaM2 != null ? String(pond.areaM2).replace('.', isEn ? '.' : ',') : '');
+    setAeration(pond.aeration ? [pond.aeration] : []);
+    setVolumeL(pond.volumeL != null ? String(pond.volumeL) : '');
+  };
+  const run = async (job: () => Promise<void>) => {
+    setBusy(true);
+    setError('');
+    try {
+      await job();
+      setMode(null);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+    setBusy(false);
+  };
+  const save = () =>
+    run(async () => {
+      const area = areaM2.trim() ? Number(areaM2.replace(',', '.')) : null;
+      const volume = volumeL.trim() ? Number(volumeL) : null;
+      if (!name.trim()) throw new Error(t('Nama kolam belum diisi', 'The pond name is empty'));
+      if ((area !== null && !(area > 0)) || (volume !== null && !(volume > 0))) throw new Error(t('Luas dan volume harus angka lebih dari 0', 'Area and volume must be numbers above 0'));
+      onSaved((await api.updatePond(pond.id, { name: name.trim(), areaM2: area, volumeL: volume, aeration: aeration[0] ?? null } as PondProfile)).pond);
+    });
+  const archive = () =>
+    run(async () => {
+      await api.archivePond(pond.id);
+      onArchived();
+    });
+
+  return (
+    <section class="card list" aria-labelledby="pond-settings-title">
+      <h2 id="pond-settings-title" style={{ paddingTop: 20, paddingBottom: 4 }}>
+        {t('Pengaturan kolam', 'Pond settings')}
+      </h2>
+      {mode === null && (
+        <>
+          <button type="button" class="list-row link-row" style={SETTING_ROW} onClick={() => open('edit')}>
+            <Icon name="pencil" size={20} />
+            <span class="grow semi">{t('Ubah nama, luas dan aerasi', 'Change name, size and aeration')}</span>
+            <Icon name="next" size={20} />
+          </button>
+          <button type="button" class="list-row link-row" style={{ ...SETTING_ROW, color: 'var(--bad)' }} onClick={() => open('archive')}>
+            <Icon name="trash" size={20} />
+            <span class="grow semi">{t('Hapus kolam', 'Delete pond')}</span>
+            <Icon name="next" size={20} />
+          </button>
+        </>
+      )}
+      {mode === 'edit' && (
+        <div class="stack" style={{ padding: '8px 0 20px' }}>
+          <Field label={t('Nama kolam', 'Pond name')}>
+            <input value={name} onInput={(e) => setName(e.currentTarget.value)} required />
+          </Field>
+          <Field label={t('Luas dasar kolam (m²)', 'Pond floor area (m²)')} hint={t('Panjang × lebar, untuk menghitung kepadatan.', 'Length × width, to work out stocking density.')}>
+            <input inputMode="decimal" value={areaM2} onInput={(e) => setAreaM2(e.currentTarget.value)} placeholder={t('contoh: 12', 'example: 12')} />
+          </Field>
+          <div class="field">
+            <span class="field-label">{t('Aerasi', 'Aeration')}</span>
+            <Chips options={aerationLabel} value={aeration} onChange={setAeration} />
+          </div>
+          <Field label={t('Volume air (liter)', 'Water volume (liters)')}>
+            <input inputMode="numeric" value={volumeL} onInput={(e) => setVolumeL(e.currentTarget.value)} placeholder={t('contoh: 870', 'example: 870')} />
+          </Field>
+          {error && <p class="error">{error}</p>}
+          <div class="grid2" style={{ gap: 8 }}>
+            <button type="button" class="btn primary" disabled={busy} onClick={save}>
+              {busy ? t('Menyimpan…', 'Saving…') : t('Simpan', 'Save')}
+            </button>
+            <button type="button" class="btn secondary" disabled={busy} onClick={() => open(null)}>
+              {t('Batal', 'Cancel')}
+            </button>
+          </div>
+        </div>
+      )}
+      {mode === 'archive' && (
+        <div class="stack" style={{ padding: '8px 0 20px' }} role="group" aria-labelledby="archive-title">
+          <span id="archive-title" class="strong">{t(`Hapus ${pond.name}?`, `Delete ${pond.name}?`)}</span>
+          <span class="ink2">
+            {t(
+              'Kolam hilang dari daftar kolam dan Waspada. Catatan lama tetap tersimpan, dan kolam bisa dikembalikan dari Profil.',
+              'The pond leaves the pond list and the night watch. Its records are kept, and the pond can be brought back from Profile.',
+            )}
+            {pond.device && ` ${t('Alat yang tersambung dilepas dari kolam ini.', 'The connected device is unlinked from this pond.')}`}
+          </span>
+          {error && <p class="error">{error}</p>}
+          <div class="grid2" style={{ gap: 8 }}>
+            <button type="button" class="btn danger" disabled={busy} onClick={archive}>
+              {busy ? t('Menghapus…', 'Deleting…') : t('Hapus kolam', 'Delete pond')}
+            </button>
+            <button type="button" class="btn secondary" disabled={busy} onClick={() => open(null)}>
+              {t('Batal', 'Cancel')}
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function PondDetail({
   id,
   nowcast,
@@ -911,6 +1025,21 @@ export function PondDetail({
       <ClosedCases list={cases.list.filter((c) => c.status === 'closed')} />
 
       <DeviceCard pond={pond} logs={logs} ponds={ponds} role={role} go={go} onChanged={onChanged} />
+
+      {role !== 'worker' && (
+        <PondSettings
+          key={pond.id}
+          pond={pond}
+          onSaved={(p) => {
+            setData({ ...data, pond: p });
+            onChanged();
+          }}
+          onArchived={() => {
+            onChanged();
+            go({ name: 'today' });
+          }}
+        />
+      )}
 
       <ActionBar>
         <button class="btn primary" onClick={() => go({ name: 'record-pond', pondId: pond.id })}>
