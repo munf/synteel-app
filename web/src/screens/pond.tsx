@@ -124,7 +124,6 @@ function MetricCard({ pond, logs }: { pond: PondSummary; logs: Log[] }) {
               ))}
             </div>
           </div>
-          <span class="meta">{t('Pita hijau = rentang target. Satu batang = ukuran terakhir tiap hari.', 'Green band = target range. One bar = last reading of each day.')}</span>
         </div>
       )}
       <p>{sentence}</p>
