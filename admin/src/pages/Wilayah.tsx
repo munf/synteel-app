@@ -7,12 +7,13 @@ import { angka, Kosong, Muat, Panel, useData, wibTgl } from '../komponen/ui'
 import type { Wilayah } from '../tipe'
 
 /** kelas skala berurutan (satu warna, muda → tua) — warna di --seq-1..5 */
+// sesuai jumlah tambak sidat per kabupaten saat ini; naikkan batasnya bila tambak bertambah
 const KELAS = [
-  { min: 3, max: 9, label: '3–9' },
-  { min: 10, max: 19, label: '10–19' },
-  { min: 20, max: 29, label: '20–29' },
-  { min: 30, max: 39, label: '30–39' },
-  { min: 40, max: Infinity, label: '40+' },
+  { min: 3, max: 4, label: '3–4' },
+  { min: 5, max: 6, label: '5–6' },
+  { min: 7, max: 9, label: '7–9' },
+  { min: 10, max: 14, label: '10–14' },
+  { min: 15, max: Infinity, label: '15+' },
 ]
 const kelasDari = (n: number) => KELAS.findIndex((k) => n >= k.min && n <= k.max) + 1
 

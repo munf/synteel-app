@@ -373,8 +373,7 @@ button { cursor: pointer; }
 .grid-pengguna { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(300px, 1fr); gap: 14px; align-items: start; }
 .tabel-akun { min-width: 780px; }
 .tabel-akun td small { display: block; font-size: 11px; }
-.tabel-akun tr.terpilih td { background: var(--panel-2); }
-.tabel-akun tr.terpilih td:first-child { box-shadow: inset 2px 0 0 var(--teks); }
+.tabel-akun tr.terpilih td { background: var(--panel-3); }
 .tautan-baris { border: 0; background: none; padding: 0; font-weight: 700; text-align: left; text-decoration: underline; text-decoration-color: var(--garis-kuat); text-underline-offset: 3px; }
 .tautan-baris:hover { text-decoration-color: currentColor; }
 .peran { font-size: 11px; padding: 2px 7px; border-radius: 5px; background: var(--panel-3); font-weight: 600; text-transform: capitalize; }
