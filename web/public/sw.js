@@ -39,6 +39,8 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== SCOPE.origin || !url.pathname.startsWith(SCOPE.pathname) || isApi(url)) return;
+  // The team dashboard (admin/) is a separate page: never cached, never served as the app shell.
+  if (url.pathname.startsWith(new URL('admin/', SCOPE).pathname)) return;
 
   if (req.mode === 'navigate') {
     event.respondWith(

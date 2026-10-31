@@ -5,6 +5,7 @@ import type { CaseRow, FarmRepo, LogRecord, Repo, Role } from './db.ts';
 import type { HistoryLog, NotebookPage, NotebookSaveResult, QuotaState, SupportTopic } from './contract.ts';
 import { guardNotebook, localIso } from './notebook.ts';
 import type { SendMail } from './mail.ts';
+import type { EventLog } from './admin.ts';
 import { attemptLimiter, AuthError, checkPin, emailCodes, hashPin, hashToken, inviteCode, maskEmail, newToken, normalizeEmail, normalizePhone, tempPin, verifyPin, type CodePurpose } from './auth.ts';
 import { knowledge } from './knowledge.ts';
 import { KINDS, SCENARIOS, sendEveryMs, simulate, toLogData, type Device, type DeviceKind, type Scenario } from './devices.ts';
@@ -168,6 +169,8 @@ export interface ApiDeps {
   removeFarmFiles?: (farmId: number) => void;
   /** Where pond cover pictures are kept (captures.ts coverStore); null = covers cannot be saved. */
   covers?: CoverStore | null;
+  /** What the team dashboard counts (admin.ts): failed sign-ins, code e-mails, errors, demo visits, last seen. */
+  events?: EventLog | null;
 }
 
 /** Briefings made in another language for the same evening (the viewer's language had none yet), per farm per day. */
@@ -193,7 +196,7 @@ const PHOTO_VIDEO_BONUS = 2;
 const STREAK_BONUS = 10;
 const STREAK_EVERY = 7;
 
-const SUPPORT_TOPICS: Record<SupportTopic, string> = { pin: 'Masuk dan PIN', catat: 'Catat dan suara', waspada: 'Waspada dan alarm', jatah: 'Jatah AI', lain: 'Lainnya' };
+export const SUPPORT_TOPICS: Record<SupportTopic, string> = { pin: 'Masuk dan PIN', catat: 'Catat dan suara', waspada: 'Waspada dan alarm', jatah: 'Jatah AI', lain: 'Lainnya' };
 
 /** Ponds can have other names ("kolam dekat pintu"): trimmed, single spaces, at most 30 characters. */
 function nickname(v: unknown): string {
@@ -274,7 +277,7 @@ type Env = { Variables: { userId: number; farmId: number | null; tokenHash: stri
 
 export function createApi(
   store: Repo,
-  { clock = () => new Date(), getWeather = defaultGetWeather, geocode = defaultGeocode, ai, saveCapture, cookieName = 'synteel_session', demoPhone = null, farmAiCap = 0, agentProviders = [], sam = null, getBmkg = getBmkgForecast, getStorm = getStormHours, mail = null, demoLimits = { perIp: DEMO_PER_IP_PER_DAY, maxLive: DEMO_MAX_LIVE }, removeFarmFiles, fetchArchive, covers = null }: ApiDeps = {},
+  { clock = () => new Date(), getWeather = defaultGetWeather, geocode = defaultGeocode, ai, saveCapture, cookieName = 'synteel_session', demoPhone = null, farmAiCap = 0, agentProviders = [], sam = null, getBmkg = getBmkgForecast, getStorm = getStormHours, mail = null, demoLimits = { perIp: DEMO_PER_IP_PER_DAY, maxLive: DEMO_MAX_LIVE }, removeFarmFiles, fetchArchive, covers = null, events = null }: ApiDeps = {},
 ) {
   const api = new Hono<Env>();
   // Every handler below answers in the language the app asked for (i18n.ts).
@@ -293,6 +296,7 @@ export function createApi(
   api.onError((err, c) => {
     if (err instanceof BadRequest) return c.json({ error: err.message }, 400);
     if (err instanceof NotFound) return c.json({ error: err.message }, 404);
+    if (err instanceof AuthError && err.status === 429) events?.record('rate_limited', `${c.req.method} ${c.req.routePath}`);
     if (err instanceof AuthError) return c.json({ error: err.message, code: err.code ?? (err.status === 401 ? 'auth' : undefined), retryAt: err.retryAt }, err.status);
     if (err instanceof AiQuota) return c.json({ error: err.message, code: 'ai_quota' }, 429);
     // The server-wide demo cap (withDailyCap) is a quota too, though ai.ts throws it as AiUnavailable.
@@ -302,6 +306,7 @@ export function createApi(
       return c.json({ error: tx('AI gagal membaca. Coba lagi, atau isi manual.', 'The AI could not read it. Try again, or type it in.'), code: 'ai_unavailable' }, 503);
     }
     console.error(err);
+    events?.record('server_error', `${c.req.method} ${c.req.routePath}`, (err as Error).message);
     return c.json({ error: tx('Terjadi kesalahan di server', 'Something went wrong on the server') }, 500);
   });
 
@@ -585,7 +590,11 @@ export function createApi(
   /** Runs the briefing agent (or the rules) in the current language and saves it. `basis`: re-run of that briefing in this language. */
   async function makeBriefing(r: FarmRepo, basis: number | null = null): Promise<Briefing & { id: number }> {
     const input = await briefingInput(r);
-    const briefing = await runBriefing(input, ai?.mode === 'meta' ? agentProviders : []);
+    const providers = ai?.mode === 'meta' ? agentProviders : [];
+    const start = Date.now();
+    const briefing = await runBriefing(input, providers);
+    // Counted as an AI call when a model was asked; 'rules' then means every model failed.
+    if (providers.length) events?.ai('malam', Date.now() - start, briefing.source === 'agent', briefing.source === 'agent' ? null : 'Model tidak menjawab, ringkasan dari aturan');
     const id = r.saveBriefing(localDate(new Date(input.now), timezone(r)), briefing, basis === null ? null : 'lang', basis);
     return { ...briefing, id };
   }
@@ -787,6 +796,7 @@ export function createApi(
     const token = getCookie(c, cookieName);
     const session = token ? store.session(hashToken(token)) : null;
     if (!token || !session) return null;
+    events?.seen(session.userId);
     const role = session.farmId === null ? null : store.role(session.userId, session.farmId);
     return { tokenHash: hashToken(token), userId: session.userId, farmId: role ? session.farmId : null, role };
   }
@@ -859,8 +869,10 @@ export function createApi(
     const code = codes.issue(purpose, phone, email);
     try {
       await mail(codeMail(purpose, code, email));
+      events?.record('code_mail_sent', purpose);
     } catch (err) {
       console.error(`${purpose} code mail failed: ${(err as Error).message}`);
+      events?.record('code_mail_failed', purpose, (err as Error).message);
       throw new BadRequest(tx('Email gagal dikirim. Periksa alamatnya, lalu coba lagi.', 'The e-mail could not be sent. Check the address, then try again.'));
     }
     return c.json({ sentTo: maskEmail(email) });
@@ -907,6 +919,7 @@ export function createApi(
     const user = store.userByPhone(phone);
     if (!user || !verifyPin(String(body.pin ?? ''), user.pinHash)) {
       limiter.fail(...keys);
+      events?.record('login_failed');
       throw new AuthError(tx('Nomor HP atau PIN salah', 'Wrong phone number or PIN'));
     }
     limiter.clear(`phone:${phone}`);
@@ -930,6 +943,7 @@ export function createApi(
     }
     const copy = store.demo.copyTemplate(template, { phone: `demo-${newToken().slice(0, 16)}`, name: tx('Petani Demo', 'Demo Farmer'), pinHash: hashPin(newToken()) }, now, ip);
     startSession(c, copy.userId, copy.farmId, 2);
+    events?.record('demo_started');
     return c.json(me(copy.userId, copy.farmId));
   });
 

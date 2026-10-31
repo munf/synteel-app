@@ -1,5 +1,6 @@
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
+import { backupStatusFile, createAdmin, eventLog, withAiLog } from './admin.ts';
 import { createAi, withDailyCap } from './ai.ts';
 import { createApi } from './api.ts';
 import { captureStore, coverStore, removeFarmCaptures } from './captures.ts';
@@ -21,13 +22,35 @@ app.get('/knowledge', (c) =>
   c.json(parseLang(c.req.header('x-lang')) === 'en' ? { ...knowledge, emergencies: { ...knowledge.emergencies, ...emergenciesEn } } : knowledge),
 );
 
-const ai = withDailyCap(createAi({ chat: env.aiChat, transcriber: env.aiTranscriber, mock: env.aiMock }), env.aiDailyCap);
+const db = openDb();
+const store = repo(db);
+// What the team dashboard counts (admin.ts). AI calls are timed inside the daily cap, so its refusals are not counted.
+const events = eventLog(db);
+const ai = withDailyCap(withAiLog(createAi({ chat: env.aiChat, transcriber: env.aiTranscriber, mock: env.aiMock }), events), env.aiDailyCap);
 const chain = env.aiChat.filter((p) => p.apiKey).map((p) => p.name).join(' → ');
 console.log(`AI mode: ${ai.mode}${ai.mode === 'meta' ? ` (${chain}${env.aiTranscriber.apiKey ? ', voice: meta' : ', no voice'}${env.aiDailyCap ? `, cap ${env.aiDailyCap}/day` : ''})` : ''}`);
 if (ai.mode === 'meta') console.log(`Briefing and case agent: ${env.agentChat.filter((p) => p.apiKey).map((p) => p.name).join(' → ')}`);
-const store = repo(openDb());
-const api = createApi(store, { ai, saveCapture: captureStore(), cookieName: env.cookieName, demoPhone: env.demoPhone, farmAiCap: env.farmAiCap, agentProviders: env.agentChat.filter((p) => p.apiKey), sam: env.aiTranscriber.apiKey ? { apiKey: env.aiTranscriber.apiKey, base: env.aiTranscriber.base } : null, mail: mailer(env.smtp), removeFarmFiles: (farmId) => removeFarmCaptures(farmId), covers: coverStore(), demoLimits: { perIp: env.demoPerIp ?? DEMO_PER_IP_PER_DAY, maxLive: env.demoMaxLive ?? DEMO_MAX_LIVE } });
+const api = createApi(store, { ai, saveCapture: captureStore(), cookieName: env.cookieName, demoPhone: env.demoPhone, farmAiCap: env.farmAiCap, agentProviders: env.agentChat.filter((p) => p.apiKey), sam: env.aiTranscriber.apiKey ? { apiKey: env.aiTranscriber.apiKey, base: env.aiTranscriber.base } : null, mail: mailer(env.smtp), removeFarmFiles: (farmId) => removeFarmCaptures(farmId), covers: coverStore(), demoLimits: { perIp: env.demoPerIp ?? DEMO_PER_IP_PER_DAY, maxLive: env.demoMaxLive ?? DEMO_MAX_LIVE }, events });
 console.log(`Support mail: ${env.smtp ? `${env.smtp.host}:${env.smtp.port}` : 'not configured (tickets only stored)'}`);
+// Team dashboard: off unless SYNTEEL_ADMIN_USER and SYNTEEL_ADMIN_PASSWORD are set. Registered before the app's routes.
+app.route(
+  '/admin',
+  createAdmin(db, {
+    creds: env.admin,
+    cookieName: env.cookieName,
+    demoPhone: env.demoPhone,
+    farmAiCap: env.farmAiCap,
+    events,
+    // The services on this server (synteel-app.service, synteel-preview.service) and the public site.
+    checks: [
+      { id: 'app', nama: 'Aplikasi', ket: 'Aplikasi petani dan API (eel.synt.fun/app)', url: 'http://127.0.0.1:8788/api/health' },
+      { id: 'preview', nama: 'Preview', ket: 'Versi uji dengan tambak demo (eel.synt.fun/preview)', url: 'http://127.0.0.1:8787/api/health' },
+      { id: 'situs', nama: 'Situs', ket: 'Halaman depan dan kebijakan privasi (eel.synt.fun)', url: 'https://eel.synt.fun/' },
+    ],
+    backupStatus: backupStatusFile(process.env.SYNTEEL_BACKUP_STATUS ?? '/var/backups/synteel-status.json'),
+  }),
+);
+console.log(`Admin dashboard: ${env.admin ? 'on' : 'off (no SYNTEEL_ADMIN_USER / SYNTEEL_ADMIN_PASSWORD)'}`);
 app.route('/', api);
 
 // Routes must all be registered before the first request, which the monitor makes.

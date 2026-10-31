@@ -4,7 +4,8 @@
   "type": "module",
   "workspaces": [
     "server",
-    "web"
+    "web",
+    "admin"
   ],
   "engines": {
     "node": ">=24"
@@ -12,7 +13,7 @@
   "scripts": {
     "dev:server": "npm run dev -w server",
     "dev:web": "npm run dev -w web",
-    "build": "npm run build -w web",
+    "build": "npm run build -w web && npm run build -w admin",
     "check:meta": "node scripts/check-meta-api.ts",
     "test": "npm test -w server",
     "seed:demo": "node scripts/seed-demo.ts --reset",

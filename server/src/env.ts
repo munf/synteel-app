@@ -55,6 +55,8 @@ export const env = {
   host: process.env.HOST,
   // Example drafts instead of real AI, until Meta API access works.
   aiMock: process.env.SYNTEEL_AI_MOCK === '1',
+  // Team dashboard login (admin.ts); unset turns the dashboard off.
+  admin: process.env.SYNTEEL_ADMIN_USER && process.env.SYNTEEL_ADMIN_PASSWORD ? { user: process.env.SYNTEEL_ADMIN_USER, password: process.env.SYNTEEL_ADMIN_PASSWORD } : null,
   // Support tickets by e-mail; without host, sender and recipient they are only stored.
   smtp:
     process.env.SYNTEEL_SMTP_HOST && process.env.SYNTEEL_SUPPORT_TO && (process.env.SYNTEEL_SMTP_FROM || process.env.SYNTEEL_SMTP_USER)
