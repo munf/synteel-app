@@ -24,6 +24,7 @@ import { checkSensorAlarms } from './sensor-alarm.ts';
 import { useAlarms, useWatchDot } from './alarms.ts';
 import { ConnectionBanner, Icon, Notice, type IconName } from './ui.tsx';
 import { t } from './i18n.ts';
+import { leaveHeld } from './leave.ts';
 
 export type Route =
   | { name: 'today' }
@@ -197,8 +198,11 @@ export function App() {
   }, [userId, farmId, refresh]);
 
   const go: Go = (r) => {
-    setRoute(r);
-    window.scrollTo(0, 0);
+    const move = () => {
+      setRoute(r);
+      window.scrollTo(0, 0);
+    };
+    if (!leaveHeld(move)) move();
   };
 
   const signedIn = (m: Me, pin?: string) => {

@@ -8,6 +8,7 @@ import { Icon, kindLabel, StatusPill, Stepper } from '../ui.tsx';
 import { sendRound, type Progress } from '../upload.ts';
 import { fmtDur, Glyph, isDenied, isSlow, parseNum, UploadCard, useTick, type GlyphName } from './record-pond.tsx';
 import { isEn, LOCALE, t } from '../i18n.ts';
+import { holdLeave } from '../leave.ts';
 import './record.css';
 
 const FIELD: Record<ReadingField, { label: string; unit: string; example: string }> = {
@@ -77,6 +78,14 @@ export function Round({ ponds, queued, onSaved, go }: { ponds: PondSummary[]; qu
   const [playing, setPlaying] = useState(false);
   const player = useRef<HTMLAudioElement | null>(null);
   useTick(reading);
+
+  // Leaving (back, tabs, a pond link) while checks are left asks first; the round stays on Catat either way.
+  const unchecked = items.filter((it) => it.review && !isDone(it)).length;
+  const [leaveTo, setLeaveTo] = useState<(() => void) | null>(null);
+  useEffect(() => {
+    holdLeave(unchecked > 0 ? (leave) => (setLeaveTo(() => leave), true) : null);
+    return () => holdLeave(null);
+  }, [unchecked]);
 
   const toItems = (c: Clip) => {
     setClip(c);
@@ -158,6 +167,7 @@ export function Round({ ponds, queued, onSaved, go }: { ponds: PondSummary[]; qu
 
   const back = () => go({ name: 'record' });
   const discard = async () => {
+    holdLeave(null);
     if (clip) await clips.remove(clip.id).catch(() => {});
     back();
   };
@@ -337,15 +347,8 @@ export function Round({ ponds, queued, onSaved, go }: { ponds: PondSummary[]; qu
           </button>
         )}
         {error && <p class="error">{error}</p>}
-        {pending > 0 && (
-          <span class="label ink2">
-            {t(
-              `${pending} yang perlu dicek belum disimpan, tetap di sini sampai dicek.`,
-              `${pending} to check ${pending === 1 ? 'is' : 'are'} not saved yet and ${pending === 1 ? 'stays' : 'stay'} here until checked.`,
-            )}
-          </span>
-        )}
       </section>
+      {leaveTo && <LeaveCheck pending={pending} onStay={() => setLeaveTo(null)} onLeave={() => (setLeaveTo(null), leaveTo())} />}
 
       {alerts.map((p) => (
         <article class="card" key={p.id} style={{ gap: 12 }}>
@@ -825,5 +828,32 @@ function TypeAll({ data, onDone }: { data: LogData; onDone: (d: LogData) => void
         {t('Pakai angka ini', 'Use this number')}
       </button>
     </div>
+  );
+}
+
+/** Asked when leaving with checks left. Nothing is lost: the round reopens from Catat where it was. */
+function LeaveCheck({ pending, onStay, onLeave }: { pending: number; onStay: () => void; onLeave: () => void }) {
+  const box = useRef<HTMLDialogElement | null>(null);
+  useEffect(() => {
+    box.current?.showModal();
+  }, []);
+  return (
+    <dialog ref={box} class="leave-check" aria-labelledby="leave-title" onCancel={(e) => (e.preventDefault(), onStay())}>
+      <div class="stack-sm">
+        <h2 id="leave-title">{t('Keluar sebelum dicek?', 'Leave before checking?')}</h2>
+        <p class="ink2 num">
+          {t(
+            `${pending} catatan belum tersimpan. Bisa dicek nanti dari Catat.`,
+            `${pending} record${pending === 1 ? ' is' : 's are'} not saved yet. Check later from Record.`,
+          )}
+        </p>
+      </div>
+      <button type="button" class="btn primary" onClick={onStay}>
+        {t('Cek sekarang', 'Check now')}
+      </button>
+      <button type="button" class="btn secondary" onClick={onLeave}>
+        {t('Cek nanti', 'Check later')}
+      </button>
+    </dialog>
   );
 }

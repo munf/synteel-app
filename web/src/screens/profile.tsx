@@ -520,7 +520,7 @@ export function Profile({
           <span class="strong" style={{ color: 'var(--ink)' }}>
             {t('Hubungi bantuan', 'Contact support')}
           </span>
-          <span class="meta">{t('Ada kendala? Tim Synteel membalas lewat email', 'Having trouble? The Synteel team replies by e-mail')}</span>
+          <span class="meta">{t('Ada kendala? Silakan hubungi kami', 'Having trouble? Get in touch')}</span>
         </span>
         <span style={{ color: 'var(--muted)', display: 'flex' }}>
           <Icon name="next" size={20} />
@@ -531,11 +531,8 @@ export function Profile({
         <span style={{ color: 'var(--accent)', display: 'flex' }}>
           <Icon name="lock" />
         </span>
-        <span class="grow stack-xs" style={{ gap: 0 }}>
-          <span class="strong" style={{ color: 'var(--ink)' }}>
-            {t('Kebijakan privasi', 'Privacy policy')}
-          </span>
-          <span class="meta">{t('Data apa yang disimpan, dikirim ke mana, dan cara menghapusnya', 'What is kept, where it goes, and how to delete it')}</span>
+        <span class="grow strong" style={{ color: 'var(--ink)' }}>
+          {t('Kebijakan privasi', 'Privacy policy')}
         </span>
         <span style={{ color: 'var(--muted)', display: 'flex' }}>
           <Icon name="next" size={20} />
@@ -688,8 +685,8 @@ export function Rewards({ state, go }: { state: FarmState; go: Go }) {
 
       <section class="card tint" style={{ gap: 12 }}>
         <h2>{t('Cara menghitung', 'How it counts')}</h2>
-        <span>{t('Satu hari dihitung kalau ada minimal satu ukuran suhu, pH atau TDS.', 'A day counts if it has at least one temperature, pH or TDS reading.')}</span>
-        <span>{t('Lupa sehari, hitungan mulai lagi dari 1. Belum ada hari libur untuk menjaga hitungan.', 'Miss a day and the count starts again from 1. There are no days off that keep the count yet.')}</span>
+        <span>{t('Satu angka sehari sudah cukup. Suhu, pH atau TDS, yang mana saja.', 'One reading a day is enough. Temperature, pH or TDS, any of them.')}</span>
+        <span>{t('Kalau ada hari yang kelewat, hitungan balik lagi ke 1. Belum ada jatah libur, jadi usahakan catat tiap hari, ya.', 'Skip a day and the count goes back to 1. There are no days off yet, so try to record every day.')}</span>
       </section>
     </div>
   );

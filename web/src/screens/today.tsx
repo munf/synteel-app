@@ -607,7 +607,7 @@ export function Today({
         </span>
         <span class="grow" style={{ display: 'flex', flexDirection: 'column' }}>
           <span class="strong">{t('Hubungi bantuan', 'Contact support')}</span>
-          <span class="label ink2">{t('Ada kendala? Tim Synteel membalas lewat email', 'Having trouble? The Synteel team replies by e-mail')}</span>
+          <span class="label ink2">{t('Ada kendala? Silakan hubungi kami', 'Having trouble? Get in touch')}</span>
         </span>
         <span class="muted" style={{ display: 'flex' }}>
           <Icon name="next" size={20} />
