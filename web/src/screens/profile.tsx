@@ -190,43 +190,20 @@ function LaterList({ title, items }: { title: string; items: { label: string; su
 // Rows in "Alat Synteel" match the switch rows above: 72px tall, divided, ink text.
 const ALAT_ROW = { color: 'var(--ink)', minHeight: 72, padding: '12px 0', gap: 12 };
 
-/** Ponds taken off the list with "Hapus kolam" (owner only): their records stayed, "Kembalikan" brings one back. */
-function ArchivedPonds({ onRestored }: { onRestored: () => void }) {
-  const [ponds, setPonds] = useState<{ id: number; name: string }[]>([]);
-  const [busy, setBusy] = useState<number | null>(null);
-  const [error, setError] = useState('');
+/** Owner only, when ponds were deleted: one row to their own page (the list there can grow long). */
+function ArchivedRow({ go }: { go: Go }) {
+  const [count, setCount] = useState(0);
   useEffect(() => {
-    api.archivedPonds().then((r) => setPonds(r.ponds), () => {});
+    api.archivedPonds().then((r) => setCount(r.ponds.length), () => {});
   }, []);
-  if (!ponds.length) return null;
-  const restore = async (id: number) => {
-    setBusy(id);
-    setError('');
-    try {
-      await api.restorePond(id);
-      setPonds(ponds.filter((p) => p.id !== id));
-      onRestored();
-    } catch (err) {
-      setError((err as Error).message);
-    }
-    setBusy(null);
-  };
+  if (!count) return null;
   return (
-    <section class="card list" aria-labelledby="archived-title">
-      <div class="stack-xs" style={{ paddingTop: 20, paddingBottom: 4 }}>
-        <h2 id="archived-title">{t('Kolam yang dihapus', 'Deleted ponds')}</h2>
-        <span class="meta">{t('Catatan lamanya masih tersimpan.', 'Their records are still kept.')}</span>
-      </div>
-      {ponds.map((p) => (
-        <div key={p.id} class="list-row" style={{ minHeight: 64, padding: '8px 0', gap: 12 }}>
-          <span class="grow semi">{p.name}</span>
-          <button type="button" class="btn secondary" style={{ minHeight: 44, width: 'auto', padding: '0 16px' }} disabled={busy !== null} onClick={() => restore(p.id)}>
-            {busy === p.id ? t('Mengembalikan…', 'Restoring…') : t('Kembalikan', 'Restore')}
-          </button>
-        </div>
-      ))}
-      {error && <p class="error">{error}</p>}
-    </section>
+    <LinkCard
+      icon={<Icon name="trash" />}
+      title={t('Kolam yang dihapus', 'Deleted ponds')}
+      sub={t(`${count} kolam · bisa dikembalikan`, `${count} ${count === 1 ? 'pond' : 'ponds'} · can be restored`)}
+      onClick={() => go({ name: 'archived-ponds' })}
+    />
   );
 }
 
@@ -478,7 +455,7 @@ export function Profile({
 
       <QuotaRow go={go} />
 
-      {owner && <ArchivedPonds onRestored={() => onFarmChanged?.()} />}
+      {owner && <ArchivedRow go={go} />}
 
       {owner && farm && (
         <FarmLocation

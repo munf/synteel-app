@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { api, isAuthError, onSessionLost, type FarmState, type Me, type NowcastState } from './api.ts';
 import { PondDetail } from './screens/pond.tsx';
+import { ArchivedPonds } from './screens/archived.tsx';
 import { Problem } from './screens/problem.tsx';
 import { OutageScreen } from './screens/outage.tsx';
 import { Profile, Rewards } from './screens/profile.tsx';
@@ -41,6 +42,8 @@ export type Route =
   /** Foto buku catatan: notebook page photos → rows to check; `pondId` when started from a pond. */
   | { name: 'notebook'; pondId?: number }
   | { name: 'quota' }
+  /** Kolam yang dihapus (owner, from Profil). */
+  | { name: 'archived-ponds' }
   | { name: 'help' }
   /** The night-check alarm, full screen. */
   | { name: 'alarm'; at: number; pondId: number }
@@ -354,6 +357,8 @@ export function App() {
     body = <Notebook ponds={state.ponds} pondId={route.pondId} onSaved={refresh} go={go} />;
   } else if (route.name === 'quota') {
     body = <Quota role={role} go={go} />;
+  } else if (route.name === 'archived-ponds') {
+    body = <ArchivedPonds go={go} onRestored={refresh} />;
   } else if (route.name === 'help') {
     body = <Help me={me} go={go} />;
   } else if (route.name === 'alarm') {
