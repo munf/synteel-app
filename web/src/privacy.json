@@ -1,7 +1,7 @@
 {
  "effective": {
-  "id": "Berlaku sejak 30 Oktober 2026",
-  "en": "In effect from 30 October 2026"
+  "id": "Berlaku sejak 31 Oktober 2026",
+  "en": "In effect from 31 October 2026"
  },
  "blocks": [
   {
@@ -106,8 +106,8 @@
   },
   {
    "kind": "p",
-   "id": "Topik, isi pesan, nomor WhatsApp atau alamat email untuk balasan, nomor HP akun, dan keterangan singkat tentang HP (sistem, peramban, versi aplikasi). Pengguna bisa menghapus centang keterangan HP sebelum mengirim.",
-   "en": "Topic, message, a WhatsApp number or email address for the reply, the account phone number, and a short description of the phone (system, browser, app version). The user can untick the phone description before sending."
+   "id": "Topik, isi pesan, alamat email untuk balasan, nomor HP akun, dan keterangan singkat tentang HP (sistem, peramban, versi aplikasi). Pengguna bisa menghapus centang keterangan HP sebelum mengirim.",
+   "en": "Topic, message, an email address for the reply, the account phone number, and a short description of the phone (system, browser, app version). The user can untick the phone description before sending."
   },
   {
    "kind": "h3",
@@ -118,6 +118,11 @@
    "kind": "p",
    "id": "Kuki masuk (httpOnly) agar pengguna tetap masuk. Server memakai alamat IP sebentar untuk membatasi percobaan masuk yang gagal dan pesan berulang; hitungan ini disimpan di memori server, bukan di database.",
    "en": "A sign-in cookie (httpOnly) that keeps the user signed in. The server uses the IP address for a short time to limit failed sign-in attempts and repeated messages; it holds these counts in memory, not in the database."
+  },
+  {
+   "kind": "p",
+   "id": "Untuk menjaga layanan, Synteel juga mencatat kapan tiap akun terakhir membuka aplikasi dan kejadian teknis tanpa isi: masuk yang gagal, email kode yang terkirim atau gagal, galat server, serta lama dan berhasil tidaknya tiap panggilan AI. Tim Synteel melihatnya di dasbor internal, dengan nomor HP dan alamat email disamarkan.",
+   "en": "To keep the service running, Synteel also records when each account last opened the app and technical events without content: failed sign-ins, code emails sent or failed, server errors, and how long each AI call took and whether it worked. The Synteel team sees these on an internal dashboard, with phone numbers and email addresses masked."
   },
   {
    "kind": "h2",
@@ -132,8 +137,8 @@
      "en": "Running the account and the farm, and showing records to the farm&rsquo;s members."
     },
     {
-     "id": "Peringatan risiko dari aturan tetap aplikasi, ringkasan sore, catatan pola suhu air mingguan dan langkah saat ada masalah. Semua ini membantu petani mengambil keputusan; bukan diagnosis penyakit dan bukan resep obat.",
-     "en": "Risk warnings from the app&rsquo;s fixed rules, the evening summary, the weekly water temperature pattern note and the steps to take when something goes wrong. These support the farmer&rsquo;s decisions; they are not a disease diagnosis and not a medicine prescription."
+     "id": "Peringatan risiko dari aturan tetap aplikasi, ringkasan malam (yang juga bisa dibacakan aplikasi), catatan pola suhu air mingguan dan langkah saat ada masalah. Semua ini membantu petani mengambil keputusan; bukan diagnosis penyakit dan bukan resep obat.",
+     "en": "Risk warnings from the app&rsquo;s fixed rules, the night summary (which the app can also read aloud), the weekly water temperature pattern note and the steps to take when something goes wrong. These support the farmer&rsquo;s decisions; they are not a disease diagnosis and not a medicine prescription."
     },
     {
      "id": "Cuaca dan prakiraan untuk lokasi tambak.",
@@ -200,8 +205,8 @@
      "en": "<b>Meta</b> (Meta Model API): reads photos, voice recordings and text into records, and SAM counts dead eels in photos. Meta is also the backup for the written summaries below."
     },
     {
-     "id": "<b>Baseten</b>: menjalankan model AI yang menulis ringkasan sore, membantu kasus sidat mati dan menulis catatan pola mingguan. Baseten menerima data tambak dan kolam, hasil ukur, cuaca dan jawaban pertanyaan kasus.",
-     "en": "<b>Baseten</b>: runs the AI model that writes the evening summary, helps with dead-eel cases and writes the weekly pattern note. It receives farm and pond data, readings, weather and answers to case questions."
+     "id": "<b>Baseten</b>: menjalankan model AI yang menulis ringkasan malam, menyusun ulang isi layar Waspada menjadi ucapan saat pengguna menekan Dengarkan, membantu kasus sidat mati dan menulis catatan pola mingguan. Baseten menerima data tambak dan kolam, hasil ukur, cuaca, teks layar Waspada dan jawaban pertanyaan kasus.",
+     "en": "<b>Baseten</b>: runs the AI model that writes the night summary, retells the night watch screen as speech when the user taps Dengarkan, helps with dead-eel cases and writes the weekly pattern note. It receives farm and pond data, readings, weather, the text on the night watch screen and answers to case questions."
     },
     {
      "id": "<b>Fireworks AI</b>: cadangan terakhir saat Meta atau Baseten tidak bisa menjawab. Fireworks menerima foto dan teks yang sama.",
@@ -285,6 +290,10 @@
     {
      "id": "Demo (&ldquo;Coba demo&rdquo;): tiap salinan demo dihapus otomatis beserta semua isinya setelah 48 jam. Agar satu koneksi paling banyak membuat 20 salinan per hari, Synteel menyimpan bentuk acak (hash) dari alamat IP, bukan alamatnya.",
      "en": "Demo (&ldquo;Coba demo&rdquo;): each demo copy is deleted automatically with everything in it after 48 hours. To allow at most 20 copies per day from one connection, Synteel keeps a hashed form of the IP address, never the address itself."
+    },
+    {
+     "id": "Kejadian teknis (masuk yang gagal, galat, waktu panggilan AI): 90 hari.",
+     "en": "Technical events (failed sign-ins, errors, AI call times): 90 days."
     },
     {
      "id": "Cadangan database: 30 hari.",
