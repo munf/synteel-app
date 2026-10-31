@@ -180,8 +180,8 @@ export function CaseCard({ c, go, onChanged, onPond = false }: { c: CaseView; go
           </a>
           <span class="label">
             {c.escalate.waUrl.includes('wa.me/?')
-              ? t('Membuka WhatsApp dengan pesan siap kirim. Pilih kontak pemilik. Tidak terkirim sendiri.', 'Opens WhatsApp with the message ready. Choose the owner’s contact. Nothing is sent by itself.')
-              : t(`Membuka WhatsApp ke ${c.escalate.ownerName} dengan pesan siap kirim. Tidak terkirim sendiri.`, `Opens WhatsApp to ${c.escalate.ownerName} with the message ready. Nothing is sent by itself.`)}
+              ? t('Membuka WhatsApp. Pilih kontak pemilik.', 'Opens WhatsApp. Choose the owner’s contact.')
+              : t(`Membuka WhatsApp ke ${c.escalate.ownerName}.`, `Opens WhatsApp to ${c.escalate.ownerName}.`)}
           </span>
         </div>
       )}
