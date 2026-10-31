@@ -94,7 +94,7 @@ export function FarmSetup({ onDone, onLogout, onJoined, newPin }: { onDone: () =
                 {newPin.split('').join(' ')}
               </span>
             </b>
-            <span>{t('Catat di tempat aman. PIN ini dipakai setiap kali masuk.', 'Write it down somewhere safe. You need this PIN every time you sign in.')}</span>
+            <span>{t('Catat PIN di tempat aman.', 'Write the PIN down somewhere safe.')}</span>
           </span>
         </div>
       )}
@@ -102,7 +102,7 @@ export function FarmSetup({ onDone, onLogout, onJoined, newPin }: { onDone: () =
         <Field label={t('Nama tambak', 'Farm name')}>
           <input value={name} onInput={(e) => setName(e.currentTarget.value)} placeholder={t('contoh: Tambak Sidat Mitra', 'example: Mitra Eel Farm')} required />
         </Field>
-        <Field label={t('Lokasi', 'Location')} hint={t('Untuk perkiraan suhu air dari cuaca setempat.', 'For estimating the water temperature from the local weather.')}>
+        <Field label={t('Lokasi', 'Location')} hint={t('Untuk cuaca dan perkiraan suhu air.', 'For the weather and the water temperature estimate.')}>
           <input value={locationName} onInput={(e) => setLocationName(e.currentTarget.value)} placeholder={t('contoh: Sleman, Yogyakarta', 'example: Sleman, Yogyakarta')} />
         </Field>
         <LocateButton gps={gps} />
@@ -111,7 +111,7 @@ export function FarmSetup({ onDone, onLogout, onJoined, newPin }: { onDone: () =
         <div class="field">
           <span class="field-label">{t('Cadangan listrik', 'Power backup')}</span>
           <BackupChoice value={powerBackup} onChange={setPowerBackup} />
-          <span class="field-hint">{t('Yang menjalankan aerator saat listrik padam. Bisa diubah nanti di Profil.', 'What runs the aerators when the power goes out. Can be changed later in Profile.')}</span>
+          <span class="field-hint">{t('Penggerak aerator saat listrik padam.', 'What runs the aerators when the power goes out.')}</span>
         </div>
       </section>
       {(error || gps.error) && <p class="error">{error || gps.error}</p>}
@@ -121,7 +121,7 @@ export function FarmSetup({ onDone, onLogout, onJoined, newPin }: { onDone: () =
       {onJoined && (
         <div class="stack-sm">
           <p class="meta center" style={{ textWrap: 'balance' }}>
-            {t('Diundang ke tambak orang lain? Masukkan kodenya, tidak perlu membuat tambak sendiri.', "Invited to someone else's farm? Enter the code; no need to set up your own farm.")}
+            {t('Diundang ke tambak lain? Masukkan kodenya.', 'Invited to another farm? Enter the code.')}
           </p>
           <JoinByCode onJoined={onJoined} />
         </div>
@@ -168,8 +168,8 @@ export function NoPonds({
         <h1>{t('Belum ada kolam', 'No ponds yet')}</h1>
         <p class="ink2" style={{ textWrap: 'balance' }}>
           {onAdd
-            ? t('Tambahkan kolam pertama, lalu Synteel ikut memantau cuaca dan risiko oksigen.', 'Add your first pond, then Synteel helps watch the weather and oxygen risk.')
-            : t('Pemilik tambak belum menambahkan kolam. Setelah kolam ditambahkan, kolam muncul di sini.', 'The farm owner has not added any ponds yet. Once they do, the ponds show up here.')}
+            ? t('Tambahkan kolam pertama untuk mulai.', 'Add the first pond to get started.')
+            : t('Kolam muncul di sini setelah ditambahkan pemilik tambak.', 'Ponds show up here once the farm owner adds them.')}
         </p>
       </section>
       {onAdd && (
@@ -266,7 +266,7 @@ function Nicknames({ nicks, onChange, draft, onDraft }: { nicks: string[]; onCha
         </button>
       </div>
       <span class="field-hint">
-        {t('Sebutan sehari-hari, contoh: kolam dekat pintu. AI memakai ini saat mendengar suara.', 'Your everyday name for it, for example: pond by the door. The AI listens for it.')}
+        {t('Dipakai AI saat mendengar suara.', 'The AI listens for these names.')}
       </span>
     </div>
   );
@@ -404,7 +404,7 @@ export function AddPond({
       )}
       <div class="stack-xs">
         <h1 style={{ lineHeight: 1 }}>{t('Tambah kolam', 'Add a pond')}</h1>
-        <span class="meta">{t('Isi yang diketahui saja. Bisa diubah nanti.', 'Fill in only what you know. You can change it later.')}</span>
+        <span class="meta">{t('Isi yang diketahui saja.', 'Fill in only what you know.')}</span>
       </div>
     </header>
   );
@@ -423,11 +423,8 @@ export function AddPond({
               <span class="meta">{saved.summary}</span>
             </div>
           </div>
-          <button type="button" class="btn primary" style={{ flexDirection: 'column', gap: 4, padding: '12px 20px' }} onClick={() => copyNext(saved)}>
-            <span>{t(`Tambah ${following(saved.name, names)}, isian sama`, `Add ${following(saved.name, names)}, same details`)}</span>
-            <span class="label" style={{ fontWeight: 400, color: 'var(--on-navy)' }}>
-              {t('Tinggal ganti nama dan jumlah benih', 'Just change the name and number stocked')}
-            </span>
+          <button type="button" class="btn primary" onClick={() => copyNext(saved)}>
+            {t(`Tambah ${following(saved.name, names)}, isian sama`, `Add ${following(saved.name, names)}, same details`)}
           </button>
           <button type="button" class="btn secondary" onClick={fresh}>
             {t('Tambah kolam lain, isian kosong', 'Add another pond, empty form')}
@@ -458,7 +455,7 @@ export function AddPond({
             <span class="strong" style={{ fontSize: '1rem' }}>
               {t(`Isian disalin dari ${copied}`, `Details copied from ${copied}`)}
             </span>
-            <span>{t('Ganti nama dan jumlah benih. Jenis wadah, tempat, fase dan tanggal tebar sudah sama.', 'Change the name and the number stocked. Container, place, stage and stocking date stay the same.')}</span>
+            <span>{t('Silahkan ganti nama dan jumlah benih.', 'Change the name and the number stocked.')}</span>
           </span>
         </div>
       )}
@@ -506,7 +503,7 @@ export function AddPond({
           </div>
         </div>
 
-        <Field label={t('Kira-kira jumlah benih', 'About how many eels stocked')} hint={t('Boleh kosong kalau tidak tahu.', 'Leave it empty if you do not know.')}>
+        <Field label={t('Kira-kira jumlah benih', 'About how many eels stocked')}>
           <input inputMode="numeric" value={initialCount} onInput={(e) => setInitialCount(e.currentTarget.value)} placeholder={t('contoh: 500', 'example: 500')} />
         </Field>
       </section>
@@ -514,7 +511,7 @@ export function AddPond({
       <section class="card">
         <div class="stack-xs">
           <h2>{t('Wadah dan tempat', 'Container and place')}</h2>
-          <span class="meta">{t('Dasar perkiraan suhu air. Foto kolam bisa mengisinya.', 'The water temperature estimate starts from this. A pond photo can fill it in.')}</span>
+          <span class="meta">{t('Dasar perkiraan suhu air.', 'The water temperature estimate starts from this.')}</span>
         </div>
         <PondPhoto
           draft={photo}
@@ -536,7 +533,7 @@ export function AddPond({
           <Icon name="down" />
         </summary>
         <div class="stack" style={{ marginTop: 16 }}>
-          <Field label={t('Luas dasar kolam (m²)', 'Pond floor area (m²)')} hint={t('Panjang × lebar, untuk menghitung kepadatan.', 'Length × width, to work out stocking density.')}>
+          <Field label={t('Luas dasar kolam (m²)', 'Pond floor area (m²)')} hint={t('Panjang × lebar.', 'Length × width.')}>
             <input inputMode="decimal" value={areaM2} onInput={(e) => setAreaM2(e.currentTarget.value)} placeholder={t('contoh: 12', 'example: 12')} />
           </Field>
           <div class="field">

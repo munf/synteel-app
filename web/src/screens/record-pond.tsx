@@ -54,7 +54,6 @@ const MORE = {
   tap: 'M9 11V5a2 2 0 0 1 4 0v6M13 10a2 2 0 0 1 4 0v1M17 11a2 2 0 0 1 4 0v4a6 6 0 0 1-6 6h-2a6 6 0 0 1-5-3l-3-5a2 2 0 0 1 3-2l2 2',
   fan: 'M12 12c0-3 1-7 4-7s3 4 0 5.5M12 12c3 0 7 1 7 4s-4 3-5.5 0M12 12c0 3-1 7-4 7s-3-4 0-5.5M12 12c-3 0-7-1-7-4s4-3 5.5 0',
   device: 'M8 3h8v18H8zM11 18h2',
-  torch: 'M8 3h8v5l-2 3v10h-4V11L8 8zM8 6h8',
 } as const;
 export type GlyphName = keyof typeof MORE | IconName;
 
@@ -166,9 +165,8 @@ export function useMic() {
 
 export function MicAsk({ onAllow, onType }: { onAllow: () => void; onType: () => void }) {
   const why: [GlyphName, string][] = [
-    ['mic', t('Untuk mendengar nama kolam dan angka yang disebut', 'To hear the pond names and numbers you say')],
-    ['shield', t('Suara hanya dipakai untuk membaca kondisi kolam, tidak untuk yang lain', 'Your voice is only used to read pond conditions, nothing else')],
-    ['tap', t('Mikrofon menyala hanya saat Bicara diketuk', 'The microphone is on only when you tap Speak')],
+    ['shield', t('Suara hanya digunakan untuk membaca kondisi kolam.', 'The voice is only used to read pond conditions.')],
+    ['tap', t('Mikrofon menyala hanya saat Bicara', 'The microphone is on only during Speak')],
   ];
   return (
     <section class="card">
@@ -257,7 +255,7 @@ export function MicDenied({ onRetry, onType }: { onRetry: () => void; onType: ()
           <h2 class="grow">{t('HP belum mengizinkan Synteel memakai mikrofon', 'Synteel is not allowed to use the microphone')}</h2>
         </div>
         <span class="label ink2">
-          {t('Tanpa mikrofon, catatan suara tidak bisa didengar. Sekitar 1 menit di setelan HP.', 'Without the microphone, voice notes cannot be heard. About 1 minute in phone settings.')}
+          {t('Sekitar 1 menit di pengaturan HP.', 'About 1 minute in phone settings.')}
         </span>
       </div>
       <ol class="rp-steps">
@@ -275,7 +273,7 @@ export function MicDenied({ onRetry, onType }: { onRetry: () => void; onType: ()
           </li>
         ))}
       </ol>
-      <p class="meta">{t('Nama menu bisa sedikit beda di tiap merek HP.', 'Menu names can differ a little on each phone brand.')}</p>
+      <p class="meta">{t('Bisa berbeda di setiap merek HP.', 'Can differ on each phone brand.')}</p>
       <button type="button" class="btn primary" onClick={onRetry}>
         <Glyph name="retry" /> {t('Sudah diizinkan, coba lagi', 'Allowed now, try again')}
       </button>
@@ -289,7 +287,7 @@ export function MicDenied({ onRetry, onType }: { onRetry: () => void; onType: ()
 export const MicGranted = () => (
   <div class="note ok" role="status" style={{ alignItems: 'center' }}>
     <Icon name="check" />
-    <span style={{ fontSize: '1rem' }}>{t('Mikrofon diizinkan. Ketuk Bicara untuk mulai.', 'Microphone allowed. Tap Speak to start.')}</span>
+    <span style={{ fontSize: '1rem' }}>{t('Mikrofon diizinkan.', 'Microphone allowed.')}</span>
   </div>
 );
 
@@ -328,22 +326,21 @@ export function UploadCard({ what, p, thumb, onOther }: { what: string; p: Progr
           <span class="strong num">
             {t(`Mengirim ${what}`, `Sending ${what}`)} · {pct}%
           </span>
-          <span class="label ink2">{t('Sinyal lemah, jadi lebih lama dari biasa.', 'Weak signal, so it takes longer than usual.')}</span>
         </span>
       </div>
       <div class="rp-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={t(`${what} terkirim`, `${what} sent`)}>
         <span style={{ width: `${pct}%` }} />
       </div>
       <div class="row between label muted num">
-        <span>{t('Sinyal lemah, agak lama', 'Weak signal, a bit slow')}</span>
+        <span>{t('Internet lambat', 'Slow Internet')}</span>
         {left !== null && <span style={{ whiteSpace: 'nowrap' }}>{left < 60 ? t('kurang dari 1 menit lagi', 'less than 1 minute left') : t(`perkiraan ${Math.round(left / 60)} menit lagi`, `about ${Math.round(left / 60)} minutes left`)}</span>}
       </div>
       <p class="note ok">
         <Icon name="check" size={20} />
         <span>
           {t(
-            `Boleh tutup aplikasi, ${what} tetap terkirim. Hasilnya muncul untuk dicek setelah terbaca.`,
-            `You can close the app and the ${what} still gets sent. The results show up to check once read.`,
+            `Aplikasi boleh ditutup, ${what} tetap terkirim.`,
+            `The app can be closed; the ${what} still gets sent.`,
           )}
         </span>
       </p>
@@ -728,7 +725,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
           <StatusPill level={result.level} />
         </div>
         {result.findings.length === 0 ? (
-          <p class="ink2">{t('Tidak ada peringatan. Kolam aman berdasarkan catatan ini.', 'No warnings. The pond is safe based on this record.')}</p>
+          <p class="ink2">{t('Tidak ada peringatan.', 'No warnings.')}</p>
         ) : (
           result.findings.map((f) => <FindingCard key={f.id} finding={f} />)
         )}
@@ -799,7 +796,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
       {aiMode === 'off' && (
         <p class="note info">
           <Icon name="info" />
-          <span>{t('AI belum aktif. Rekaman disimpan di HP dan dibaca setelah AI aktif. Ketik sendiri tetap bisa.', 'The AI is not on yet. Recordings are kept on the phone and read once it is on. You can still type it in.')}</span>
+          <span>{t('AI belum aktif. Rekaman disimpan di HP dan dibaca setelah AI aktif. Ketik sendiri tetap tersedia.', 'The AI is not on yet. Recordings are kept on the phone and read once it is on. Typing it in is still available.')}</span>
         </p>
       )}
       {mic.granted && !recording && <MicGranted />}
@@ -810,9 +807,6 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
           <Icon name="mic" />
           <span class="grow" style={{ display: 'flex', flexDirection: 'column' }}>
             <span class="strong">{t('Rekam ulang', 'Record again')}</span>
-            <span class="label ink2" style={{ fontWeight: 400 }}>
-              {t('Bicara, foto alat ukur atau video', 'Speak, photo a meter, or video')}
-            </span>
           </span>
           <Icon name="down" size={20} />
         </button>
@@ -831,8 +825,8 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
             <span class="title">{recording ? `${t('Selesai', 'Done')} · ${fmtDur(elapsed)}` : t('Bicara', 'Speak')}</span>
             <span class="label" style={{ color: 'var(--on-hero-pale)' }}>
               {recording
-                ? t(`Merekam ${pond.name}. Ketuk untuk selesai, paling lama 60 detik.`, `Recording ${pond.name}. Tap to finish, 60 seconds at most.`)
-                : t('Sebutkan suhu, pH, TDS, sidat mati, sisa pakan dan aerator.', 'Say the temperature, pH, TDS, dead eels, leftover feed and aerator.')}
+                ? t('Maksimal 60 detik.', '60 seconds at most.')
+                : t('Suhu, pH, TDS, sidat mati, sisa pakan, aerator.', 'Temperature, pH, TDS, dead eels, leftover feed, aerator.')}
             </span>
           </span>
         </button>
@@ -855,7 +849,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
           </span>
           <span class="stack-xs">
             <span class="strong">{t('Video harian', 'Daily video')}</span>
-            <span class="meta">{t('Keliling kolam sambil cerita', 'Walk around the pond and talk')}</span>
+            <span class="meta">{t('Keliling sambil cerita', 'Walk around and talk')}</span>
           </span>
         </button>
       </div>
@@ -865,7 +859,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
       {!folded && (
         <div class="note info">
           <Icon name="wifi" />
-          <span>{t('Tidak ada sinyal? Rekaman disimpan di HP dan dibaca otomatis saat ada sinyal.', 'No signal? The recording is kept on the phone and read automatically when there is signal.')}</span>
+          <span>{t('Tanpa Internet, rekaman disimpan dan dibaca nanti.', 'Without Internet, the recording is kept and read later.')}</span>
         </div>
       )}
 
@@ -967,8 +961,8 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
           {waiting.length > 0 && (
             <p class="meta">
               {t(
-                `${waiting.length} rekaman menunggu sinyal atau AI aktif.`,
-                `${waiting.length} ${waiting.length === 1 ? 'recording' : 'recordings'} waiting for signal or for the AI to be on.`,
+                `${waiting.length} rekaman menunggu Internet atau AI aktif.`,
+                `${waiting.length} ${waiting.length === 1 ? 'recording' : 'recordings'} waiting for Internet or for the AI to be on.`,
               )}
             </p>
           )}
@@ -980,7 +974,6 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
           <div class="row top between">
             <div class="stack-xs">
               <h2>{t('Cek sebelum simpan', 'Check before saving')}</h2>
-              <span class="meta">{pond.name}</span>
             </div>
             <span class="pill blue">{t('dari', 'from')} {kindWord[source as CaptureKind]}</span>
           </div>
@@ -991,7 +984,6 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
               <span>{p}</span>
             </p>
           ))}
-          <span class="label ink2">{t('Ada yang salah? Ketuk barisnya.', 'Something wrong? Tap the row.')}</span>
           <div class="stack-sm">
             {draftKeys.map((k) =>
               editing === k ? (
@@ -1043,7 +1035,6 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
               </span>
               <span class="stack-xs">
                 <span class="strong">{t('Ketik sendiri', 'Type it in')}</span>
-                <span class="meta">{t('Isi angka dan keadaan kolam satu per satu', 'Enter the numbers and pond conditions one by one')}</span>
               </span>
             </span>
             <Icon name="down" />
@@ -1103,14 +1094,11 @@ function PhotoTrouble(props: {
           <span class="strong">
             {props.glare ? t('Angka di layar alat belum terbaca (silau)', 'Meter screen not readable (glare)') : t('Angka di layar alat belum terbaca (buram)', 'Meter screen not readable (blurry)')}
           </span>
-          <span class="label ink2">{props.glare ? t('Ada pantulan cahaya di layar alat.', 'Light is reflecting on the meter screen.') : t('Foto tampak buram, angka tidak tajam.', 'The photo looks blurry; the numbers are not sharp.')}</span>
         </span>
       </div>
       <p class="note info">
         <Glyph name="device" size={20} />
-        <span>{props.glare
-            ? t('Miringkan HP sedikit dan jauhi lampu, sampai pantulan putih hilang dari layar alat.', 'Tilt the phone a little and move away from the lamp until the white glare leaves the screen.')
-            : t('Pegang HP diam sebentar dan dekatkan sampai angka di layar alat tajam.', 'Hold the phone still for a moment and move closer until the numbers on the meter are sharp.')}</span>
+        <span>{t('Pastikan mengambil gambar dengan jelas.', 'Make sure the photo is clear.')}</span>
       </p>
       <button type="button" class="btn primary" onClick={props.onRetake}>
         <Icon name="camera" /> {t('Foto ulang', 'Photograph again')}
@@ -1154,10 +1142,6 @@ function DarkVideo(props: { seconds: number; at: number; frame?: Blob; heard: bo
               : t('Suara juga belum terbaca.', 'The voice could not be read either.')}</span>
         </span>
       </div>
-      <p class="note info">
-        <Glyph name="torch" size={20} />
-        <span>{t('Malam hari, nyalakan senter HP saat merekam supaya sidat terlihat.', 'At night, turn on the phone flashlight while recording so the eels show.')}</span>
-      </p>
       {!props.busy && props.heard && (
         <button type="button" class="btn primary" onClick={props.onCheck}>
           {t('Cek hasil dari suara', 'Check the voice results')} <Icon name="arrow" />

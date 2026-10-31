@@ -656,7 +656,6 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
     <div class="screen problem-flow has-bar">
       <section class="stack-sm">
         <h1>{t('Ada masalah?', 'Something wrong?')}</h1>
-        <p class="ink2">{t('Pilih kolamnya dulu, lalu pilih yang terlihat.', 'Choose the pond first, then pick what you see.')}</p>
       </section>
 
       {/* A power cut stops every aerator at once: one tap, no pond to choose. */}
@@ -758,7 +757,7 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
         <CountFailed failed={failed} onRetake={() => photo.current?.click()} onManual={() => setManual(true)} />
       )}
 
-      <span class="label ink2 center">{t('Laporan darurat tidak memakai jatah baca AI.', 'Emergency reports do not use your daily AI reads.')}</span>
+      <span class="label ink2 center">{t('Laporan darurat tidak memakai kredit AI.', 'Emergency reports do not use AI credits.')}</span>
       {error && <p class="error">{error}</p>}
 
       {/* Main action: pinned above the tab bar while the page scrolls. */}

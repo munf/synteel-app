@@ -1,4 +1,4 @@
-/* Jatah baca AI (canvas JatahAI). Running out uses the info style: amber only means Perhatian. */
+/* Kredit AI (canvas JatahAI). Running out uses the info style: amber only means Perhatian. */
 .quota-bar { display: block; background: var(--tint); }
 .quota-bar.tall { height: 12px; border-radius: 6px; }
 .quota-bar.tall > span { border-radius: 6px; }

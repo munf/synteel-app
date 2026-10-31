@@ -12,7 +12,7 @@ const TOPICS: { key: SupportTopic; label: string; hint: string }[] = [
   { key: 'pin', label: t('Masuk dan PIN', 'Sign in and PIN'), hint: t('contoh: pemilik lupa PIN dan tidak bisa masuk', 'example: the owner forgot the PIN and cannot sign in') },
   { key: 'catat', label: t('Catat dan suara', 'Recording and voice'), hint: t('contoh: suara di Kolam B tidak terbaca sejak kemarin', 'example: voice for Kolam B not understood since yesterday') },
   { key: 'waspada', label: t('Waspada dan alarm', 'Watch and alarm'), hint: t('contoh: alarm jam 23.30 tidak bunyi', 'example: the 23:30 alarm did not ring') },
-  { key: 'jatah', label: t('Jatah AI', 'AI reads'), hint: t('contoh: jatah habis padahal baru dipakai sedikit', 'example: reads ran out after only a little use') },
+  { key: 'jatah', label: t('Kredit AI', 'AI reads'), hint: t('contoh: kredit habis padahal baru dipakai sedikit', 'example: reads ran out after only a little use') },
   { key: 'lain', label: t('Lainnya', 'Other'), hint: t('Ceritakan singkat saja', 'Keep it short') },
 ];
 
@@ -86,10 +86,10 @@ export function SpeakToText({ onText, hint }: { onText: (text: string) => void; 
       {heard && !rec ? (
         <p role="status" class="note info">
           <Icon name="check" size={18} stroke={2.5} />
-          {t('Sudah jadi teks di atas. Periksa dulu sebelum kirim.', 'It is now text above. Check it before sending.')}
+          {t('Periksa teksnya sebelum dikirim.', 'Check the text before sending.')}
         </p>
       ) : (
-        <span class="label ink2">{note || hint || t('Yang terkirim hanya teksnya. Tidak memakai jatah baca AI.', 'Only the text is sent. It does not use your daily AI reads.')}</span>
+        <span class="label ink2">{note || hint || t('Yang terkirim hanya teksnya. Tidak memakai kredit AI.', 'Only the text is sent. It does not use your daily AI reads.')}</span>
       )}
     </div>
   );
@@ -145,7 +145,6 @@ export function Help({ me, go }: { me: Me | null; go: Go }) {
         </button>
         <div class="grow" style={{ display: 'flex', flexDirection: 'column' }}>
           <h1>{t('Hubungi bantuan', 'Contact support')}</h1>
-          <span class="meta">{t('Tim Synteel membalas lewat email', 'The Synteel team replies by e-mail')}</span>
         </div>
       </header>
 
@@ -226,10 +225,7 @@ export function Help({ me, go }: { me: Me | null; go: Go }) {
             ) : (
               <Field
                 label={t('Nomor HP akun Synteel', 'Phone number of the Synteel account')}
-                hint={t(
-                  'Untuk lupa PIN pemilik: tim akan memastikan pemilik akun sebelum mengatur ulang PIN.',
-                  'For a forgotten owner PIN: the team confirms the account owner before resetting the PIN.',
-                )}
+                hint={t('Tim akan memastikan pemilik akun sebelum mengatur ulang PIN.', 'The team confirms the account owner before resetting the PIN.')}
               >
                 <input type="tel" inputMode="tel" placeholder={t('Nomor yang dipakai untuk masuk', 'The number you sign in with')} value={accountPhone} onInput={(e) => setAccountPhone(e.currentTarget.value)} />
               </Field>

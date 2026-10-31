@@ -72,7 +72,7 @@ function Mark({ field, draft }: { field: Field; draft: PondPhotoDraft | null }) 
   if (draft.unsure.includes(field))
     return (
       <span class="label ink2" style={{ fontWeight: 400 }}>
-        {t('AI belum yakin, pilih sendiri', 'The AI is not sure; pick it yourself')}
+        {t('AI ragu, silahkan pilih sendiri', 'The AI is unsure; pick it yourself')}
       </span>
     );
   return (
@@ -130,7 +130,6 @@ export function ProfileFields({ value, onChange, draft, depth = true }: { value:
           <Mark field="light" draft={draft} />
         </span>
         <Chips options={lightLabel} value={value.light ? [value.light] : []} onChange={(v) => set({ light: v[0] ?? null })} />
-        <span class="field-hint">{t('Sidat hewan malam: lebih tenang di tempat redup.', 'Eels are night animals: calmer in dim places.')}</span>
       </div>
       {depth && (
         <label class="field">
@@ -241,10 +240,8 @@ export function PondPhoto({
         )}
         <span class="grow stack-xs">
           <span class="strong">{t('Foto kolam', 'Pond photo')}</span>
-          <span class="meta">{t('AI membaca jenis wadah, tempat, warna air dan cahaya. Cek dulu sebelum disimpan.', 'The AI reads the container, place, water color and light. Check before saving.')}</span>
-          {onCover && cover && (
-            <span class="label ink2">{pending ? t('Jadi foto sampul kolam setelah Simpan.', 'Becomes the pond cover after Save.') : t('Foto sampul kolam sekarang.', 'The pond cover now.')}</span>
-          )}
+          <span class="meta">{t('AI mengisi pilihan di bawah. Cek sebelum simpan.', 'The AI fills in the choices below. Check before saving.')}</span>
+          {onCover && cover && pending && <span class="label ink2">{t('Jadi foto sampul kolam setelah Simpan.', 'Becomes the pond cover after Save.')}</span>}
           {dropped && <span class="label ink2">{t('Foto ini tidak dipakai jadi sampul kolam.', 'This photo is not used as the pond cover.')}</span>}
         </span>
       </div>
@@ -273,7 +270,7 @@ export function PondPhoto({
             <span>{error.text}</span>
             {error.quota && onQuota && (
               <button type="button" class="rp-link warn" onClick={onQuota}>
-                {t('Lihat jatah AI', 'View daily AI reads')}
+                {t('Lihat kredit AI', 'View daily AI reads')}
               </button>
             )}
           </span>
@@ -283,7 +280,6 @@ export function PondPhoto({
         <div class="stack-sm" role="status">
           {draft.mode === 'mock' && <span class="soon">{t('Mode contoh, bukan hasil AI', 'Sample mode, not an AI result')}</span>}
           <span class="strong">{seen && seen.length ? t(`Terbaca: ${seen.join(' · ')}`, `Seen: ${seen.join(' · ')}`) : t('Belum ada yang terbaca jelas.', 'Nothing could be read clearly.')}</span>
-          {draft.unsure.length > 0 && !draft.notPond && <span class="label ink2">{t('Yang belum yakin dibiarkan kosong: pilih sendiri di bawah.', 'What the AI was not sure of is left empty: pick it below.')}</span>}
           {draft.problems.filter((p) => !/Mode contoh|Sample mode/.test(p)).map((p) => (
             <span key={p} class="label ink2">
               {p}

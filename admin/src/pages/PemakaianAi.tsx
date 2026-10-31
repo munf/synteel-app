@@ -62,7 +62,7 @@ export function PemakaianAiHalaman() {
           </div>
         </Panel>
 
-        <Panel judul="Jatah AI tambak hari ini" aksi={<span className="redup-teks kecil">terbanyak di atas</span>}>
+        <Panel judul="Kredit AI tambak hari ini" aksi={<span className="redup-teks kecil">terbanyak di atas</span>}>
           {d.kuota.length === 0 && <p className="kecil redup-teks">Belum ada tambak yang memakai AI hari ini.</p>}
           <ul className="daftar-kuota">
             {d.kuota.map((k) => {
@@ -80,7 +80,7 @@ export function PemakaianAiHalaman() {
               )
             })}
           </ul>
-          <p className="kecil redup-teks">Jatah dihitung per tambak per hari (waktu setempat) dan mulai dari nol lagi tengah malam.</p>
+          <p className="kecil redup-teks">Kredit dihitung per tambak per hari (waktu setempat) dan mulai dari nol lagi tengah malam.</p>
         </Panel>
       </div>
     </>

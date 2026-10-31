@@ -137,7 +137,7 @@ const parseNum = (s: string) => Number(s.trim().replace(/\s/g, '').replace(',', 
 type Mode = 'lihat' | 'ubah' | 'pindah' | 'hapus';
 type Notice = { kind: 'moved' | 'deleted'; log: HistoryLog; to?: string };
 
-export function History({ ponds, pondId, days: initialDays, role, onChanged, go }: { ponds: PondSummary[]; pondId: number; days?: number; role: Role | null; onChanged: () => void; go: Go }) {
+export function History({ ponds, pondId, days: initialDays, onChanged, go }: { ponds: PondSummary[]; pondId: number; days?: number; role: Role | null; onChanged: () => void; go: Go }) {
   const pond = ponds.find((p) => p.id === pondId);
   const [logs, setLogs] = useState<HistoryLog[] | null>(null);
   const [me, setMe] = useState<{ id: number; name: string } | null>(null);
@@ -316,19 +316,7 @@ export function History({ ponds, pondId, days: initialDays, role, onChanged, go 
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 11v5M12 8h.01" />
         </svg>
-        <span class="stack-xs">
-          {me && role && (
-            <span class="strong">
-              {t(`Masuk sebagai ${me.name}, ${roleLabel[role].toLowerCase()}.`, `Signed in as ${me.name}, ${roleLabel[role].toLowerCase()}.`)}
-            </span>
-          )}
-          <span>
-            {t(
-              'Catatan bisa diubah atau dihapus oleh yang mencatat sampai 24 jam. Pemilik tambak bisa kapan saja. Setiap perubahan tetap tercatat.',
-              'Whoever made a record can edit or delete it for 24 hours. The farm owner can at any time. Every change stays on record.',
-            )}
-          </span>
-        </span>
+        <span>{t('Setiap perubahan tetap tercatat.', 'Every change stays on record.')}</span>
       </div>
 
       {error && <p class="error">{error}</p>}
@@ -526,14 +514,6 @@ export function History({ ponds, pondId, days: initialDays, role, onChanged, go 
                             ))}
                             {q && found.length === 0 && <span class="label ink2 center" style={{ padding: '8px 0' }}>{t('Tidak ada kolam dengan nama itu.', 'No pond with that name.')}</span>}
                           </div>
-                          {!q && others.length > picks.length && (
-                            <span class="meta">
-                              {t(
-                                `Bukan ini? Ketik nama kolam, ada ${others.length - picks.length} kolam lain.`,
-                                `Not these? Type a pond name; there are ${others.length - picks.length} other ponds.`,
-                              )}
-                            </span>
-                          )}
                           {actionError && <p class="error">{actionError}</p>}
                           <button type="button" class="btn secondary" style={{ minHeight: 48 }} onClick={() => (setMode('lihat'), setQuery(''), setActionError(''))}>
                             {t('Batal', 'Cancel')}
@@ -583,7 +563,7 @@ export function History({ ponds, pondId, days: initialDays, role, onChanged, go 
           </span>
           <span class="grow stack-xs" style={{ gap: 2 }}>
             <span class="strong">{t('Ada catatan lama di buku?', 'Old records in a notebook?')}</span>
-            <span class="meta">{t('Foto halamannya, AI menyalin ke riwayat ini. Dicek dulu sebelum disimpan.', 'Take a photo of the page; the AI copies it into this history. Checked before saving.')}</span>
+            <span class="meta">{t('AI menyalin halaman ke riwayat ini.', 'The AI copies the page into this history.')}</span>
           </span>
           <Icon name="next" size={20} />
         </button>

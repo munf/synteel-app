@@ -53,7 +53,7 @@ test('the farm cap is shared; a photo and a video today earn +2; quota out is 42
   const out = await worker('POST', '/round/text', { transcript: 'Kolam A suhu 28' });
   assert.equal(out.status, 429);
   assert.equal(out.json.code, 'ai_quota');
-  assert.match(out.json.error, /Jatah baca AI/);
+  assert.match(out.json.error, /Kredit AI/);
 
   let q = (await owner('GET', '/quota')).json;
   assert.deepEqual([q.cap, q.base, q.bonus, q.used, q.left, q.unlimited], [2, 2, 0, 2, 0, false]);

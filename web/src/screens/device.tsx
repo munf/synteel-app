@@ -187,10 +187,7 @@ export function ConnectDevice({ initialCode, role, onLinked, go }: { initialCode
       {!device && (
         <>
           <p class="ink2">
-            {t(
-              'Ketik kode yang tertulis di alat, atau scan kode QR-nya. Angka dari alat lalu masuk sendiri dan ikut dicek seperti catatan lain.',
-              'Type the code written on the device, or scan its QR code. Its readings then come in by themselves and are checked like any other record.',
-            )}
+            {t('Angka dari alat masuk sendiri dan ikut dicek.', "The device's readings come in by themselves and are checked.")}
           </p>
 
           {scanning ? (
@@ -211,7 +208,7 @@ export function ConnectDevice({ initialCode, role, onLinked, go }: { initialCode
                   look();
                 }}
               >
-                <Field label={t('Kode alat', 'Device code')} hint={t('contoh: N0-7KQ2-M4', 'example: N0-7KQ2-M4')}>
+                <Field label={t('Kode alat', 'Device code')}>
                   <input
                     class="code-input"
                     value={code}
@@ -254,10 +251,7 @@ export function ConnectDevice({ initialCode, role, onLinked, go }: { initialCode
               </button>
               {noScan && (
                 <Notice tone="info" icon="info" title={t('Browser ini belum bisa membaca kode QR', 'This browser cannot read QR codes yet')}>
-                  {t(
-                    'Ketik kode yang tertulis di bawah kode QR, atau arahkan aplikasi kamera ke kode QR: tautannya membuka Synteel dengan kode terisi.',
-                    'Type the code written under the QR code, or point the phone camera app at the QR code: its link opens Synteel with the code filled in.',
-                  )}
+                  {t('Ketik kode di bawah kode QR, atau pakai aplikasi kamera.', 'Type the code under the QR code, or use the camera app.')}
                 </Notice>
               )}
             </section>
@@ -272,12 +266,7 @@ export function ConnectDevice({ initialCode, role, onLinked, go }: { initialCode
               <Icon name="next" size={20} />
             </a>
             <a class="link-row" href="https://eel.synt.fun/sim/" target="_blank" rel="noopener" onClick={siteInAppLanguage}>
-              <span style={{ display: 'flex', flexDirection: 'column' }}>
-                <span>{t('Coba alat simulasi', 'Try a simulated device')}</span>
-                <span class="label ink2" style={{ fontWeight: 400 }}>
-                  {t('Kodenya bisa langsung dihubungkan di sini', 'Its code can be connected right here')}
-                </span>
-              </span>
+              <span>{t('Coba alat simulasi', 'Try a simulated device')}</span>
               <Icon name="next" size={20} />
             </a>
           </section>
@@ -326,8 +315,8 @@ export function ConnectDevice({ initialCode, role, onLinked, go }: { initialCode
               ) : device.simulated ? (
                 <p>
                   {t(
-                    `Membuat ${newNames.length} kolam simulasi baru: ${joinNames(newNames)}. Kolam yang ada tidak berubah. Angka simulasi datang sendiri dan ikut dicek aturan, perkiraan dan alarm.`,
-                    `Makes ${newNames.length} new simulation ponds: ${joinNames(newNames)}. Existing ponds do not change. Simulated readings come in by themselves and go through the rules, forecast and alarms.`,
+                    `Membuat ${newNames.length} kolam simulasi baru: ${joinNames(newNames)}. Kolam lain tidak berubah.`,
+                    `Makes ${newNames.length} new simulation ponds: ${joinNames(newNames)}. Other ponds do not change.`,
                   )}
                 </p>
               ) : (

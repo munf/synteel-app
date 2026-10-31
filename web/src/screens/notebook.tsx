@@ -172,7 +172,7 @@ export function Notebook({ ponds, pondId, onSaved, go }: { ponds: PondSummary[];
       });
     } catch (err) {
       if (err instanceof ApiError && err.code === 'ai_quota')
-        setError({ text: t('Jatah baca AI hari ini habis. Foto halaman ini lagi besok, atau ketik sendiri di Catat.', "Today's AI reads are used up. Take this page again tomorrow, or type it in on Record."), quota: true });
+        setError({ text: t('Kredit AI hari ini habis. Foto halaman ini lagi besok, atau ketik sendiri di Catat.', "Today's AI reads are used up. Take this page again tomorrow, or type it in on Record."), quota: true });
       else if (err instanceof Offline) setError({ text: t('Belum ada sinyal. Foto halaman ini lagi saat ada sinyal.', 'No signal yet. Take this page again when there is signal.') });
       else setError({ text: (err as Error).message });
     } finally {
@@ -261,7 +261,7 @@ export function Notebook({ ponds, pondId, onSaved, go }: { ponds: PondSummary[];
         <span>{error.text}</span>
         {error.quota && (
           <button type="button" class="rp-link warn" onClick={() => go({ name: 'quota' })}>
-            {t('Lihat jatah AI', 'View daily AI reads')}
+            {t('Lihat kredit AI', 'View daily AI reads')}
           </button>
         )}
       </span>
@@ -299,7 +299,6 @@ export function Notebook({ ponds, pondId, onSaved, go }: { ponds: PondSummary[];
               )}
             </div>
           </div>
-          <span class="label ink2">{t('Tercatat sebagai “Buku” di riwayat dan ikut di grafik kolam.', 'Marked “Notebook” in the history and shown in the pond charts.')}</span>
           <div class="stack-sm">
             {[...byPond.entries()].map(([id, v]) => (
               <button type="button" key={id} class="nb-pond-link" onClick={() => go({ name: 'history', pondId: id, days: daysBack(v.oldest) })}>
@@ -337,17 +336,12 @@ export function Notebook({ ponds, pondId, onSaved, go }: { ponds: PondSummary[];
           <div class="stack-xs">
             <h2>{t('Catatan lama dari buku masuk ke aplikasi', 'Old records from the notebook go into the app')}</h2>
             <p class="ink2">
-              {t(
-                'Foto satu halaman buku catatan kolam. AI menyalin tanggal, kolam, suhu, pH, TDS, jumlah mati dan pakan. Semua dicek dulu, baru disimpan.',
-                'Take a photo of one notebook page. The AI copies the date, pond, temperature, pH, TDS, number dead and feed. Everything is checked before it is saved.',
-              )}
+              {t('AI telah menyalin halaman. Tolong periksa lagi sebelum disimpan.', 'The AI has copied the page. Please check it again before saving.')}
             </p>
           </div>
           <div class="stack-sm nb-tips">
             {[
-              t('Satu halaman per foto, lurus dari atas', 'One page per photo, straight from above'),
-              t('Cukup terang, tanpa bayangan tangan', 'Bright enough, no hand shadow'),
-              t('Tulisan yang tidak terbaca dikosongkan, tidak ditebak', 'Writing that cannot be read is left empty, never guessed'),
+              t('Satu halaman per foto', 'One page per photo'),
             ].map((tip) => (
               <span class="row label ink2" key={tip} style={{ gap: 8 }}>
                 <Icon name="check" size={18} stroke={2.6} />
@@ -363,7 +357,7 @@ export function Notebook({ ponds, pondId, onSaved, go }: { ponds: PondSummary[];
           <button type="button" class="btn secondary" disabled={!!reading} onClick={() => gallery.current?.click()}>
             {t('Pilih foto dari galeri', 'Choose a photo from the gallery')}
           </button>
-          <span class="meta">{t('Satu halaman memakai satu jatah baca AI.', 'Each page uses one daily AI read.')}</span>
+          <span class="meta">{t('Satu halaman memakai satu kredit AI.', 'Each page uses one AI credit.')}</span>
         </section>
         {inputs}
       </div>
@@ -379,7 +373,7 @@ export function Notebook({ ponds, pondId, onSaved, go }: { ponds: PondSummary[];
       {mock && (
         <p class="note info">
           <Icon name="info" />
-          <span>{t('Mode contoh, bukan hasil AI. Baris di bawah adalah contoh untuk mencoba.', 'Sample mode, not an AI result. The rows below are samples to try it out.')}</span>
+          <span>{t('Mode contoh, bukan hasil AI. Baris di bawah adalah contoh untuk demo.', 'Sample mode, not an AI result. The rows below are samples for the demo.')}</span>
         </p>
       )}
 
@@ -405,16 +399,15 @@ export function Notebook({ ponds, pondId, onSaved, go }: { ponds: PondSummary[];
           </h2>
           <span class="label ink2 num">
             {openCount
-              ? t(`${openCount} sel perlu dicek lagi. Sel itu kosong sampai diisi.`, `${openCount} ${openCount === 1 ? 'cell needs' : 'cells need'} checking. ${openCount === 1 ? 'It stays' : 'They stay'} empty until filled.`)
+              ? t(`${openCount} sel perlu diperiksa.`, `${openCount} ${openCount === 1 ? 'cell needs' : 'cells need'} checking.`)
               : t('Semua sel sudah dicek.', 'All cells are checked.')}
           </span>
         </div>
-        <span class="label ink2">{t('Bandingkan dengan buku. Angka bisa diubah, baris bisa dihapus.', 'Compare with the notebook. Numbers can be changed, rows can be deleted.')}</span>
         {waiting.length > 0 && toSave.length > 0 && !s.done && (
           <span class="label ink2 num">
             {t(
-              `${waiting.length} baris yang perlu dicek belum disimpan, tetap di sini sampai dicek.`,
-              `${waiting.length} ${waiting.length === 1 ? 'row' : 'rows'} to check ${waiting.length === 1 ? 'is' : 'are'} not saved yet and ${waiting.length === 1 ? 'stays' : 'stay'} here until checked.`,
+              `${waiting.length} baris yang perlu diperiksa belum disimpan, silahkan periksa.`,
+              `${waiting.length} ${waiting.length === 1 ? 'row' : 'rows'} to check ${waiting.length === 1 ? 'is' : 'are'} not saved yet, please check.`,
             )}
           </span>
         )}
@@ -499,10 +492,10 @@ function PageGroup({ page, rows, children }: { page: Page; rows: Row[]; children
       ))}
       {years.length > 0 && (
         <span class="meta num">
-          {t(`Tahun tidak tertulis, dianggap ${years.join(' dan ')}: tanggal terakhir yang sudah lewat.`, `No year written, taken as ${years.join(' and ')}: the most recent date that has passed.`)}
+          {t(`Tahun tidak tertulis, dianggap ${years.join(' dan ')}.`, `No year written, taken as ${years.join(' and ')}.`)}
         </span>
       )}
-      {page.rows === 0 && <p class="ink2">{t('Tidak ada baris yang terbaca di halaman ini. Coba foto lebih dekat dan lebih terang.', 'No rows could be read on this page. Try a closer, brighter photo.')}</p>}
+      {page.rows === 0 && <p class="ink2">{t('Tidak ada baris yang terbaca di halaman ini. Pastikan gambar jelas.', 'No rows could be read on this page. Make sure the picture is clear.')}</p>}
       {children}
     </section>
   );

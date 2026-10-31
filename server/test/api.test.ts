@@ -284,7 +284,7 @@ test('each farm has its own daily AI cap', async () => {
   const refused = await a();
   assert.equal(refused.status, 429);
   assert.equal(refused.json.code, 'ai_quota');
-  assert.match(refused.json.error, /Jatah baca AI/);
+  assert.match(refused.json.error, /Kredit AI/);
   assert.equal((await b()).status, 200);
 });
 

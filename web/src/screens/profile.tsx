@@ -46,7 +46,7 @@ function QuotaRow({ go }: { go: Go }) {
       ? t('Lihat sisa hari ini', 'See what is left today')
       : t('Memuat…', 'Loading…');
   return (
-    <LinkCard icon={<Icon name="sparkle" />} title={t('Jatah baca AI', 'Daily AI reads')} sub={sub} onClick={() => go({ name: 'quota' })}>
+    <LinkCard icon={<Icon name="sparkle" />} title={t('Kredit AI', 'Daily AI reads')} sub={sub} onClick={() => go({ name: 'quota' })}>
       {q && !q.unlimited && <QuotaBar q={q} />}
     </LinkCard>
   );
@@ -89,10 +89,7 @@ function FarmLocation({ farm, onSaved }: { farm: Farm; onSaved: (f: Farm) => voi
         {notFound && (
           <span class="note info" style={{ width: '100%' }}>
             <Icon name="info" size={20} />{' '}
-            {t(
-              'Tempat ini belum ditemukan di peta, jadi cuaca belum bisa dihitung. Tulis nama kecamatan dan kabupaten, atau pakai lokasi HP.',
-              'This place was not found on the map, so the weather cannot be worked out yet. Write the district and regency, or use the phone location.',
-            )}
+            {t('Lokasi tidak ditemukan. Tulis kecamatan dan kabupaten, atau pakai lokasi HP.', 'Location not found. Write the district and regency, or use the phone location.')}
           </span>
         )}
       </LinkCard>
@@ -100,7 +97,7 @@ function FarmLocation({ farm, onSaved }: { farm: Farm; onSaved: (f: Farm) => voi
   }
   return (
     <form class="card" id="lokasi" onSubmit={save}>
-      <Field label={t('Lokasi tambak', 'Farm location')} hint={t('Untuk perkiraan suhu air dari cuaca setempat.', 'For estimating the water temperature from the local weather.')}>
+      <Field label={t('Lokasi tambak', 'Farm location')} hint={t('Untuk cuaca dan perkiraan suhu air.', 'For the weather and the water temperature estimate.')}>
         <input value={place} onInput={(e) => setPlace(e.currentTarget.value)} placeholder={t('contoh: Sleman, Yogyakarta', 'example: Sleman, Yogyakarta')} />
       </Field>
       <LocateButton gps={gps} />
@@ -170,7 +167,7 @@ function StreakDays({ state }: { state: FarmState }) {
 }
 
 /** Everything that does not exist yet, in one quiet group with one "Belum tersedia" chip. */
-function LaterList({ title, items }: { title: string; items: { label: string; sub: string }[] }) {
+function LaterList({ title, items }: { title: string; items: { label: string }[] }) {
   return (
     <section class="card later" aria-label={t('Belum tersedia', 'Not available yet')}>
       <div class="row between" style={{ paddingBottom: 8 }}>
@@ -180,7 +177,6 @@ function LaterList({ title, items }: { title: string; items: { label: string; su
       {items.map((l) => (
         <div key={l.label} class="later-row">
           <span class="semi">{l.label}</span>
-          <span class="label ink2">{l.sub}</span>
         </div>
       ))}
     </section>
@@ -277,9 +273,9 @@ export function Profile({
     { id: 'en', label: 'English' },
   ];
   const later = [
-    { label: t('Telepon penyuluh', 'Call an extension officer'), sub: t('Penyuluh perikanan', 'Fisheries extension officer') },
-    { label: t('Laporan mingguan', 'Weekly report'), sub: t('Ringkasan mati, suhu dan pakan seminggu', 'A week of deaths, temperature and feed') },
-    { label: t('Teruskan alarm ke pemilik', 'Forward alarms to the owner'), sub: t('Kalau alarm cek malam tidak dijawab', 'If the night check alarm is not answered') },
+    { label: t('Telepon penyuluh', 'Call an extension officer') },
+    { label: t('Laporan mingguan', 'Weekly report') },
+    { label: t('Teruskan alarm ke pemilik', 'Forward alarms to the owner') },
   ];
 
   return (
@@ -359,7 +355,6 @@ export function Profile({
         <div class="stack night-row">
           <div class="stack-xs">
             <span class="strong">{t('Terang atau gelap', 'Light or dark')}</span>
-            <span class="label ink2">{t('Gelap nyaman untuk cek kolam malam hari', 'Dark is easier on the eyes for night checks')}</span>
           </div>
           <div role="radiogroup" aria-label={t('Terang atau gelap', 'Light or dark')} class="grid3" style={{ gap: 8 }}>
             {themes.map((g) => {
@@ -376,7 +371,6 @@ export function Profile({
         <div class="stack lang-row">
           <div class="stack-xs">
             <span class="strong">{t('Bahasa', 'Language')}</span>
-            <span class="label ink2">{t('Menu dan saran AI', 'Menus and AI advice')}</span>
           </div>
           <div role="radiogroup" aria-label={t('Bahasa', 'Language')} class="grid2" style={{ gap: 8 }}>
             {langs.map((g) => {
@@ -397,7 +391,6 @@ export function Profile({
         <section class="card list">
           <div class="stack-xs" style={{ padding: '20px 0 8px' }}>
             <h2>{t('Pilih tambak', 'Choose a farm')}</h2>
-            <span class="meta">{t(`Terdaftar di ${me.farms.length} tambak`, `Member of ${me.farms.length} farms`)}</span>
           </div>
           {me.farms.map((f) => {
             const on = f.id === me.farm?.id;
@@ -432,7 +425,7 @@ export function Profile({
         <section class="card stack">
           <div class="stack-xs">
             <h2>{t('Gabung tambak lain', 'Join another farm')}</h2>
-            <span class="meta">{t('Pakai kode undangan dari pemilik tambak. Tambak ini tetap ada di daftar.', 'Use an invite code from the farm owner. This farm stays in your list.')}</span>
+            <span class="meta">{t('Tambak ini tetap ada di daftar.', 'This farm stays in your list.')}</span>
           </div>
           <JoinByCode onJoined={onJoined} />
         </section>
@@ -484,9 +477,6 @@ export function Profile({
         <button type="button" class="list-row link-row" style={ALAT_ROW} onClick={() => go({ name: 'device' })}>
           <span class="grow stack-xs" style={{ gap: 0 }}>
             <span class="semi">{t('Hubungkan alat', 'Connect a device')}</span>
-            <span class="label ink2" style={{ fontWeight: 400 }}>
-              {t('Ketik kode alat atau scan kode QR-nya', "Type the device code or scan its QR code")}
-            </span>
           </span>
           <Icon name="next" size={20} />
         </button>
@@ -494,7 +484,7 @@ export function Profile({
           <span class="grow stack-xs" style={{ gap: 0 }}>
             <span class="semi">{t('Lihat alat Synteel', 'See Synteel devices')}</span>
             <span class="label ink2" style={{ fontWeight: 400 }}>
-              {t('Sensor dan filter untuk kolam · masih prototipe, belum dijual', 'Sensors and filters for ponds · still prototypes, not for sale yet')}
+              {t('Prototipe, belum dijual', 'Prototypes, not for sale yet')}
             </span>
           </span>
           <Icon name="next" size={20} />
@@ -543,7 +533,6 @@ export function Profile({
         <button type="button" class="btn secondary" onClick={logout} disabled={leaving}>
           <Icon name="logout" size={20} /> {t('Keluar', 'Sign out')}
         </button>
-        <span class="meta center">{t(`Masuk sebagai ${me.user.name}`, `Signed in as ${me.user.name}`)}</span>
       </section>
     </div>
   );
@@ -652,7 +641,6 @@ export function Rewards({ state, go }: { state: FarmState; go: Go }) {
               <span class={`ladder-day${got ? ' got' : isNext ? ' next' : ''}`}>{s.day}</span>
               <span class="grow stack-xs" style={{ gap: 0 }}>
                 <span class="strong">{s.sub}</span>
-                <span class="label ink2">+{bonus} {t('bacaan', 'reads')}</span>
               </span>
               <span class={`pill ${got ? 'ok' : isNext ? 'blue' : 'grey'}`}>{got ? t('tercapai', 'reached') : isNext ? t('berikutnya', 'next') : t(`${s.day - streak} hari lagi`, `${s.day - streak} ${s.day - streak === 1 ? 'day' : 'days'} to go`)}</span>
             </div>
@@ -662,13 +650,7 @@ export function Rewards({ state, go }: { state: FarmState; go: Go }) {
 
       <button type="button" class="card quota-link" onClick={() => go({ name: 'quota' })}>
         <span class="grow stack-xs">
-          <span class="h2">{t('Jatah baca AI', 'Daily AI reads')}</span>
-          <span class="label ink2">
-            {t(
-              'Satu bacaan = satu foto, suara atau video yang dibaca AI. Ketik sendiri dan laporan darurat tidak memakai jatah.',
-              'One read = one photo, voice note or video the AI reads. “Type it in” and emergency reports do not use reads.',
-            )}
-          </span>
+          <span class="h2">{t('Kredit AI', 'Daily AI reads')}</span>
         </span>
         <span class="ink2" style={{ display: 'flex' }}>
           <Icon name="next" size={20} />
@@ -678,8 +660,8 @@ export function Rewards({ state, go }: { state: FarmState; go: Go }) {
       <LaterList
         title={t('Hadiah lain', 'Other rewards')}
         items={[
-          { label: t('Laporan mingguan', 'Weekly report'), sub: t('Ringkasan mati, suhu dan pakan seminggu', 'A week of deaths, temperature and feed') },
-          { label: t('Hadiah mitra', 'Partner rewards'), sub: t('contoh: diskon pakan', 'for example: feed discounts') },
+          { label: t('Laporan mingguan', 'Weekly report') },
+          { label: t('Hadiah mitra', 'Partner rewards') },
         ]}
       />
 

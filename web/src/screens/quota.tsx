@@ -24,9 +24,9 @@ const USES: { label: string; icon: IconName }[] = [
 ];
 
 // Prices are not decided yet: the packs are shown without them and cannot be bought.
-const PACKS = [
-  { name: t('+50 bacaan', '+50 reads'), sub: t('Untuk hari sibuk', 'For busy days') },
-  { name: t('+200 bacaan', '+200 reads'), sub: t('Untuk beberapa minggu', 'For a few weeks') },
+const PACKS: { name: string; sub?: string }[] = [
+  { name: t('+50 bacaan', '+50 reads') },
+  { name: t('+200 bacaan', '+200 reads') },
   { name: t('Langganan bulanan', 'Monthly plan'), sub: t('150 bacaan per hari', '150 reads a day') },
 ];
 
@@ -37,10 +37,7 @@ function Hero({ q }: { q: QuotaState }) {
         <span class="label semi ink2">{t('Sisa hari ini', 'Left today')}</span>
         <h2>{t('Tidak ada batas harian', 'No daily limit')}</h2>
         <span class="ink2">
-          {t(
-            `Saat ini tambak ini belum punya batas bacaan AI per hari. Dipakai hari ini: ${q.used} bacaan.`,
-            `This farm has no daily limit on AI reads right now. Used today: ${q.used} ${q.used === 1 ? 'read' : 'reads'}.`,
-          )}
+          {t(`Dipakai hari ini: ${q.used} bacaan.`, `Used today: ${q.used} ${q.used === 1 ? 'read' : 'reads'}.`)}
         </span>
       </section>
     );
@@ -58,7 +55,7 @@ function Hero({ q }: { q: QuotaState }) {
       <span class="label sub">
         {out
           ? t(
-              `Habis. Terisi lagi besok jam ${reset}. Rekaman yang dibuat sekarang tetap disimpan dan dibaca setelah jatah ada.`,
+              `Habis. Terisi lagi besok jam ${reset}. Rekaman yang dibuat sekarang tetap disimpan dan dibaca setelah kredit ada.`,
               `Used up. Refills tomorrow at ${reset}. Recordings made now are still saved, and read once reads are back.`,
             )
           : t(`Terisi penuh lagi tiap jam ${reset}.`, `Refills in full every day at ${reset}.`)}
@@ -110,7 +107,7 @@ export function Quota({ role, go }: { role: Role | null; go: Go }) {
   const ask =
     q &&
     t(
-      `Jatah baca AI di Synteel hari ini ${q.left === 0 ? 'habis' : `tinggal ${q.left}`}. Mohon ditambah di Synteel › Profil › Jatah baca AI.`,
+      `Kredit AI di Synteel hari ini ${q.left === 0 ? 'habis' : `tinggal ${q.left}`}. Mohon ditambah di Synteel › Profil › Kredit AI.`,
       `Today's AI reads in Synteel are ${q.left === 0 ? 'used up' : `down to ${q.left}`}. Please add more in Synteel › Profile › Daily AI reads.`,
     );
 
@@ -121,8 +118,8 @@ export function Quota({ role, go }: { role: Role | null; go: Go }) {
           <Icon name="back" />
         </button>
         <div class="stack-xs">
-          <h1 style={{ lineHeight: 1.1 }}>{t('Jatah baca AI', 'Daily AI reads')}</h1>
-          <span class="meta">{t('Satu jatah untuk semua anggota tambak', 'One allowance for all farm members')}</span>
+          <h1 style={{ lineHeight: 1.1 }}>{t('Kredit AI', 'Daily AI reads')}</h1>
+          <span class="meta">{t('Kredit dipakai bersama semua anggota tambak', 'One allowance for all farm members')}</span>
         </div>
       </header>
 
@@ -130,7 +127,7 @@ export function Quota({ role, go }: { role: Role | null; go: Go }) {
       {error && (
         <div class="stack-sm">
           <p class="error">
-            {t('Jatah belum bisa dimuat', 'Reads could not be loaded')}: {error}
+            {t('Kredit belum bisa dimuat', 'Reads could not be loaded')}: {error}
           </p>
           <button class="btn secondary" onClick={load}>
             {t('Coba lagi', 'Try again')}
@@ -159,7 +156,7 @@ export function Quota({ role, go }: { role: Role | null; go: Go }) {
             <div class="note ok">
               <Icon name="check" size={20} stroke={2.5} />
               <span>
-                <b style={{ fontWeight: 800 }}>{t('Tidak memakai jatah:', 'Does not use reads:')}</b>{' '}
+                <b style={{ fontWeight: 800 }}>{t('Tidak memakai kredit:', 'Does not use reads:')}</b>{' '}
                 {t(
                   'laporan darurat dan hitung sidat mati, ketik sendiri, ringkasan malam, Waspada, dan bicara di Hubungi bantuan.',
                   'emergency reports and dead-eel counts, Type it in, Night summary, Watch, and speaking in Contact support.',
@@ -190,7 +187,7 @@ export function Quota({ role, go }: { role: Role | null; go: Go }) {
           {owner && (
             <section class="card" style={{ gap: 12 }}>
               <div class="row between">
-                <h2>{t('Beli jatah tambahan', 'Buy extra reads')}</h2>
+                <h2>{t('Beli kredit tambahan', 'Buy extra reads')}</h2>
                 <Soon />
               </div>
               <span class="label ink2">{t('Harga paket diumumkan nanti.', 'Pack prices will be announced later.')}</span>
@@ -198,11 +195,11 @@ export function Quota({ role, go }: { role: Role | null; go: Go }) {
                 {PACKS.map((p) => (
                   <li key={p.name}>
                     <span class="semi">{p.name}</span>
-                    <span class="label ink2">{p.sub}</span>
+                    {p.sub && <span class="label ink2">{p.sub}</span>}
                   </li>
                 ))}
               </ul>
-              <span class="label ink2">{t('Jatah tambahan dipakai setelah jatah harian habis dan berlaku 30 hari.', 'Extra reads are used after the daily reads run out, and last 30 days.')}</span>
+              <span class="label ink2">{t('Kredit tambahan dipakai setelah kredit harian habis dan berlaku 30 hari.', 'Extra reads are used after the daily reads run out, and last 30 days.')}</span>
             </section>
           )}
 
@@ -228,8 +225,8 @@ export function Quota({ role, go }: { role: Role | null; go: Go }) {
 
           {!owner && (
             <section class="card">
-              <h2>{t('Butuh jatah lebih?', 'Need more reads?')}</h2>
-              <p class="ink2">{t('Hanya pemilik tambak yang bisa membeli jatah tambahan.', 'Only the farm owner can buy extra reads.')}</p>
+              <h2>{t('Butuh kredit lebih?', 'Need more reads?')}</h2>
+              <p class="ink2">{t('Hanya pemilik tambak yang bisa membeli kredit tambahan.', 'Only the farm owner can buy extra reads.')}</p>
               <a class="btn primary" href={`https://wa.me/?text=${encodeURIComponent(ask ?? '')}`} target="_blank" rel="noopener">
                 <Icon name="chat" size={20} /> {t('Minta pemilik lewat WhatsApp', 'Ask the owner on WhatsApp')}
               </a>

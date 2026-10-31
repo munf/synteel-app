@@ -64,7 +64,6 @@ function Header() {
         <span class="title">synteel</span>
         <LangSwitch onHero />
       </div>
-      <p style={{ fontSize: '1.125rem', fontWeight: 800, lineHeight: 1.3 }}>{t('Jaga kolam sidat, siang dan malam', 'Look after your eel ponds, day and night')}</p>
     </header>
   );
 }
@@ -300,12 +299,8 @@ export function SignIn({
   );
   const pinHint =
     mode === 'register' || reset
-      ? t('Hindari PIN yang mudah ditebak 123456 atau 111111.', 'Avoid PINs that are easy to guess, like 123456 or 111111.')
-      : join
-        ? t('PIN terlihat supaya tidak salah ketik.', 'The PIN is shown so you do not mistype it.')
-        : sessionEnded
-          ? t('PIN baru dari pemilik tambak, kalau baru diatur ulang.', 'Use the new PIN from the farm owner if it was just reset.')
-          : undefined;
+      ? t('Hindari PIN seperti 123456 atau 111111.', 'Avoid PINs like 123456 or 111111.')
+      : undefined;
   const phoneBorder = taken ? 'var(--ink)' : wrong ? 'var(--bad-dot)' : undefined;
 
   return (
@@ -333,11 +328,7 @@ export function SignIn({
               <Icon name="back" size={20} /> {t('Kembali ke Masuk', 'Back to Sign in')}
             </button>
             <h1>{join ? t('Gabung dengan kode', 'Join with a code') : t('Buat PIN baru', 'Set a new PIN')}</h1>
-            <p class="ink2">
-              {join
-                ? t('Kode undangan didapat dari pemilik tambak.', 'You get the invite code from the farm owner.')
-                : t('Kode dikirim ke email yang dipakai saat daftar.', 'A code goes to the e-mail used when the account was made.')}
-            </p>
+            {!join && <p class="ink2">{t('Kode dikirim ke akun email.', 'A code goes to the account e-mail.')}</p>}
           </div>
         ) : (
           <div class="stack-sm">
@@ -377,14 +368,14 @@ export function SignIn({
         {sessionEnded && mode === 'login' && (
           <Notice tone="info" icon="login" title={t('Akun ini sudah keluar', 'This account was signed out')} role="status">
             {t(
-              'Karena PIN diatur ulang oleh pemilik tambak, atau akun ini masuk di HP lain. Masuk lagi untuk lanjut.',
-              'The farm owner reset the PIN, or this account signed in on another phone. Sign in again to continue.',
+              'PIN diatur ulang pemilik tambak, atau akun masuk di HP lain.',
+              'The farm owner reset the PIN, or the account signed in on another phone.',
             )}
           </Notice>
         )}
 
         {join && (
-          <Field label={t('Kode undangan', 'Invite code')} hint={t('6 huruf dan angka, dari pesan pemilik tambak', "6 letters and numbers, from the farm owner's message")}>
+          <Field label={t('Kode undangan', 'Invite code')} hint={t('Pesan dari pemilik tambak', "Message from the farm owner")}>
             <input
               class="code-input"
               value={code}
@@ -410,10 +401,7 @@ export function SignIn({
         )}
         {join && inviteBad && (
           <Notice tone="info" icon="info" title={t('Kode ini sudah tidak berlaku', 'This code no longer works')} role="alert">
-            {t(
-              'Kode undangan berlaku 7 hari dan hanya bisa dipakai sekali. Kode ini sudah lewat 7 hari atau sudah dipakai.',
-              'An invite code works for 7 days and only once. This code is older than 7 days or was already used.',
-            )}
+            {t('Kode berlaku 7 hari.', 'Codes work for 7 days.')}
           </Notice>
         )}
         {join && invite && (
@@ -427,7 +415,7 @@ export function SignIn({
         )}
 
         {showForm && mode !== 'login' && !reset && !taken && (
-          <Field label={t('Nama', 'Name')} hint={join ? t('Sudah punya akun? Isi nomor HP dan PIN yang biasa dipakai.', 'Already have an account? Enter your usual phone number and PIN.') : undefined}>
+          <Field label={t('Nama', 'Name')} hint={join ? t('Sudah punya akun? Login dengan nomor.', 'Already have an account? Log in with your number.') : undefined}>
             <input autoComplete="name" value={name} onInput={(e) => setName(e.currentTarget.value)} placeholder={t('contoh: Pak Joko', 'example: Pak Joko')} required={mode === 'register'} />
           </Field>
         )}
@@ -467,7 +455,7 @@ export function SignIn({
         )}
         {taken && (
           <Notice tone="info" icon="userCheck" title={t('Nomor ini sudah punya akun', 'This number already has an account')} role="status">
-            {t('Tidak perlu daftar lagi. Masuk dengan PIN yang biasa dipakai.', 'No need to sign up again. Sign in with your usual PIN.')}
+            {t('Nomor sudah terdaftar.', 'This number is already registered.')}
           </Notice>
         )}
         {reset && sentTo && <EmailCode sentTo={sentTo} value={emailCode} onChange={setEmailCode} onResend={sendCode} busy={busy} />}
@@ -496,9 +484,7 @@ export function SignIn({
         )}
         {mode === 'register' && emailOn && sentTo && !taken && <EmailCode sentTo={sentTo} value={emailCode} onChange={setEmailCode} onResend={sendCode} busy={busy} />}
         {locked && (
-          <Notice tone="info" icon="lock" title={t('Terlalu banyak percobaan', 'Too many tries')} role="alert">
-            {lockText(Math.max(1, Math.ceil((lockedUntil! - Date.now()) / 60_000)), fmtClock(lockedUntil!))}
-          </Notice>
+          <Notice tone="info" icon="lock" title={t('Terlalu banyak percobaan', 'Too many tries')} role="alert" />
         )}
 
         {error && (
@@ -562,7 +548,6 @@ export function SignIn({
             <a class="btn primary" href={`https://wa.me/?text=${encodeURIComponent(askOwner)}`} target="_blank" rel="noopener">
               <Icon name="chat" size={20} /> {t('Minta kode baru ke pemilik tambak', 'Ask the farm owner for a new code')}
             </a>
-            <p class="label ink2 center">{t('Membuka WhatsApp dengan pesan yang siap dikirim.', 'Opens WhatsApp with a message ready to send.')}</p>
           </div>
         )}
 
@@ -614,12 +599,6 @@ export function SignIn({
     </div>
   );
 }
-
-const lockText = (min: number, at: string) =>
-  t(
-    `Coba lagi ${min} menit lagi (jam ${at}). PIN dikunci sebentar supaya akun aman.`,
-    `Try again in ${min} ${min === 1 ? 'minute' : 'minutes'} (at ${at}). The PIN is locked for a while to keep the account safe.`,
-  );
 
 const TILE = {
   minHeight: 88,

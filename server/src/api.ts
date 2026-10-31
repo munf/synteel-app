@@ -197,7 +197,7 @@ const PHOTO_VIDEO_BONUS = 2;
 const STREAK_BONUS = 10;
 const STREAK_EVERY = 7;
 
-export const SUPPORT_TOPICS: Record<SupportTopic, string> = { pin: 'Masuk dan PIN', catat: 'Catat dan suara', waspada: 'Waspada dan alarm', jatah: 'Jatah AI', lain: 'Lainnya' };
+export const SUPPORT_TOPICS: Record<SupportTopic, string> = { pin: 'Masuk dan PIN', catat: 'Catat dan suara', waspada: 'Waspada dan alarm', jatah: 'Kredit AI', lain: 'Lainnya' };
 
 /** Ponds can have other names ("kolam dekat pintu"): trimmed, single spaces, at most 30 characters. */
 function nickname(v: unknown): string {
@@ -438,7 +438,7 @@ export function createApi(
   function useAi(r: FarmRepo, userId: number) {
     if (!ai || ai.mode === 'off') throw new AiUnavailable(tx('AI belum aktif. Isi manual dulu, atau coba lagi nanti.', 'The AI is not on yet. Type it in for now, or try again later.'));
     if (farmAiCap && ai.mode === 'meta' && quotaState(r).left <= 0) {
-      throw new AiQuota(tx('Jatah baca AI tambak ini untuk hari ini sudah habis. Rekaman disimpan di HP; ketik sendiri tetap bisa.', "This farm's AI reads for today are used up. The recording is kept on the phone; typing it in still works."));
+      throw new AiQuota(tx('Kredit AI tambak ini untuk hari ini sudah habis. Rekaman disimpan di HP; ketik sendiri tetap bisa.', "This farm's AI reads for today are used up. The recording is kept on the phone; typing it in still works."));
     }
     r.countAiUse(userId, localDate(clock(), timezone(r)));
   }

@@ -390,7 +390,6 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
             ))}
           </ul>
         )}
-        {!risky && focus && <p>{t('Tidak ada jam rawan dalam 24 jam ke depan. Tetap ukur pagi dan sore.', 'No risky hours in the next 24 hours. Keep measuring morning and afternoon.')}</p>}
 
         {weather && ahead.length > 0 && (
           <figure class="w-risk" aria-label={t(
@@ -440,11 +439,10 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
               <span class="row" style={{ gap: 6 }}>
                 <Shape tone="bad" /> {t('Bahaya', 'Danger')}
               </span>
-              <span>{t('· makin tinggi makin rawan', '· taller means riskier')}</span>
+              <span>{t('· semakin tinggi semakin rawan', '· taller means riskier')}</span>
             </div>
           </figure>
         )}
-        {fromRules && <p class="label" style={{ color: 'var(--on-navy-2)' }}>{t('Dari ambang batas dan catatan 3 hari. Disusun ulang saat AI tersedia lagi.', 'From thresholds and 3 days of records. Rebuilt when the AI is back.')}</p>}
 
         {!weather && (
           <div class="w-noweather">
@@ -453,15 +451,7 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
               <span class="stack-xs">
                 <span class="strong">{t('Cuaca belum tersedia', 'Weather not available yet')}</span>
                 <span class="label" style={{ color: 'var(--on-navy)' }}>
-                  {located
-                    ? t(
-                        'Data cuaca belum bisa diambil, jadi risiko per jam belum bisa dihitung. Cek di bawah tetap dari aturan dan catatan kolam.',
-                        'The weather data could not be fetched, so hourly risk cannot be worked out yet. The checks below still come from rules and pond records.',
-                      )
-                    : t(
-                        'Lokasi tambak belum diatur, jadi risiko per jam belum bisa dihitung. Cek di bawah tetap dari aturan dan catatan kolam.',
-                        'The farm location is not set, so hourly risk cannot be worked out yet. The checks below still come from rules and pond records.',
-                      )}
+                  {t('Risiko per jam belum bisa dihitung. Jadwal cek tetap berjalan.', 'Hourly risk cannot be worked out yet. The check schedule still runs.')}
                 </span>
               </span>
             </div>
@@ -516,14 +506,11 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
                     )}
                   </>
                 )}
-                <span class="sub">{t('Saran, bukan diagnosis. AI hanya boleh menambah cek, tidak menghapus.', 'Advice, not a diagnosis. The AI can only add checks, never remove them.')}</span>
+                <span class="sub">{t('Saran, bukan diagnosis. AI hanya boleh menambah cek.', 'Advice, not a diagnosis. The AI can only add checks.')}</span>
               </>
             ) : (
               <p style={{ color: 'var(--on-navy)' }}>
-                {t(
-                  'Belum ada ringkasan malam hari ini. AI akan membaca catatan, prakiraan dan cuaca, lalu menyusun rencana malam.',
-                  'No night summary today yet. The AI will read the records, forecasts and weather, then write a plan for the night.',
-                )}
+                {t('Belum ada ringkasan malam hari ini.', 'No night summary today yet.')}
               </p>
             )}
             {briefError && <p class="label" style={{ color: '#FDA29B', fontWeight: 600 }}>{briefError}</p>}
@@ -694,7 +681,7 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
           {open && (
             <div class="stack" style={{ padding: '0 20px 20px' }}>
               <span class="meta">
-                {pondName(focus.pondId)} · {t('perkiraan suhu air per jam. Area biru = rentang perkiraan.', 'estimated water temperature per hour. Blue area = estimate range.')}
+                {t('Area biru adalah rentang perkiraan.', 'The blue area is the estimate range.')}
               </span>
               <NowcastChart nc={focus} />
               <div class="stack-sm">
@@ -717,10 +704,7 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
                 ))}
               </div>
               <span class="label ink2">
-                {t(
-                  'Ringkasan malam disusun AI Meta (Muse Spark) dari prakiraan, cuaca dan catatan. Skor risiko dari aturan Synteel.',
-                  'Night summary written by Meta AI (Muse Spark) from forecasts, weather and records. Risk score from Synteel rules.',
-                )}
+                {t('Ringkasan dari AI Meta. Skor risiko dari aturan Synteel.', 'Summary from Meta AI. Risk score from Synteel rules.')}
               </span>
             </div>
           )}

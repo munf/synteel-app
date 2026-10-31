@@ -386,7 +386,7 @@ export function App() {
         {me === null && pendingDevice && (
           <div class="conn-wrap">
             <Notice tone="info" icon="wifi" title={t(`Alat ${formatCode(pendingDevice)}`, `Device ${formatCode(pendingDevice)}`)}>
-              {t('Masuk dulu. Sesudah itu alat ini langsung siap dihubungkan.', 'Sign in first. The device is then ready to connect.')}
+              {t('Login dulu untuk menghubungkan alat ini.', 'Log in first to connect this device.')}
             </Notice>
           </div>
         )}

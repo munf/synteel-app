@@ -177,7 +177,7 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
             <div class="grow stack-xs">
               <h2>{t(`Rekaman terputus setelah ${fmtDur(cut.seconds)}`, `Recording cut off after ${fmtDur(cut.seconds)}`)}</h2>
               <span class="label ink2">
-                {t('Aplikasi tertutup atau ada telepon masuk. Suara sampai saat itu tetap tersimpan.', 'The app closed or a call came in. The sound up to that point is kept.')}
+                {t('Suara tetap tersimpan.', 'The sound is kept.')}
               </span>
             </div>
           </div>
@@ -232,9 +232,11 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
           </span>
           <span class="stack-xs">
             <span class="title num">{rec ? `${t('Selesai', 'Done')} · ${fmtDur(elapsed)}` : t('Bicara', 'Speak')}</span>
-            <span class="label" style={{ color: 'var(--on-hero-pale)' }}>
-              {rec ? t('Ketuk kalau sudah selesai keliling', 'Tap when you finish your round') : t('Sambil keliling: “Kolam A suhu 27, pH 7,4…”', 'As you walk: “Pond A, 27 degrees, pH 7.4…”')}
-            </span>
+            {!rec && (
+              <span class="label" style={{ color: 'var(--on-hero-pale)' }}>
+                {t('Sambil keliling: “Kolam A suhu 27, pH 7,4…”', 'As you walk: “Pond A, 27 degrees, pH 7.4…”')}
+              </span>
+            )}
           </span>
         </button>
       )}
@@ -251,7 +253,6 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
           <section class="card">
             <div class="stack-xs">
               <h2>{shot.kind === 'photo' ? t('Foto ini untuk kolam mana?', 'Which pond is this photo for?') : t('Video ini untuk kolam mana?', 'Which pond is this video for?')}</h2>
-              <span class="meta">{t('Kolam yang belum dicatat hari ini ada di atas.', 'Ponds not recorded today are at the top.')}</span>
             </div>
             <PondPicker
               ponds={ponds}
@@ -274,7 +275,6 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
               </span>
               <span class="stack-xs">
                 <span class="strong">{t('Foto alat ukur', 'Meter photo')}</span>
-                <span class="meta">{t('Lalu sebut atau pilih kolamnya', 'Then say or pick the pond')}</span>
               </span>
             </button>
             <button type="button" class="capture-tile" onClick={() => videoInput.current?.click()} disabled={!!rec}>
@@ -283,7 +283,7 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
               </span>
               <span class="stack-xs">
                 <span class="strong">{t('Video harian', 'Daily video')}</span>
-                <span class="meta">{t('Keliling kolam sambil cerita', 'Walk the ponds and talk')}</span>
+                <span class="meta">{t('Keliling sambil cerita', 'Walk around and talk')}</span>
               </span>
             </button>
           </div>
@@ -295,7 +295,7 @@ function Hub({ state, go }: { state: FarmState; go: Go }) {
           </span>
           <span class="grow stack-xs">
             <span class="strong">{t('Foto buku catatan', 'Notebook photo')}</span>
-            <span class="meta">{t('Salin catatan lama dari buku ke aplikasi', 'Copy old records from the notebook into the app')}</span>
+            <span class="meta">{t('Salin catatan lama', 'Copy old records')}</span>
           </span>
           <Icon name="next" size={20} />
         </button>
@@ -401,7 +401,7 @@ function PondRow({ pond: p, today, go }: { pond: PondSummary; today: boolean; go
   );
 }
 
-/** The AI quota is used up: record anyway, read tomorrow morning (Catat, "jatah AI habis"). */
+/** The AI quota is used up: record anyway, read tomorrow morning (Catat, "kredit AI habis"). */
 function QuotaCard({ rec, elapsed, kept, onTalk, go }: { rec: Rec | null; elapsed: number; kept: number | null; onTalk: () => void; go: Go }) {
   return (
     <section class="card">
@@ -411,18 +411,17 @@ function QuotaCard({ rec, elapsed, kept, onTalk, go }: { rec: Rec | null; elapse
         </span>
         <span class="stack-xs">
           <span class="title">{t('Rekam suara', 'Record voice')}</span>
-          <span class="meta">{t('Disimpan dulu, dibaca besok pagi', 'Kept for now, read tomorrow morning')}</span>
         </span>
       </div>
       <div class="note info" style={{ fontSize: '1rem' }}>
         <Icon name="info" />
         <span class="stack-xs">
-          <span class="strong">{t('Jatah baca AI hari ini habis', "Today's AI reads are used up")}</span>
+          <span class="strong">{t('Kredit AI hari ini habis', "Today's AI reads are used up")}</span>
           <span class="label">
-            {t('Rekaman tetap disimpan dan dibaca otomatis besok pagi, atau begitu jatah ditambah.', 'The recording is kept and read automatically tomorrow morning, or as soon as more reads are added.')}
+            {t('Rekaman tetap disimpan dan dibaca otomatis besok pagi, atau begitu kredit ditambah.', 'The recording is kept and read automatically tomorrow morning, or as soon as more reads are added.')}
           </span>
           <button type="button" class="rp-link warn" onClick={() => go({ name: 'quota' })}>
-            {t('Lihat dan tambah jatah AI', 'View and add daily AI reads')} <Icon name="next" size={16} />
+            {t('Lihat dan tambah kredit AI', 'View and add daily AI reads')} <Icon name="next" size={16} />
           </button>
         </span>
       </div>
@@ -434,19 +433,19 @@ function QuotaCard({ rec, elapsed, kept, onTalk, go }: { rec: Rec | null; elapse
         <div class="note ok" role="status" style={{ alignItems: 'center' }}>
           <Icon name="check" />
           <span>
-            {t(`Rekaman ${fmtDur(kept)} disimpan. Dibaca besok pagi, lalu muncul untuk dicek.`, `Recording (${fmtDur(kept)}) saved. It is read tomorrow morning, then shows up for checking.`)}
+            {t(`Rekaman ${fmtDur(kept)} disimpan.`, `Recording (${fmtDur(kept)}) saved.`)}
           </span>
         </div>
       )}
       <div class="stack-sm rp-quota-foot">
         <span class="row top label ink2">
           <Icon name="pencil" size={20} />
-          {t('Ketik sendiri tetap bisa: ketuk kolam di daftar.', 'You can still type it in: tap a pond in the list.')}
+          {t('Ketik sendiri tersedia.', 'Typing it in is still available.')}
         </span>
         <span class="row top label ink2">
           <Icon name="alert" size={20} />
           <span>
-            {t('Laporan darurat tetap dibaca AI, tidak memakai jatah.', 'Emergency reports are still read by the AI and use no reads.')}{' '}
+            {t('Laporan darurat tetap dibaca AI, tidak memakai kredit.', 'Emergency reports are still read by the AI and use no reads.')}{' '}
             <button type="button" class="rp-link" onClick={() => go({ name: 'problem' })}>
               {t('Lapor masalah', 'Report a problem')}
             </button>
@@ -467,7 +466,7 @@ function Waiting({ clips: list, jobs, ponds, go }: { clips: Clip[]; jobs: Job[];
       id: c.id,
       at: c.createdAt,
       title: t(`Rekaman ${fmtDur(c.seconds)}`, `Recording, ${fmtDur(c.seconds)}`),
-      state: c.status === 'ready' ? READ : c.status === 'failed' ? FAILED : c.reason === 'quota' ? t('Menunggu jatah', 'Waiting for reads') : t('Menunggu', 'Waiting'),
+      state: c.status === 'ready' ? READ : c.status === 'failed' ? FAILED : c.reason === 'quota' ? t('Menunggu kredit', 'Waiting for reads') : t('Menunggu', 'Waiting'),
       ready: c.status !== 'waiting',
       open: () => go({ name: 'round', queued: c.id }),
     })),
@@ -493,15 +492,15 @@ function Waiting({ clips: list, jobs, ponds, go }: { clips: Clip[]; jobs: Job[];
               ? t(`${ready.length} rekaman siap dicek`, `${ready.length} ${ready.length === 1 ? 'recording' : 'recordings'} ready to check`)
               : t(`${rows.length} rekaman menunggu sinyal`, `${rows.length} ${rows.length === 1 ? 'recording' : 'recordings'} waiting for signal`)}
           </h2>
-          <span class="meta">
-            {ready.length
-              ? t('Sinyal kembali, AI sudah memilah per kolam', 'Signal is back; the AI sorted them by pond')
-              : why === 'ai'
+          {!ready.length && (
+            <span class="meta">
+              {why === 'ai'
                 ? t('AI belum aktif saat direkam', 'The AI was not on when this was recorded')
                 : why === 'quota'
-                  ? t('Jatah baca AI hari ini habis', "Today's AI reads are used up")
+                  ? t('Kredit AI hari ini habis', "Today's AI reads are used up")
                   : t('Tidak ada sinyal saat direkam', 'No signal while recording')}
-          </span>
+            </span>
+          )}
         </div>
       </div>
       <div class="readings">
@@ -525,7 +524,7 @@ function Waiting({ clips: list, jobs, ponds, go }: { clips: Clip[]; jobs: Job[];
         </button>
       ) : (
         <p class="label ink2">
-          {t('Dibaca AI otomatis begitu ada sinyal. Rekaman aman tersimpan di HP, aplikasi boleh ditutup.', 'The AI reads them as soon as there is signal. The recordings are kept safe on the phone; you can close the app.')}
+          {t('Dibaca otomatis saat terhubung Internet.', 'Read automatically once connected to the Internet.')}
         </p>
       )}
     </section>

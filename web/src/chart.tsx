@@ -29,7 +29,7 @@ const dayClock = (t: number) => new Date(t).toLocaleString(LOCALE, { weekday: 'l
 export function NowcastChart({ nc }: { nc: Nowcast }) {
   const points = nc.hours.filter((h) => h.temp !== null);
   const [active, setActive] = useState<NowcastPoint | null>(null);
-  if (points.length < 2) return <p class="meta">{tr('Belum cukup data untuk grafik perkiraan.', 'Not enough data for the forecast chart yet.')}</p>;
+  if (points.length < 2) return <p class="meta">{tr('Belum cukup data untuk grafik.', 'Not enough data for the chart yet.')}</p>;
 
   const t0 = nc.hours[0].t;
   const t1 = nc.hours.at(-1)!.t;

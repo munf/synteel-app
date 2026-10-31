@@ -70,7 +70,7 @@ export function Members({ farmName, owner, inviteOpen, onInviteOpen }: { farmNam
                   </span>
                   <span class="label ink2">
                     {roleLabel[m.role]}
-                    {m.phone ? ` · ${fmtPhone(m.phone)}` : m.role === 'worker' ? ` · ${ROLE_HINT.worker}`.replace(/\.$/, '') : ''}
+                    {m.phone ? ` · ${fmtPhone(m.phone)}` : ''}
                   </span>
                 </span>
               </>
@@ -108,10 +108,7 @@ export function Members({ farmName, owner, inviteOpen, onInviteOpen }: { farmNam
                           {tempPin.pin}
                         </span>
                         <span class="label ink2">
-                          {t(
-                            `Berikan PIN ini ke ${m.name}. PIN hanya tampil sekali. Setelah masuk, ganti PIN di Profil.`,
-                            `Give this PIN to ${m.name}. It shows only once. After signing in, change the PIN in Profile.`,
-                          )}
+                          {t('PIN hanya tampil sekali. Ganti setelah masuk.', 'The PIN shows only once. Change it after signing in.')}
                         </span>
                         <button type="button" class="btn secondary" onClick={() => setTempPin(null)}>
                           {t('Sudah dicatat', 'Written down')}
@@ -173,7 +170,7 @@ export function Members({ farmName, owner, inviteOpen, onInviteOpen }: { farmNam
           </button>
         )
       ) : (
-        <p class="meta">{t('Hanya pemilik tambak yang bisa mengundang atau mengeluarkan anggota.', 'Only the farm owner can invite or remove members.')}</p>
+        <p class="meta">{t('Hanya pemilik tambak yang bisa mengundang.', 'Only the farm owner can invite.')}</p>
       )}
     </section>
   );
@@ -226,9 +223,6 @@ function Invite({ farmName, onClose }: { farmName: string; onClose: () => void }
           </span>
           <span class="label ink2">{t(`Berlaku ${days} hari · sekali pakai`, `Valid for ${days} ${days === 1 ? 'day' : 'days'} · one use`)}</span>
         </div>
-        <span class="label ink2">
-          {t('Di HP anggota: buka Synteel, pilih "Punya kode undangan?", lalu masukkan kode ini.', 'On the member\'s phone: open Synteel, choose "Have an invite code?", then enter this code.')}
-        </span>
         <a class="btn primary" href={`https://wa.me/?text=${encodeURIComponent(text)}`} target="_blank" rel="noopener noreferrer">
           <Icon name="chat" size={20} /> {t('Bagikan lewat WhatsApp', 'Share on WhatsApp')}
         </a>
@@ -304,7 +298,6 @@ export function ChangePin() {
           </span>
           <span class="stack-xs">
             <span class="strong">{t('Ganti PIN', 'Change PIN')}</span>
-            <span class="meta">{t('PIN 6 angka untuk masuk', '6-digit PIN to sign in')}</span>
           </span>
         </span>
         <Icon name="down" />

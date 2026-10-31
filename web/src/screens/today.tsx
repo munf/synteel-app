@@ -93,9 +93,6 @@ function UnrecordedCard({ pond, go }: { pond: PondSummary; go: Go }) {
               {pond.name}
               <SimChip pond={pond} />
             </span>
-            <span class="label ink2" style={{ whiteSpace: 'nowrap', fontWeight: 400 }}>
-              {t('Belum dicatat hari ini', 'Not recorded today')}
-            </span>
           </div>
           <span class="label ink2 num">{pondMeta(pond)}</span>
         </div>
@@ -107,7 +104,6 @@ function UnrecordedCard({ pond, go }: { pond: PondSummary; go: Go }) {
               {label}
             </span>
             <span class="v">–</span>
-            <span class="label ink2">{t('belum diukur', 'not measured yet')}</span>
           </div>
         ))}
       </div>
@@ -128,7 +124,6 @@ function SafeCard({ ponds, go, now }: { ponds: PondSummary[]; go: Go; now: numbe
         </span>
         <div class="grow stack-xs">
           <span class="h2">{t('Semua kolam aman', 'All ponds safe')}</span>
-          <span class="meta">{t(`${ponds.length} kolam dalam batas baik`, `${ponds.length} ${ponds.length === 1 ? 'pond' : 'ponds'} within good limits`)}</span>
         </div>
       </div>
       <hr class="rule" />
@@ -244,8 +239,8 @@ function WeatherCard({
         icon="cloud"
         text={
           noPlace
-            ? t('Atur lokasi tambak supaya cuaca dan suhu air bisa diperkirakan.', 'Set the farm location so the weather and water temperature can be estimated.')
-            : t('Cuaca belum termuat; perkiraan memakai data terakhir.', 'The weather has not loaded; estimates use the latest data.')
+            ? t('Cuaca butuh lokasi tambak.', 'The weather needs the farm location.')
+            : t('Cuaca belum termuat. Perhitungan memakai data terakhir.', 'The weather has not loaded. Calculations use the latest data.')
         }
         action={
           <button class="btn secondary" onClick={noPlace ? onPlace : onRetry}>
@@ -366,10 +361,10 @@ function WeatherCard({
               <span class="label ink2">
                 {fit.length >= 3
                   ? t(
-                      `${good} dari ${fit.length} ukuran suhu terakhir cocok dengan perkiraan (selisih 0,5 °C atau kurang).`,
-                      `${good} of the last ${fit.length} temperature readings matched the estimate (0.5 °C off or less).`,
+                      `${good} dari ${fit.length} ukuran suhu cocok (selisih 0,5 °C atau kurang).`,
+                      `${good} of ${fit.length} temperature readings matched (0.5 °C off or less).`,
                     )
-                  : t('Butuh beberapa ukuran suhu pagi dan sore untuk mencocokkan cuaca dengan kolam.', 'It needs a few morning and afternoon temperature readings to match the weather to the pond.')}
+                  : t('Butuh beberapa ukuran suhu pagi dan sore.', 'Needs a few morning and afternoon temperature readings.')}
               </span>
             </div>
           </div>
@@ -499,7 +494,7 @@ export function Today({
             {t('Hari ini', 'Today')}
           </span>
           <p class="h2" style={{ color: '#fff' }}>
-            {t('Catat kondisi kolam pagi dan sore supaya Synteel bisa ikut menjaga.', 'Record pond conditions morning and afternoon so Synteel can help keep watch.')}
+            {t('Catat kondisi kolam pagi dan sore.', 'Record pond conditions morning and afternoon.')}
           </p>
           <button class="btn light" onClick={() => go({ name: 'record' })}>
             <Icon name="pencil" size={20} /> {t('Catat kondisi sekarang', 'Record conditions now')}
@@ -545,7 +540,7 @@ export function Today({
         )}
         {counts.none > 0 && (
           <span class="label ink2" style={{ fontWeight: 400 }}>
-            {t(`${counts.none} belum dicatat hari ini · status muncul sesudah dicatat`, `${counts.none} not recorded today · status shows once recorded`)}
+            {t(`${counts.none} belum dicatat hari ini`, `${counts.none} not recorded today`)}
           </span>
         )}
       </button>
@@ -596,7 +591,7 @@ export function Today({
           <span class="strong">{state.streak > 0
               ? t(`${state.streak} hari mencatat beruntun`, state.streak === 1 ? '1 day of recording' : `${state.streak} days of recording in a row`)
               : t('Mulai catat tiap hari', 'Start recording every day')}</span>
-          <span class="label ink2">{t('Lihat hadiah rajin mencatat', 'See the rewards for steady recording')}</span>
+          <span class="label ink2">{t('Lihat hadiah', 'See the rewards')}</span>
         </span>
         <Icon name="next" />
       </button>

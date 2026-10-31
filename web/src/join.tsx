@@ -55,7 +55,7 @@ export function JoinByCode({ onJoined, open: startOpen = false }: { onJoined: (m
 
   return (
     <div class="stack">
-      <Field label={t('Kode undangan', 'Invite code')} hint={t('6 huruf dan angka, dari pesan pemilik tambak', "6 letters and numbers, from the farm owner's message")}>
+      <Field label={t('Kode undangan', 'Invite code')} hint={t('Dari pesan pemilik tambak', "From the farm owner's message")}>
         <input
           class="code-input"
           value={code}
@@ -74,7 +74,7 @@ export function JoinByCode({ onJoined, open: startOpen = false }: { onJoined: (m
       {checking && <p class="working">{t('Memeriksa kode…', 'Checking the code…')}</p>}
       {bad && (
         <Notice tone="info" icon="info" title={t('Kode ini sudah tidak berlaku', 'This code no longer works')} role="alert">
-          {t('Kode undangan berlaku 7 hari dan hanya bisa dipakai sekali. Minta kode baru ke pemilik tambak.', 'An invite code works for 7 days and only once. Ask the farm owner for a new code.')}
+          {t('Berlaku 7 hari, sekali pakai. Minta kode baru ke pemilik tambak.', 'Works for 7 days, once only. Ask the farm owner for a new code.')}
         </Notice>
       )}
       {farm && (

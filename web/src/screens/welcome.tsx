@@ -43,13 +43,13 @@ const POINTS: { icon: IconName; title: string; text: string }[] = [
   {
     icon: 'mic',
     title: t('Catat dengan suara', 'Record by voice'),
-    text: t('Sebut banyak kolam sekaligus, periksa hasilnya sebelum disimpan.', 'Name many ponds in one go, check the result before saving.'),
+    text: t('Banyak kolam sekaligus, dicek sebelum disimpan.', 'Many ponds at once, checked before saving.'),
   },
-  { icon: 'moon', title: t('Waspada malam', 'Night watch'), text: t('Jadwal cek dan alarm di malam yang rawan oksigen.', 'Check schedule and alarms on nights at risk of low oxygen.') },
+  { icon: 'moon', title: t('Waspada malam', 'Night watch'), text: t('Cek jadwal di malam rawan oksigen.', 'Check schedule on nights at risk of low oxygen.') },
   {
     icon: 'alert',
     title: t('Saat sidat sekarat', 'When eels are dying'),
-    text: t('Langkah yang bisa langsung dikerjakan, plus ringkasan untuk pemilik.', 'Steps you can do right away, plus a summary for the owner.'),
+    text: t('Langkah darurat dan ringkasan untuk pemilik.', 'Emergency steps and a summary for the owner.'),
   },
 ];
 
@@ -122,7 +122,7 @@ export function Welcome({ onPick, onSignedIn }: { onPick: (mode: SignInMode) => 
             <button type="button" class="btn tint block" disabled={busy} onClick={tryDemo}>
               <Glyph d={GLYPH.play} size={20} /> {busy ? t('Menyiapkan tambak contoh…', 'Setting up a sample farm…') : t('Coba demo', 'Try the demo')}
             </button>
-            <p class="label ink2 center">{t('Tambak contoh sendiri, tanpa akun dan PIN. Dihapus sesudah 2 hari.', 'A sample farm of your own, no account or PIN. Deleted after 2 days.')}</p>
+            <p class="label ink2 center">{t('Tambak contoh, tanpa akun dan PIN. Direset setiap 2 hari.', 'A sample farm, no account or PIN. Reset every 2 days.')}</p>
           </div>
         )}
         {error && (

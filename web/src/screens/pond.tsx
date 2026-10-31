@@ -81,7 +81,7 @@ function MetricCard({ pond, logs }: { pond: PondSummary; logs: Log[] }) {
   const diff = first !== undefined && last !== undefined ? last - first : 0;
   const sentence =
     days.length < 2
-      ? t('Belum cukup catatan untuk melihat arah. Ukur pagi dan sore.', 'Not enough records to see a trend yet. Measure morning and afternoon.')
+      ? t('Catatan belum mencukupi.', 'Not enough records yet.')
       : Math.abs(diff) < (key === 'tds' ? 5 : key === 'ph' ? 0.1 : 0.3)
         ? t(`${m.label} stabil dalam ${days.length} hari terakhir.`, `${m.label} steady over the last ${days.length} days.`)
         : t(
@@ -202,15 +202,9 @@ function DeviceCard({ pond, logs, ponds, role, go, onChanged }: { pond: PondSumm
           </span>
           <div class="stack-xs grow">
             <h2>{t('Alat Synteel', 'Synteel device')}</h2>
-            <span class="label ink2">{t('Belum ada alat yang mengirim angka ke kolam ini.', 'No device sends readings to this pond yet.')}</span>
+            <span class="label ink2">{t('Belum ada alat.', 'No device yet.')}</span>
           </div>
         </div>
-        <p class="label ink2">
-          {t(
-            'Alat simulasi membuat kolam simulasi baru sendiri, jadi kolam ini tidak berubah.',
-            'A simulated device makes new simulation ponds of its own, so this pond does not change.',
-          )}
-        </p>
         <button type="button" class="btn secondary" onClick={() => go({ name: 'device' })}>
           <Icon name="wifi" /> {t('Hubungkan alat', 'Connect a device')}
         </button>
@@ -367,8 +361,7 @@ function Nicknames({ pond, role, onSaved }: { pond: PondSummary; role?: Role | n
       <label class="field">
         <span class="meta">{owner ? t('Nama panggilan (boleh kosong)', 'Nicknames (optional)') : t('Nama panggilan baru', 'New nickname')}</span>
         <input value={draft} onInput={(e) => setDraft(e.currentTarget.value)} placeholder={t('contoh: kolam pojok', 'example: corner pond')} />
-        <span class="field-hint">{owner && names.length > 1 ? t('Pisahkan dengan koma. ', 'Separate them with commas. ') : ''}
-          {t('AI memakai ini saat mendengar suara.', 'The AI uses this when it listens to voice recordings.')}</span>
+        {owner && names.length > 1 && <span class="field-hint">{t('Pisahkan dengan koma.', 'Separate them with commas.')}</span>}
       </label>
       {error && <p class="error">{error}</p>}
       <div class="grid2" style={{ gap: 8 }}>
@@ -441,10 +434,8 @@ function WaterTempCard({ pond, nc, go }: { pond: PondSummary; nc: Nowcast | unde
       </div>
       <span class="label ink2">
         {m.readings === 0
-          ? t('Belum ada ukuran suhu untuk belajar. Perkiraan memakai profil kolam dan cuaca.', 'No temperature readings to learn from yet. The estimate uses the pond profile and the weather.')
-          : m.oldReadings > 0
-            ? t(`Belajar dari ${m.readings} ukuran suhu, ${m.oldReadings} di antaranya dari buku catatan lama.`, `Learned from ${m.readings} temperature readings, ${m.oldReadings} of them from the old notebook.`)
-            : t(`Belajar dari ${m.readings} ukuran suhu kolam ini.`, `Learned from ${m.readings} temperature readings of this pond.`)}
+          ? t('Belum ada ukuran suhu; memakai profil kolam dan cuaca.', 'No temperature readings yet; using the pond profile and the weather.')
+          : t(`Belajar dari ${m.readings} ukuran suhu.`, `Learned from ${m.readings} temperature readings.`)}
       </span>
       {pattern && (
         <div class="box stack-sm" style={{ background: 'var(--bg)' }}>
@@ -470,7 +461,7 @@ function WaterTempCard({ pond, nc, go }: { pond: PondSummary; nc: Nowcast | unde
           <Icon name="sparkle" size={20} /> {asking ? t('AI membaca pola…', 'The AI is reading the pattern…') : t('Baca pola sekarang', 'Read the pattern now')}
         </button>
       )}
-      {data && enough && data.ask.mode !== 'rules' && data.ask.left <= 0 && <span class="label ink2">{t('Sudah dibaca beberapa kali hari ini. Besok bisa lagi.', 'Read several times today. Again tomorrow.')}</span>}
+      {data && enough && data.ask.mode !== 'rules' && data.ask.left <= 0 && <span class="label ink2">{t('Sudah dibaca beberapa kali hari ini. Coba lagi besok.', 'Read several times today. Try again tomorrow.')}</span>}
       {error && <p class="error">{error}</p>}
     </section>
   );
@@ -499,7 +490,6 @@ function ProfileEditor({ pond, onSaved, onClose, go }: { pond: PondSummary; onSa
     <section class="card" id="pond-profile">
       <div class="stack-xs">
         <h2>{t('Profil kolam', 'Pond profile')}</h2>
-        <span class="meta">{t('Dasar perkiraan suhu air. Foto kolam bisa mengisinya; cek dulu sebelum disimpan.', 'The water temperature estimate starts from this. A pond photo can fill it in; check before saving.')}</span>
       </div>
       <PondPhoto
         pondId={pond.id}
@@ -593,7 +583,7 @@ function PondSettings({ pond, onSaved, onArchived }: { pond: PondSummary; onSave
           <Field label={t('Nama kolam', 'Pond name')}>
             <input value={name} onInput={(e) => setName(e.currentTarget.value)} required />
           </Field>
-          <Field label={t('Luas dasar kolam (m²)', 'Pond floor area (m²)')} hint={t('Panjang × lebar, untuk menghitung kepadatan.', 'Length × width, to work out stocking density.')}>
+          <Field label={t('Luas dasar kolam (m²)', 'Pond floor area (m²)')} hint={t('Panjang × lebar.', 'Length × width.')}>
             <input inputMode="decimal" value={areaM2} onInput={(e) => setAreaM2(e.currentTarget.value)} placeholder={t('contoh: 12', 'example: 12')} />
           </Field>
           <div class="field">
@@ -797,7 +787,6 @@ export function PondDetail({
         ) : (
           <section class="card tint">
             <h2>{t('Kolam aman', 'Pond safe')}</h2>
-            <p class="ink2">{t('Tidak ada peringatan dari catatan terakhir.', 'No warnings from the latest record.')}</p>
           </section>
         ))}
 
@@ -813,8 +802,8 @@ export function PondDetail({
             </span>
             <span class="ink2">
               {t(
-                `Pakan ${feedKind(stage.feed).toLowerCase()}. Air: ${plainWater(stage.water).toLowerCase()}. Porsi pakan ada di Teknis.`,
-                `Feed: ${feedKind(stage.feed).toLowerCase()}. Water: ${plainWater(stage.water).toLowerCase()}. Feed portions are in Technical.`,
+                `Pakan ${feedKind(stage.feed).toLowerCase()}. Air: ${plainWater(stage.water).toLowerCase()}.`,
+                `Feed: ${feedKind(stage.feed).toLowerCase()}. Water: ${plainWater(stage.water).toLowerCase()}.`,
               )}
             </span>
           </div>
@@ -885,7 +874,7 @@ export function PondDetail({
           </span>
           <span class="grow stack-xs" style={{ gap: 2 }}>
             <span class="strong">{t('Punya buku catatan kolam ini?', 'Have a notebook for this pond?')}</span>
-            <span class="meta">{t('Foto halamannya, riwayat dan perkiraan langsung punya data.', 'Take a photo of the pages; history and estimates get data right away.')}</span>
+            <span class="meta">{t('Foto halamannya untuk mengisi riwayat.', 'Take a photo of the pages to fill the history.')}</span>
           </span>
           <span style={{ color: 'var(--muted)', display: 'inline-flex' }}>
             <Icon name="next" size={20} />
@@ -911,10 +900,10 @@ export function PondDetail({
                 <span class="label ink2">
                   {fit.length >= 3
                     ? t(
-                        `${good} dari ${fit.length} ukuran suhu terakhir cocok (selisih 0,5 °C atau kurang).`,
-                        `${good} of the last ${fit.length} temperature readings matched (0.5 °C off or less).`,
+                        `${good} dari ${fit.length} ukuran suhu cocok (selisih 0,5 °C atau kurang).`,
+                        `${good} of ${fit.length} temperature readings matched (0.5 °C off or less).`,
                       )
-                    : t('Perkiraan sedang belajar: butuh beberapa ukuran suhu lagi.', 'The estimate is still learning: it needs a few more temperature readings.')}
+                    : t('Butuh beberapa ukuran suhu pagi dan sore.', 'Needs a few morning and afternoon temperature readings.')}
                 </span>
               </div>
             </div>
@@ -990,7 +979,7 @@ export function PondDetail({
                   {t(`Pakan minggu ke-${pond.program!.week}`, `Week ${pond.program!.week} feed`)}: {stage.name}
                 </span>
                 <span class="ink2">
-                  {stage.feed}. {t('Panduan umum fase ini, bukan resep: sesuaikan dengan nafsu makan sidat.', "General guidance for this stage, not a recipe: adjust to the eels' appetite.")}
+                  {stage.feed}. {t('Panduan umum, sesuaikan dengan nafsu makan sidat.', "General guidance, adjust to the eels' appetite.")}
                 </span>
               </div>
             )}

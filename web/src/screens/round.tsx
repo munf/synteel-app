@@ -257,7 +257,7 @@ export function Round({ ponds, queued, onSaved, go }: { ponds: PondSummary[]; qu
           <div class="stack-xs">
             <h2>{t('Suara belum terbaca', 'Could not read the recording')}</h2>
             <p class="ink2">
-              {t('AI belum menangkap nama kolam atau angka dari rekaman ini. Rekaman tetap\u00a0disimpan.', 'The AI did not catch a pond name or number in this recording. The recording is still\u00a0kept.')}
+              {t('Nama kolam atau angka tidak\u00a0tertangkap.', 'No pond name or number was\u00a0caught.')}
             </p>
           </div>
           <button type="button" class="rp-play" onClick={play} aria-pressed={playing}>
@@ -422,8 +422,8 @@ function Kept({ reason, go, onRetry }: { reason?: Clip['reason']; go: Go; onRetr
   const text =
     reason === 'quota'
       ? {
-          title: t('Jatah baca AI hari ini habis', "Today's AI reads are used up"),
-          body: t('Rekaman tetap disimpan dan dibaca otomatis besok pagi, atau begitu jatah ditambah.', 'The recording is kept and read automatically tomorrow morning, or as soon as more reads are added.'),
+          title: t('Kredit AI hari ini habis', "Today's AI reads are used up"),
+          body: t('Rekaman tetap disimpan dan dibaca otomatis besok pagi, atau begitu kredit ditambah.', 'The recording is kept and read automatically tomorrow morning, or as soon as more reads are added.'),
         }
       : reason === 'ai'
         ? {
@@ -432,7 +432,7 @@ function Kept({ reason, go, onRetry }: { reason?: Clip['reason']; go: Go; onRetr
           }
         : {
             title: t('Belum ada sinyal', 'No signal yet'),
-            body: t('Rekaman disimpan di HP dan dibaca otomatis saat ada sinyal. Aplikasi boleh ditutup.', 'The recording is kept on the phone and read automatically when there is signal. You can close the app.'),
+            body: t('Rekaman disimpan di HP dan dibaca otomatis saat ada sinyal.', 'The recording is kept on the phone and read automatically when there is signal.'),
           };
   return (
     <section class="card rp-warn-card">
@@ -443,7 +443,7 @@ function Kept({ reason, go, onRetry }: { reason?: Clip['reason']; go: Go; onRetr
       <p class="ink2">{text.body}</p>
       {reason === 'quota' && (
         <button type="button" class="rp-link" onClick={() => go({ name: 'quota' })}>
-          {t('Lihat dan tambah jatah AI', 'View and add daily AI reads')} <Icon name="next" size={16} />
+          {t('Lihat dan tambah kredit AI', 'View and add daily AI reads')} <Icon name="next" size={16} />
         </button>
       )}
       <button type="button" class="btn primary" onClick={() => go({ name: 'record' })}>
@@ -571,7 +571,6 @@ function Remember({ nick, pond, onAnswer }: { nick: string; pond: PondSummary; o
         <span class="strong" style={{ color: 'var(--navy-ink)' }}>
           {t('Ingat', 'Remember')} “{nick}” = {pond.name}?
         </span>
-        <span class="label ink2">{t(`Lain kali langsung masuk ke ${pond.name}.`, `Next time it goes straight to ${pond.name}.`)}</span>
       </div>
       {error && <p class="error">{error}</p>}
       <div class="grid2" style={{ gap: 8 }}>
@@ -746,7 +745,7 @@ function Unclear(props: { issue: Extract<RoundIssue, { kind: 'unclear' }>; item:
         isDenied(err)
           ? t('Mikrofon belum diizinkan. Ketik sendiri dulu.', 'The microphone is not allowed yet. Type it in for now.')
           : why === 'quota'
-            ? t('Jatah baca AI hari ini habis. Ketik sendiri dulu.', "Today's AI reads are used up. Type it in for now.")
+            ? t('Kredit AI hari ini habis. Ketik sendiri dulu.', "Today's AI reads are used up. Type it in for now.")
             : why
               ? t('Belum bisa dibaca sekarang. Ketik sendiri dulu.', 'It cannot be read right now. Type it in for now.')
               : err instanceof ApiError

@@ -69,7 +69,7 @@ export async function sendCapture(job: Job, onProgress?: (p: Progress) => void):
     return { ...job, status: 'ready', draft: body.draft };
   } catch (err) {
     if (err instanceof Offline) throw new Retryable(err.message);
-    if (err instanceof ApiError && err.code === 'ai_quota') throw new Retryable(t('Jatah baca AI hari ini habis', "Today's AI reads are used up"));
+    if (err instanceof ApiError && err.code === 'ai_quota') throw new Retryable(t('Kredit AI hari ini habis', "Today's AI reads are used up"));
     if (err instanceof ApiError && (err.status >= 500 || err.status === 408)) throw new Retryable(err.message);
     return { ...job, status: 'failed', error: (err as Error).message };
   }

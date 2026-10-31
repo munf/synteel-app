@@ -213,7 +213,7 @@ export function PondPicker({
             {cur ? cur.name : (placeholder ?? t('Pilih kolam', 'Choose a pond'))}
             {cur && <SimChip pond={cur} />}
           </span>
-          <span class="meta">{cur ? pondMeta(cur) : t('Belum dipilih', 'Not chosen yet')}</span>
+          {cur && <span class="meta">{pondMeta(cur)}</span>}
         </span>
         <Icon name="down" />
       </button>
@@ -511,11 +511,11 @@ export function ConnectionBanner({ since, retrying, stillOff, onRetry }: { since
           <span class="note-title">{t('Belum tersambung ke server', 'Not connected to the server')}</span>
           <span>
             {t(
-              `Data yang sudah tampil masih bisa dibaca${since ? ` (terakhir ${fmtClock(since)})` : ''}. Catatan baru disimpan di HP dan terkirim sendiri saat tersambung.`,
-              `Data already shown can still be read${since ? ` (last updated ${fmtClock(since)})` : ''}. New records are saved on the phone and sent once connected.`,
+              `Data yang sudah tampil masih bisa dibaca${since ? ` (terakhir ${fmtClock(since)})` : ''}. Catatan baru disimpan di HP.`,
+              `Data already shown can still be read${since ? ` (last updated ${fmtClock(since)})` : ''}. New records are saved on the phone.`,
             )}
           </span>
-          {stillOff && <span class="semi">{t('Masih belum tersambung. Dicoba lagi otomatis tiap 30 detik.', 'Still not connected. Trying again on its own every 30 seconds.')}</span>}
+          {stillOff && <span class="semi">{t('Belum terhubung ke Internet.', 'Not connected to the Internet.')}</span>}
         </span>
       </div>
       <button type="button" disabled={retrying} onClick={onRetry}>

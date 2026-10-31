@@ -199,7 +199,6 @@ export function BmkgPanel({ bmkg, owner, onChanged }: { bmkg: BmkgView; owner: b
           <span class="label semi">{t('Prakiraan BMKG', 'BMKG forecast')}</span>
           <span class="label ink2">
             {r.desa}, {r.kecamatan}, {r.kabupaten}
-            {r.auto ? t(' · terdekat dari lokasi tambak', ' · nearest to the farm') : t(' · dipilih pemilik', ' · picked by the owner')}
           </span>
         </span>
         {owner && !picking && (
@@ -231,7 +230,7 @@ export function BmkgPanel({ bmkg, owner, onChanged }: { bmkg: BmkgView; owner: b
           ))}
         </div>
       ) : (
-        <p class="label ink2">{t('Prakiraan BMKG belum termuat. Dicoba lagi otomatis.', 'The BMKG forecast has not loaded. It is tried again on its own.')}</p>
+        <p class="label ink2">{t('Prakiraan belum termuat.', 'The forecast has not loaded.')}</p>
       )}
       <span class="label ink2">{t('Sumber: BMKG', 'Source: BMKG')}</span>
     </div>
