@@ -330,12 +330,11 @@ export function CaseBrief({ c, go }: { c: CaseView; go: Go }) {
           <a class="btn danger" href={c.escalate.waUrl} target="_blank" rel="noopener">
             <Icon name="chat" size={20} /> {t('Kirim ke pemilik', 'Send to the owner')}
           </a>
-          <span class="label ink2">
-            {c.escalate.reasons.includes('recheck_missed') && c.recheck
-              ? t(`Cek ulang jam ${fmtClock(c.recheck.dueAt)} belum dijawab. `, `The ${fmtClock(c.recheck.dueAt)} re-check has no answer yet. `)
-              : ''}
-            {t('Pesan siap kirim lewat WhatsApp, tidak terkirim sendiri.', 'The WhatsApp message is ready; nothing is sent by itself.')}
-          </span>
+          {c.escalate.reasons.includes('recheck_missed') && c.recheck && (
+            <span class="label ink2">
+              {t(`Cek ulang jam ${fmtClock(c.recheck.dueAt)} belum dijawab.`, `The ${fmtClock(c.recheck.dueAt)} re-check has no answer yet.`)}
+            </span>
+          )}
         </div>
       )}
 
