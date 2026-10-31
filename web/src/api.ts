@@ -283,6 +283,8 @@ export const api = {
   /** `running`: the agent is writing it in this language (it had one only in the other); poll until done. */
   briefing: () => call<{ briefing: Briefing | null; running?: boolean }>('GET', '/briefing'),
   makeBriefing: () => call<{ briefing: Briefing }>('POST', '/briefing'),
+  /** "Dengarkan": the Waspada text rewritten by Muse Spark as speech; the text as given without a model. */
+  spoken: (text: string) => call<{ text: string; source: 'agent' | 'rules' }>('POST', '/briefing/spoken', { text }),
   countEels: (pondId: number, image: Blob) => {
     const form = new FormData();
     form.append('image', image, 'basin.jpg');

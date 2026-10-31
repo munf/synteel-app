@@ -6,6 +6,7 @@ import type { HistoryLog, NotebookPage, NotebookSaveResult, QuotaState, SupportT
 import { guardNotebook, localIso } from './notebook.ts';
 import type { SendMail } from './mail.ts';
 import type { EventLog } from './admin.ts';
+import { SPOKEN_MAX_INPUT, spokenWriter } from './spoken.ts';
 import { attemptLimiter, AuthError, checkPin, emailCodes, hashPin, hashToken, inviteCode, maskEmail, newToken, normalizeEmail, normalizePhone, tempPin, verifyPin, type CodePurpose } from './auth.ts';
 import { knowledge } from './knowledge.ts';
 import { KINDS, SCENARIOS, sendEveryMs, simulate, toLogData, type Device, type DeviceKind, type Scenario } from './devices.ts';
@@ -291,6 +292,9 @@ export function createApi(
   const codeMessage = () => tx('Terlalu banyak kode diminta. Coba lagi 1 jam lagi.', 'Too many codes asked for. Try again in 1 hour.');
   const codeLimiter = attemptLimiter(5, 60 * 60_000, undefined, codeMessage);
   const codeIpLimiter = attemptLimiter(30, 60 * 60_000, undefined, codeMessage);
+  // "Dengarkan": Muse Spark rewrites the Waspada text as speech (spoken.ts); repeats come from its cache.
+  const spoken = spokenWriter(agentProviders);
+  const spokenLimiter = attemptLimiter(30, 60 * 60_000, undefined, () => tx('Terlalu sering. Coba lagi 1 jam lagi.', 'Too often. Try again in 1 hour.'));
   const speechLimiter = attemptLimiter(20, 60 * 60_000, undefined, () => tx('Terlalu sering. Ketik saja dulu, atau coba lagi 1 jam lagi.', 'Too often. Type it in for now, or try again in 1 hour.'));
 
   api.onError((err, c) => {
@@ -1382,6 +1386,19 @@ export function createApi(
     if (r.briefingsOn(localDate(clock(), timezone(r))) >= MAX_BRIEFINGS_PER_DAY) throw new BadRequest(tx('Ringkasan malam hari ini sudah disusun beberapa kali. Coba lagi besok.', "Tonight's summary has been made several times today. Try again tomorrow."));
     const { id: _id, ...briefing } = await makeBriefing(r);
     return c.json({ briefing }, 201);
+  });
+
+  // "Dengarkan": the screen's text as one spoken explanation; the text as given when no model is on or the rewrite is refused.
+  api.post('/briefing/spoken', async (c) => {
+    needFarm(c);
+    const text = String((await c.req.json()).text ?? '').trim().slice(0, SPOKEN_MAX_INPUT);
+    if (!text) throw new BadRequest(tx('Tidak ada teks', 'No text'));
+    if (ai?.mode !== 'meta' || !agentProviders.length) return c.json({ text, source: 'rules' });
+    const key = `farm:${c.get('farmId')}`;
+    spokenLimiter.check(key);
+    const result = await spoken(text);
+    if (result.source === 'agent') spokenLimiter.fail(key);
+    return c.json(result);
   });
 
   // ---------- dead-eel cases ----------

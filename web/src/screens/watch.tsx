@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { api, type Briefing, type FarmState, type Nowcast, type NowcastPoint, type NowcastState, type RiskFactor } from '../api.ts';
 import type { Go } from '../app.tsx';
 import { actionIcon, armAlarms, askNotifyPermission, canNotify, GLYPH, loadDone, notifyPermission, onDoneChange, saveDone, tonightChecks, type NightCheck } from '../alarms.ts';
@@ -190,7 +190,14 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
   const [briefError, setBriefError] = useState('');
   const [why, setWhy] = useState(false);
   const [showSteps, setShowSteps] = useState(false);
-  const [listening, setListening] = useState(false);
+  // 'preparing' while Muse Spark writes the spoken version (a few seconds), 'on' while the phone reads it.
+  const [listening, setListeningState] = useState<'off' | 'preparing' | 'on'>('off');
+  const listeningNow = useRef<'off' | 'preparing' | 'on'>('off');
+  const setListening = (v: 'off' | 'preparing' | 'on') => {
+    listeningNow.current = v;
+    setListeningState(v);
+  };
+  const spokenCache = useRef<{ screen: string; text: string } | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [permission, setPermission] = useState(notifyPermission);
 
@@ -296,12 +303,12 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
   const speech = typeof window !== 'undefined' && 'speechSynthesis' in window;
   const listen = () => {
     const synth = window.speechSynthesis;
-    if (listening) {
+    if (listening !== 'off') {
       synth.cancel();
-      setListening(false);
+      setListening('off');
       return;
     }
-    const text = spokenTimes(
+    const screen = (
       [
         `${headline}.`,
         reasons.length ? t(`Alasannya: ${reasons.map((r) => r.label).join(', ')}.`, `Reasons: ${reasons.map((r) => r.label).join(', ')}.`) : '',
@@ -311,18 +318,35 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
           : ALL_DONE,
       ]
         .filter(Boolean)
-        .join(' '),
-    ).replace(/°/g, t(' derajat', ' degrees'));
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = t('id-ID', 'en-GB');
-    u.rate = 0.95;
-    const voice = synth.getVoices().find((v) => v.lang.replace('_', '-').toLowerCase().startsWith(t('id', 'en')));
-    if (voice) u.voice = voice;
-    u.onend = () => setListening(false);
-    u.onerror = () => setListening(false);
-    synth.cancel();
-    synth.speak(u);
-    setListening(true);
+        .join(' ')
+    );
+    const say = (text: string) => {
+      const u = new SpeechSynthesisUtterance(text.replace(/\s*°\s*C?\b/g, t(' derajat', ' degrees')));
+      u.lang = t('id-ID', 'en-GB');
+      u.rate = 0.95;
+      const voice = synth.getVoices().find((v) => v.lang.replace('_', '-').toLowerCase().startsWith(t('id', 'en')));
+      if (voice) u.voice = voice;
+      u.onend = () => setListening('off');
+      u.onerror = () => setListening('off');
+      synth.cancel();
+      synth.speak(u);
+      setListening('on');
+    };
+    if (spokenCache.current?.screen === screen) return say(spokenCache.current.text);
+    // A silent utterance inside the tap keeps the phone willing to speak once the rewrite arrives.
+    const unlock = new SpeechSynthesisUtterance(' ');
+    unlock.volume = 0;
+    synth.speak(unlock);
+    setListening('preparing');
+    const timeout = new Promise<null>((done) => setTimeout(() => done(null), 15_000));
+    // The server gets the clock times as written (21.00), so its guard can check none went missing.
+    const rewrite = api.spoken(screen).then((r) => spokenTimes(r.text)).catch(() => null);
+    Promise.race([rewrite, timeout]).then((text) => {
+      // Stopped while waiting: say nothing.
+      if (listeningNow.current !== 'preparing') return;
+      if (text) spokenCache.current = { screen, text };
+      say(text ?? spokenTimes(screen));
+    });
   };
 
   const allowAlarm = async () => setPermission(await askNotifyPermission());
@@ -452,9 +476,9 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
 
         <div class={`w-actions${speech ? '' : ' one'}`}>
           {speech && (
-            <button type="button" class="w-listen" aria-pressed={listening} onClick={listen}>
-              <Glyph d={listening ? GLYPH.stop : GLYPH.speaker} size={20} />
-              {listening ? t('Berhenti', 'Stop') : t('Dengarkan', 'Listen')}
+            <button type="button" class="w-listen" aria-pressed={listening !== 'off'} aria-busy={listening === 'preparing'} onClick={listen}>
+              <Glyph d={listening !== 'off' ? GLYPH.stop : GLYPH.speaker} size={20} />
+              {listening === 'preparing' ? t('Menyiapkan…', 'Preparing…') : listening === 'on' ? t('Berhenti', 'Stop') : t('Dengarkan', 'Listen')}
             </button>
           )}
           <button type="button" class="w-why" aria-expanded={why} onClick={() => setWhy(!why)}>
