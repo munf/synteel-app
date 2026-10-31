@@ -3,7 +3,8 @@
   position: relative; min-height: 96px; border-radius: 16px; background: var(--surface); color: var(--ink);
   border: 2px solid var(--line-2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 0;
 }
-.profile .size-opt.on { border: 3px solid var(--navy-ink); }
+/* The chosen tile is filled (the user's call on the canvas, Oct 31): no corner tick. */
+.profile .size-opt.on { background: var(--navy); border-color: var(--navy); color: #fff; }
 .profile .night-row { min-height: 64px; border-top: 1px solid var(--line); padding-top: 16px; }
 /* Language: the same choice tiles as text size, two across. */
 .profile .lang-row { border-top: 1px solid var(--line); padding-top: 16px; }

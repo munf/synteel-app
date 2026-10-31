@@ -1,0 +1,378 @@
+{
+ "effective": {
+  "id": "Berlaku sejak 30 Oktober 2026",
+  "en": "In effect from 30 October 2026"
+ },
+ "blocks": [
+  {
+   "kind": "h2",
+   "id": "Ringkasan",
+   "en": "In short"
+  },
+  {
+   "kind": "list",
+   "items": [
+    {
+     "id": "Synteel menyimpan nomor HP, nama, data tambak dan catatan kolam agar aplikasi bisa berjalan.",
+     "en": "Synteel keeps phone numbers, names, farm data and pond records so the app can work."
+    },
+    {
+     "id": "Foto, video dan rekaman suara dikirim ke layanan AI untuk dibaca menjadi catatan. Setelah dibaca, Synteel menghapus file itu, kecuali pengguna menghidupkan <b>Simpan foto dan rekaman</b> di Profil.",
+     "en": "Photos, videos and voice recordings go to an AI service to be read into records. After reading, Synteel deletes the files, unless the user turns on <b>Simpan foto dan rekaman</b> in Profil."
+    },
+    {
+     "id": "Synteel tidak pernah mengirim nama atau nomor HP akun ke layanan AI.",
+     "en": "Synteel never sends account names or phone numbers to AI services."
+    },
+    {
+     "id": "Synteel tidak menjual data, tidak memasang iklan dan tidak memakai alat pelacak.",
+     "en": "Synteel does not sell data, shows no ads and uses no tracking tools."
+    },
+    {
+     "id": "Pengguna bisa menghapus akun sendiri di aplikasi: Profil, lalu <b>Hapus akun</b>.",
+     "en": "A user can delete the account in the app: Profil, then <b>Hapus akun</b>."
+    }
+   ]
+  },
+  {
+   "kind": "h2",
+   "id": "1. Siapa yang mengelola data",
+   "en": "1. Who manages the data"
+  },
+  {
+   "kind": "p",
+   "id": "<b>PT Synt Tekno Multikarya</b> (PT perorangan, Indonesia) menjalankan aplikasi Synteel di eel.synt.fun/app, versi demo di eel.synt.fun/preview dan situs eel.synt.fun. Dalam kebijakan ini, &ldquo;Synteel&rdquo; berarti PT Synt Tekno Multikarya.",
+   "en": "<b>PT Synt Tekno Multikarya</b> (a sole-founder limited company, Indonesia) runs the Synteel app at eel.synt.fun/app, the demo at eel.synt.fun/preview and the website eel.synt.fun. In this policy, &ldquo;Synteel&rdquo; means PT Synt Tekno Multikarya."
+  },
+  {
+   "kind": "p",
+   "id": "Kebijakan ini mengikuti Undang-Undang Nomor 27 Tahun 2022 tentang Pelindungan Data Pribadi (UU PDP).",
+   "en": "This policy follows Indonesian Law No. 27 of 2022 on Personal Data Protection (UU PDP)."
+  },
+  {
+   "kind": "p",
+   "id": "Kontak untuk semua urusan data pribadi: Email <a href=\"mailto:fajarnugraha@synt.fun\">fajarnugraha@synt.fun</a> atau Telegram <a href=\"https://t.me/fajarmuhammad\">@fajarmuhammad</a>.",
+   "en": "Contact for anything about personal data: Email <a href=\"mailto:fajarnugraha@synt.fun\">fajarnugraha@synt.fun</a> or Telegram <a href=\"https://t.me/fajarmuhammad\">@fajarmuhammad</a>."
+  },
+  {
+   "kind": "h2",
+   "id": "2. Data yang dikumpulkan",
+   "en": "2. What data Synteel collects"
+  },
+  {
+   "kind": "h3",
+   "id": "Akun",
+   "en": "Account"
+  },
+  {
+   "kind": "p",
+   "id": "Nomor HP, nama dan PIN 6 angka. Synteel menyimpan PIN hanya dalam bentuk acak satu arah (hash scrypt), sehingga tidak ada orang di Synteel yang bisa membaca PIN. Pemilik tambak yang mendaftar juga mengisi alamat email: Synteel mengirim kode 6 angka ke sana untuk memastikan pendaftaran, dan kode untuk membuat PIN baru kalau PIN lupa. Synteel tidak memakai alamat itu untuk hal lain, tidak menampilkannya ke anggota tambak, dan tidak mengirim promosi ke sana. Pekerja yang bergabung dengan kode undangan tidak perlu email.",
+   "en": "Phone number, name and a 6-digit PIN. Synteel stores the PIN only as a one-way hash (scrypt), so nobody at Synteel can read it. A farm owner who signs up also gives an email address: Synteel sends it a 6-digit code to confirm the sign-up and, if the PIN is forgotten, a code to set a new one. Synteel uses the address for nothing else, does not show it to farm members and sends no promotions to it. Workers who join with an invite code do not need an email address."
+  },
+  {
+   "kind": "h3",
+   "id": "Tambak dan kolam",
+   "en": "Farm and ponds"
+  },
+  {
+   "kind": "p",
+   "id": "Nama tambak, nama tempat, lokasi GPS yang dibulatkan sampai sekitar 11 meter (atau nama tempat yang diketik pengguna) dan kode desa. Untuk tiap kolam: ukuran, letak, peneduh, aerasi dan foto sampul yang dipilih pengguna.",
+   "en": "Farm name, place name, GPS location rounded to about 11 metres (or a place name typed by the user) and the village code. For each pond: size, setting, shade, aeration and a cover photo the user picks."
+  },
+  {
+   "kind": "h3",
+   "id": "Catatan",
+   "en": "Records"
+  },
+  {
+   "kind": "p",
+   "id": "Suhu air, pH, TDS, oksigen jika diukur, amonia, nitrit, pakan, jumlah sidat mati, perilaku sidat, warna dan bau air, catatan bebas, kasus sidat mati beserta jawaban pengguna, catatan listrik padam, dan siapa yang mencatat tiap catatan.",
+   "en": "Water temperature, pH, TDS, oxygen when measured, ammonia, nitrite, feed, number of dead eels, eel behaviour, water colour and smell, free notes, dead-eel cases with the user&rsquo;s answers, power cuts, and who recorded each entry."
+  },
+  {
+   "kind": "h3",
+   "id": "Foto, video dan rekaman suara",
+   "en": "Photos, videos and voice recordings"
+  },
+  {
+   "kind": "p",
+   "id": "Lihat bagian 4.",
+   "en": "See section 4."
+  },
+  {
+   "kind": "h3",
+   "id": "Pesan bantuan",
+   "en": "Help messages"
+  },
+  {
+   "kind": "p",
+   "id": "Topik, isi pesan, nomor WhatsApp atau alamat email untuk balasan, nomor HP akun, dan keterangan singkat tentang HP (sistem, peramban, versi aplikasi). Pengguna bisa menghapus centang keterangan HP sebelum mengirim.",
+   "en": "Topic, message, a WhatsApp number or email address for the reply, the account phone number, and a short description of the phone (system, browser, app version). The user can untick the phone description before sending."
+  },
+  {
+   "kind": "h3",
+   "id": "Data teknis",
+   "en": "Technical data"
+  },
+  {
+   "kind": "p",
+   "id": "Kuki masuk (httpOnly) agar pengguna tetap masuk. Server memakai alamat IP sebentar untuk membatasi percobaan masuk yang gagal dan pesan berulang; hitungan ini disimpan di memori server, bukan di database.",
+   "en": "A sign-in cookie (httpOnly) that keeps the user signed in. The server uses the IP address for a short time to limit failed sign-in attempts and repeated messages; it holds these counts in memory, not in the database."
+  },
+  {
+   "kind": "h2",
+   "id": "3. Untuk apa data dipakai",
+   "en": "3. What Synteel uses the data for"
+  },
+  {
+   "kind": "list",
+   "items": [
+    {
+     "id": "Menjalankan akun dan tambak, serta menampilkan catatan kepada anggota tambak.",
+     "en": "Running the account and the farm, and showing records to the farm&rsquo;s members."
+    },
+    {
+     "id": "Peringatan risiko dari aturan tetap aplikasi, ringkasan sore, catatan pola suhu air mingguan dan langkah saat ada masalah. Semua ini membantu petani mengambil keputusan; bukan diagnosis penyakit dan bukan resep obat.",
+     "en": "Risk warnings from the app&rsquo;s fixed rules, the evening summary, the weekly water temperature pattern note and the steps to take when something goes wrong. These support the farmer&rsquo;s decisions; they are not a disease diagnosis and not a medicine prescription."
+    },
+    {
+     "id": "Cuaca dan prakiraan untuk lokasi tambak.",
+     "en": "Weather and forecasts for the farm&rsquo;s location."
+    },
+    {
+     "id": "Menjawab pesan bantuan.",
+     "en": "Answering help messages."
+    },
+    {
+     "id": "Hanya dengan persetujuan pengguna: memeriksa seberapa tepat AI membaca foto dan rekaman (bagian 4).",
+     "en": "Only with the user&rsquo;s consent: checking how accurately the AI reads photos and recordings (section 4)."
+    }
+   ]
+  },
+  {
+   "kind": "p",
+   "id": "Synteel memproses data ini atas dasar persetujuan pengguna saat mendaftar dan memakai fitur, serta untuk menjalankan layanan yang diminta pengguna. Synteel tidak menjual data, tidak memakainya untuk iklan dan tidak memakainya untuk melatih model AI.",
+   "en": "Synteel processes this data on the basis of the user&rsquo;s consent when signing up and using a feature, and to provide the service the user asks for. Synteel does not sell data, does not use it for ads and does not use it to train AI models."
+  },
+  {
+   "kind": "h2",
+   "id": "4. Foto, video dan rekaman suara",
+   "en": "4. Photos, videos and voice recordings"
+  },
+  {
+   "kind": "p",
+   "id": "Saat pengguna mencatat dengan suara atau mengambil foto atau video di aplikasi, Synteel mengirimnya ke layanan AI yang membacanya menjadi draf catatan. Pengguna memeriksa draf itu sebelum menyimpan.",
+   "en": "When a user records by voice or takes a photo or video in the app, Synteel sends it to an AI service that reads it into a draft record. The user checks the draft before saving."
+  },
+  {
+   "kind": "list",
+   "items": [
+    {
+     "id": "<b>Saklar mati</b> (bawaan): Synteel tidak menyimpan file itu setelah AI selesai membaca.",
+     "en": "<b>Switch off</b> (the default): Synteel does not keep the file once the AI has read it."
+    },
+    {
+     "id": "<b>Saklar hidup</b> (Profil, <b>Simpan foto dan rekaman</b>): Synteel menyimpan file di servernya sendiri dan memakainya hanya untuk memeriksa seberapa tepat AI membaca. Synteel tidak menjual file ini dan tidak memakainya untuk melatih model AI. Saklar berlaku untuk HP tempat saklar itu dihidupkan. Pengguna bisa mematikannya kapan saja, dan bisa meminta file yang sudah tersimpan dihapus.",
+     "en": "<b>Switch on</b> (Profil, <b>Simpan foto dan rekaman</b>): Synteel keeps the file on its own server and uses it only to check how accurately the AI reads. Synteel does not sell these files and does not use them to train AI models. The switch applies to the phone it is turned on in. The user can turn it off at any time, and can ask for files already kept to be deleted."
+    }
+   ]
+  },
+  {
+   "kind": "p",
+   "id": "Foto sampul kolam yang dipilih pengguna tetap tersimpan sebagai bagian dari profil kolam sampai pengguna mengganti atau menghapusnya. Saat pengguna mengucapkan pesan bantuan alih-alih mengetik, Synteel hanya menyimpan teksnya, bukan rekamannya.",
+   "en": "The pond cover photo the user picks stays as part of the pond profile until the user replaces or removes it. When a user speaks a help message instead of typing it, Synteel keeps only the text, not the recording."
+  },
+  {
+   "kind": "h2",
+   "id": "5. Pihak lain yang menerima data",
+   "en": "5. Who else receives data"
+  },
+  {
+   "kind": "p",
+   "id": "Synteel memakai layanan berikut untuk menjalankan aplikasi. Masing-masing hanya menerima yang diperlukan:",
+   "en": "Synteel uses these services to run the app. Each receives only what it needs:"
+  },
+  {
+   "kind": "list",
+   "items": [
+    {
+     "id": "<b>Meta</b> (Meta Model API): membaca foto, rekaman suara dan teks menjadi catatan, dan SAM menghitung sidat mati di foto. Meta juga menjadi cadangan untuk tulisan ringkasan di bawah.",
+     "en": "<b>Meta</b> (Meta Model API): reads photos, voice recordings and text into records, and SAM counts dead eels in photos. Meta is also the backup for the written summaries below."
+    },
+    {
+     "id": "<b>Baseten</b>: menjalankan model AI yang menulis ringkasan sore, membantu kasus sidat mati dan menulis catatan pola mingguan. Baseten menerima data tambak dan kolam, hasil ukur, cuaca dan jawaban pertanyaan kasus.",
+     "en": "<b>Baseten</b>: runs the AI model that writes the evening summary, helps with dead-eel cases and writes the weekly pattern note. It receives farm and pond data, readings, weather and answers to case questions."
+    },
+    {
+     "id": "<b>Fireworks AI</b>: cadangan terakhir saat Meta atau Baseten tidak bisa menjawab. Fireworks menerima foto dan teks yang sama.",
+     "en": "<b>Fireworks AI</b>: the last backup when Meta or Baseten cannot answer. It receives the same photos and text they would."
+    },
+    {
+     "id": "Baseten dan Fireworks AI tidak pernah menerima rekaman suara.",
+     "en": "Baseten and Fireworks AI never receive voice recordings."
+    },
+    {
+     "id": "<b>Open-Meteo</b>: koordinat tambak untuk cuaca, atau nama tempat yang diketik untuk mencari lokasi.",
+     "en": "<b>Open-Meteo</b>: the farm&rsquo;s coordinates for weather, or the typed place name to find the location."
+    },
+    {
+     "id": "<b>BMKG</b>: hanya kode desa.",
+     "en": "<b>BMKG</b>: the village code only."
+    },
+    {
+     "id": "<b>Cloudflare</b>: berada di depan situs dan aplikasi, dan memproses alamat IP serta lalu lintas jaringan.",
+     "en": "<b>Cloudflare</b>: sits in front of the website and app and handles IP addresses and network traffic."
+    },
+    {
+     "id": "<b>Brevo</b> (Prancis), penyedia email: mengantar pesan bantuan ke tim Synteel, serta kode pendaftaran dan kode PIN ke pemilik tambak.",
+     "en": "<b>Brevo</b> (France), the email provider: delivers help messages to the Synteel team, and sign-up and PIN codes to farm owners."
+    },
+    {
+     "id": "<b>WhatsApp</b>: hanya saat pengguna menekan tombol bagikan. Aplikasi membuka WhatsApp dengan teks yang sudah terisi; pengguna sendiri yang memutuskan mengirim atau tidak.",
+     "en": "<b>WhatsApp</b>: only when the user taps a share button. The app opens WhatsApp with the text filled in; the user decides whether to send it."
+    }
+   ]
+  },
+  {
+   "kind": "p",
+   "id": "Synteel tidak pernah mengirim nama atau nomor HP akun ke layanan AI. Penyedia ini bisa memproses data di server di luar Indonesia, dan masing-masing punya kebijakan privasi sendiri.",
+   "en": "Synteel never sends account names or phone numbers to AI services. These providers may process data on servers outside Indonesia, and each has its own privacy policy."
+  },
+  {
+   "kind": "h2",
+   "id": "6. Data yang hanya ada di HP",
+   "en": "6. Data kept only on the phone"
+  },
+  {
+   "kind": "p",
+   "id": "Pengaturan (ukuran huruf, tema, bahasa), langkah darurat yang sudah dicentang, salinan langkah darurat agar tetap muncul tanpa sinyal, serta rekaman atau foto yang menunggu sinyal. Aplikasi menghapusnya dari HP setelah terkirim. Menghapus data situs di peramban menghapus semuanya.",
+   "en": "Settings (text size, theme, language), ticked emergency steps, a copy of the emergency steps so they show without signal, and recordings or photos waiting for signal. The app removes those from the phone once they are sent. Clearing the browser&rsquo;s site data removes all of it."
+  },
+  {
+   "kind": "h2",
+   "id": "7. Berbagi di dalam tambak",
+   "en": "7. Sharing inside a farm"
+  },
+  {
+   "kind": "p",
+   "id": "Semua anggota tambak melihat catatan kolam tambak itu. Pemilik melihat nama dan nomor HP anggota; pekerja hanya melihat nama.",
+   "en": "All members of a farm see the farm&rsquo;s pond records. Owners see members&rsquo; names and phone numbers; workers see names only."
+  },
+  {
+   "kind": "h2",
+   "id": "8. Berapa lama data disimpan",
+   "en": "8. How long data is kept"
+  },
+  {
+   "kind": "list",
+   "items": [
+    {
+     "id": "Akun dan tambak: selama akun masih ada.",
+     "en": "Account and farm: while the account exists."
+    },
+    {
+     "id": "Masuk ke aplikasi: 90 hari (demo: 2 hari). Keluar dari aplikasi mengakhirinya.",
+     "en": "Sign-in: 90 days (demo: 2 days). Signing out ends it."
+    },
+    {
+     "id": "Foto, video dan rekaman: dihapus setelah dibaca, atau jika saklar hidup, disimpan sampai pengguna meminta dihapus atau menghapus akun.",
+     "en": "Photos, videos and recordings: deleted after reading, or, with the switch on, kept until the user asks for deletion or deletes the account."
+    },
+    {
+     "id": "Pesan bantuan: selama diperlukan untuk menjawab, dan dihapus bersama akun.",
+     "en": "Help messages: as long as needed to answer, and deleted with the account."
+    },
+    {
+     "id": "Demo (&ldquo;Coba demo&rdquo;): tiap salinan demo dihapus otomatis beserta semua isinya setelah 48 jam. Agar satu koneksi paling banyak membuat 20 salinan per hari, Synteel menyimpan bentuk acak (hash) dari alamat IP, bukan alamatnya.",
+     "en": "Demo (&ldquo;Coba demo&rdquo;): each demo copy is deleted automatically with everything in it after 48 hours. To allow at most 20 copies per day from one connection, Synteel keeps a hashed form of the IP address, never the address itself."
+    },
+    {
+     "id": "Cadangan database: 30 hari.",
+     "en": "Database backups: 30 days."
+    }
+   ]
+  },
+  {
+   "kind": "h2",
+   "id": "9. Menghapus akun",
+   "en": "9. Deleting an account"
+  },
+  {
+   "kind": "p",
+   "id": "Di aplikasi: Profil, lalu <b>Hapus akun</b>, dikonfirmasi dengan PIN.",
+   "en": "In the app: Profil, then <b>Hapus akun</b>, confirmed with the PIN."
+  },
+  {
+   "kind": "list",
+   "items": [
+    {
+     "id": "<b>Pemilik satu-satunya</b>: Synteel menghapus tambak beserta seluruh isinya: kolam, catatan, foto dan akses para anggota.",
+     "en": "<b>The farm&rsquo;s only owner</b>: Synteel deletes the farm and everything in it: ponds, records, photos and the members&rsquo; access."
+    },
+    {
+     "id": "<b>Pemilik di tambak yang punya pemilik lain</b>: tambak tetap ada; Synteel menghapus akun dan keanggotaan.",
+     "en": "<b>An owner of a farm that has another owner</b>: the farm stays; Synteel deletes the account and the membership."
+    },
+    {
+     "id": "<b>Pekerja</b>: Synteel menghapus akun dan keanggotaan. Catatan yang dibuat pekerja tetap ada di tambak, tanpa nama pekerja itu.",
+     "en": "<b>Worker</b>: Synteel deletes the account and the membership. Records the worker made stay with the farm, without the worker&rsquo;s name."
+    }
+   ]
+  },
+  {
+   "kind": "p",
+   "id": "Pesan bantuan dari akun itu ikut dihapus. Data yang dihapus hilang dari cadangan paling lambat 30 hari kemudian.",
+   "en": "Help messages sent from the account are deleted too. Deleted data disappears from the backups within 30 days at most."
+  },
+  {
+   "kind": "h2",
+   "id": "10. Hak pengguna",
+   "en": "10. The user&rsquo;s rights"
+  },
+  {
+   "kind": "p",
+   "id": "Sesuai UU PDP, pengguna boleh meminta Synteel menunjukkan, menyalin, memperbaiki atau menghapus data pribadinya, boleh menarik persetujuan (misalnya dengan mematikan <b>Simpan foto dan rekaman</b>) dan boleh menolak pemrosesan.",
+   "en": "Under UU PDP a user may ask Synteel to show, copy, correct or delete their personal data, may withdraw consent (for example by turning off <b>Simpan foto dan rekaman</b>) and may object to processing."
+  },
+  {
+   "kind": "p",
+   "id": "Kirim permintaan ke Email <a href=\"mailto:fajarnugraha@synt.fun\">fajarnugraha@synt.fun</a> atau Telegram <a href=\"https://t.me/fajarmuhammad\">@fajarmuhammad</a>. Synteel menjawab paling lambat 14 hari.",
+   "en": "Send the request to Email <a href=\"mailto:fajarnugraha@synt.fun\">fajarnugraha@synt.fun</a> or Telegram <a href=\"https://t.me/fajarmuhammad\">@fajarmuhammad</a>. Synteel replies within 14 days."
+  },
+  {
+   "kind": "h2",
+   "id": "11. Keamanan",
+   "en": "11. Security"
+  },
+  {
+   "kind": "p",
+   "id": "Aplikasi dan situs memakai HTTPS. Synteel menyimpan PIN dan sesi masuk hanya dalam bentuk hash, dan menyimpan data di server yang dikelolanya sendiri. Tidak ada sistem yang bebas risiko. Jika terjadi kebocoran data yang mengenai pengguna, Synteel memberi tahu pengguna yang terdampak sesuai UU PDP.",
+   "en": "The app and website use HTTPS. Synteel stores PINs and sign-in sessions only as hashes, and keeps the data on a server it manages itself. No system is free of risk. If a data breach affects users, Synteel will tell the affected users as UU PDP requires."
+  },
+  {
+   "kind": "h2",
+   "id": "12. Anak",
+   "en": "12. Children"
+  },
+  {
+   "kind": "p",
+   "id": "Synteel dibuat untuk petani dan pekerja tambak, bukan untuk anak di bawah 17 tahun.",
+   "en": "Synteel is made for farmers and farm workers, not for children under 17."
+  },
+  {
+   "kind": "h2",
+   "id": "13. Perubahan kebijakan",
+   "en": "13. Changes to this policy"
+  },
+  {
+   "kind": "p",
+   "id": "Synteel memperbarui tanggal di bagian atas saat kebijakan ini berubah, dan mengumumkan perubahan besar di aplikasi.",
+   "en": "Synteel updates the date at the top when this policy changes, and announces bigger changes in the app."
+  },
+  {
+   "kind": "h2",
+   "id": "14. Kontak",
+   "en": "14. Contact"
+  }
+ ]
+}

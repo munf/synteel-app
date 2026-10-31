@@ -345,11 +345,6 @@ export function Profile({
                 <span class="label semi" style={{ whiteSpace: 'nowrap', textAlign: 'center' }}>
                   {s.label}
                 </span>
-                {on && (
-                  <span class="corner-tick">
-                    <Tick size={14} />
-                  </span>
-                )}
               </button>
             );
           })}
@@ -373,11 +368,6 @@ export function Profile({
                 <button key={g.id} role="radio" aria-checked={on} class={`size-opt lang-opt${on ? ' on' : ''}`} onClick={() => setPrefs({ theme: g.id })}>
                   {g.icon}
                   <span class="semi">{g.label}</span>
-                  {on && (
-                    <span class="corner-tick">
-                      <Tick size={14} />
-                    </span>
-                  )}
                 </button>
               );
             })}
@@ -394,11 +384,6 @@ export function Profile({
               return (
                 <button key={g.id} role="radio" aria-checked={on} lang={g.id} class={`size-opt lang-opt${on ? ' on' : ''}`} onClick={() => setLang(g.id)}>
                   <span class="semi">{g.label}</span>
-                  {on && (
-                    <span class="corner-tick">
-                      <Tick size={14} />
-                    </span>
-                  )}
                 </button>
               );
             })}
@@ -542,7 +527,7 @@ export function Profile({
         </span>
       </button>
 
-      <a class="go-row help-row" href="https://eel.synt.fun/privasi/" target="_blank" rel="noopener" onClick={siteInAppLanguage}>
+      <button type="button" class="go-row help-row" onClick={() => go({ name: 'privacy' })}>
         <span style={{ color: 'var(--accent)', display: 'flex' }}>
           <Icon name="lock" />
         </span>
@@ -555,7 +540,7 @@ export function Profile({
         <span style={{ color: 'var(--muted)', display: 'flex' }}>
           <Icon name="next" size={20} />
         </span>
-      </a>
+      </button>
 
       <section class="stack-sm">
         <button type="button" class="btn secondary" onClick={logout} disabled={leaving}>
