@@ -1,9 +1,8 @@
 /* Hubungi bantuan (canvas Bantuan). */
-.emergency-line { padding: 12px 16px 4px; }
 .emergency-line svg { margin-top: 1px; }
-/* An escape route inside a sentence: a 44px-tall link. */
+/* An escape route inside a sentence: the vertical padding gives a 44px tap area without making its line taller. */
 .emergency-line .tab-link {
-  min-height: 44px; display: inline-flex; align-items: center; vertical-align: middle; border: 0; background: none; padding: 0;
+  display: inline; border: 0; background: none; padding: 13px 0; margin: -13px 0;
   color: inherit; font: inherit; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
 }
 .btn.speak { background: var(--surface); color: var(--navy); border: 2px solid var(--line-2); padding: 0 16px; }
