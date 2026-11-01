@@ -1,15 +1,16 @@
 {
   "source": "Diskusi dengan petani sidat mitra, Sleman, Yogyakarta (Oktober 2026, selama hackathon)",
-  "note": "Praktik lapangan dari petani yang memelihara elver di kolam beton terbuka. Belum diuji silang dengan literatur; dipakai sebagai acuan fase elver dan sebagai konteks agen.",
+  "note": "Praktik lapangan dari petani yang memelihara glass eel dan elver di kolam beton terbuka. Belum diuji silang dengan literatur; dipakai sebagai acuan fase elver dan sebagai konteks agen.",
   "species": { "recommended": "Anguilla bicolor", "seed_origin": "Cilacap" },
   "water": {
-    "temperature_c": { "ideal_min": 28, "ideal_max": 31 },
-    "ph": { "ideal_min": 6.8, "ideal_max": 7.6 },
+    "temperature_c": { "ideal_min": 28, "ideal_max": 31, "applies_to": "glass eel dan elver (dikonfirmasi petani, November 2026)" },
+    "ph": { "ideal_min": 6.8, "ideal_max": 7.6, "applies_to": "glass eel dan elver (dikonfirmasi petani, November 2026)" },
     "tds_ppm": { "max": 200 },
     "depth_cm": { "value": 30, "note": "Dari dasar kolam, atau menyesuaikan tinggi dinding kolam" },
     "oxygen": "Aerasi/oksigen disarankan",
     "flow": "Arus air tidak terlalu diperlukan (tergantung kondisi)",
-    "drain": "Model pembuangan air leher angsa (perlu konfirmasi)"
+    "drain": "Model pembuangan air leher angsa",
+    "rush_water": "Air diambil langsung dari sungai dan mengalir terus-menerus ke kolam"
   },
   "stocking": {
     "density_per_m2": { "ideal_min": 40, "ideal_max": 60, "max": 100 },
@@ -25,6 +26,13 @@
       "Bila 3 kali sehari tetap habis semua, perbanyak volume tiap pemberian"
     ]
   },
+  "warning_signs": { "most_reliable": "Sidat naik ke permukaan", "note": "Menurut petani, tanda ini paling sering muncul sebelum sidat mati." },
+  "field_observations": [
+    "Fase glass eel: kematian mendadak biasanya terjadi sekitar 2 minggu setelah ditangkap.",
+    "Penyebab yang paling sering: lupa mengukur air dan lupa merawat kolam.",
+    "Pengukuran selama ini hanya diingat, mengandalkan perasaan; tidak ada catatan tertulis.",
+    "Malam hari kolam tidak selalu dijaga; pagi sampai siang pemilik masih punya pekerjaan lain."
+  ],
   "husbandry": [
     { "id": "shelter", "text": "Sediakan shelter (tempat berlindung) di kolam" },
     { "id": "predator_net", "text": "Pasang jaring paranet untuk menghindari predator" },
@@ -43,5 +51,5 @@
     "Siapkan 1 kolam untuk karantina/pengendapan air sebelum dipakai",
     "Bila sumber air keruh atau membawa lumpur setelah hujan, endapkan dulu sebelum masuk kolam"
   ],
-  "open_questions": ["Arti 'rush water' pada catatan asli", "Apakah rentang suhu dan pH ini juga berlaku untuk fase glass eel"]
+  "open_questions": []
 }
