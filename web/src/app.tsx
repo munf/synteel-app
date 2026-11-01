@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { api, isAuthError, onSessionLost, type FarmState, type Me, type NowcastState } from './api.ts';
 import { PondDetail } from './screens/pond.tsx';
 import { ArchivedPonds } from './screens/archived.tsx';
-import { Privacy } from './screens/privacy.tsx';
+import { Privacy, Terms, TermsGate } from './screens/privacy.tsx';
 import { Problem } from './screens/problem.tsx';
 import { OutageScreen } from './screens/outage.tsx';
 import { Profile, Rewards } from './screens/profile.tsx';
@@ -48,6 +48,8 @@ export type Route =
   | { name: 'archived-ponds' }
   /** Kebijakan privasi, inside the app (from Profil). */
   | { name: 'privacy' }
+  /** Syarat dan ketentuan, inside the app (from Profil). */
+  | { name: 'terms' }
   | { name: 'help' }
   /** The night-check alarm, full screen. */
   | { name: 'alarm'; at: number; pondId: number }
@@ -304,6 +306,8 @@ export function App() {
         <p class="muted">{t('Memuat…', 'Loading…')}</p>
       </div>
     );
+  } else if (!me.terms) {
+    body = <TermsGate me={me} onAgreed={setMe} onLogout={() => api.logout().catch(() => {}).then(signedOut)} />;
   } else if (!state.farm) {
     body = (
       <FarmSetup
@@ -366,6 +370,8 @@ export function App() {
     body = <Quota role={role} go={go} />;
   } else if (route.name === 'privacy') {
     body = <Privacy go={go} />;
+  } else if (route.name === 'terms') {
+    body = <Terms go={go} />;
   } else if (route.name === 'archived-ponds') {
     body = <ArchivedPonds go={go} onRestored={refresh} />;
   } else if (route.name === 'help') {

@@ -162,6 +162,8 @@ export interface Me {
   farm: FarmRef | null;
   farms: FarmRef[];
   demo: boolean;
+  /** Agreed to the current Syarat dan Ketentuan; false shows the consent screen once. */
+  terms: boolean;
 }
 
 export interface Member {
@@ -236,10 +238,12 @@ export const api = {
   forgotPin: (phone: string, code: string, pin: string) => call<Me>('POST', '/auth/reset', { phone, code, pin }),
   me: () => call<Me>('GET', '/auth/me'),
   login: (phone: string, pin: string) => call<Me>('POST', '/auth/login', { phone, pin }),
-  register: (name: string, phone: string, pin: string, email?: string, emailCode?: string) => call<Me>('POST', '/auth/register', { name, phone, pin, email, emailCode }),
+  register: (name: string, phone: string, pin: string, email?: string, emailCode?: string) => call<Me>('POST', '/auth/register', { name, phone, pin, email, emailCode, terms: true }),
   demo: () => call<Me>('POST', '/auth/demo'),
   invite: (code: string) => call<{ farmName: string; role: Role }>('GET', `/auth/invite/${encodeURIComponent(code)}`),
-  join: (code: string, name: string, phone: string, pin: string) => call<Me>('POST', '/auth/join', { code, name, phone, pin }),
+  join: (code: string, name: string, phone: string, pin: string) => call<Me>('POST', '/auth/join', { code, name, phone, pin, terms: true }),
+  /** The one-time consent screen: agree to the current Syarat dan Ketentuan. */
+  acceptTerms: () => call<Me>('POST', '/auth/terms', { terms: true }),
   logout: () => call<void>('POST', '/auth/logout'),
   switchFarm: (farmId: number) => call<Me>('POST', '/auth/switch', { farmId }),
   /** Signed in: join the farm of an invite code (after the person saw its name) and switch to it. */

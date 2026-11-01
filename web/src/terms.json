@@ -1,0 +1,573 @@
+{
+ "effective": {
+  "id": "Berlaku sejak 1 November 2026",
+  "en": "In effect from 1 November 2026"
+ },
+ "blocks": [
+  {
+   "kind": "h2",
+   "id": "Ringkasan",
+   "en": "In short"
+  },
+  {
+   "kind": "list",
+   "items": [
+    {
+     "id": "Synteel membantu petani menilai risiko di kolam sidat. Synteel tidak menggantikan pemeriksaan kolam, dan keputusan tetap di tangan petani.",
+     "en": "Synteel helps farmers judge the risk in eel ponds. It does not replace checking the ponds, and the decisions stay with the farmer."
+    },
+    {
+     "id": "Tingkat risiko dihitung dengan aturan tetap. AI membaca foto dan rekaman serta menulis ringkasan, dan AI bisa salah. Periksa selalu hasil bacaan AI sebelum menyimpan.",
+     "en": "The risk level comes from fixed rules. The AI reads photos and recordings and writes summaries, and it can make mistakes. Always check what the AI read before saving."
+    },
+    {
+     "id": "Alarm berbunyi di HP. Alarm perlu HP menyala, baterai cukup, suara dan izin pemberitahuan aktif.",
+     "en": "Alarms ring on the phone. They need the phone on, charged, with sound and notifications allowed."
+    },
+    {
+     "id": "Catatan tambak milik tambak. Synteel tidak menjual data dan tidak memakainya untuk melatih AI.",
+     "en": "The farm&rsquo;s records belong to the farm. Synteel does not sell data and does not use it to train AI."
+    },
+    {
+     "id": "Pengguna harus berumur 18 tahun ke atas. Pekerja serta peserta penelitian atau magang di bawah 18 tahun perlu izin orang tua atau wali.",
+     "en": "Users must be 18 or older. Workers and research or internship participants under 18 need a parent&rsquo;s or guardian&rsquo;s permission."
+    },
+    {
+     "id": "Ringkasan ini untuk memudahkan membaca; yang berlaku adalah pasal-pasal di bawah.",
+     "en": "This summary helps reading; the articles below are what count."
+    }
+   ]
+  },
+  {
+   "kind": "p",
+   "id": "Syarat dan Ketentuan ini (&ldquo;<b>Syarat</b>&rdquo;) adalah perjanjian antara <b>PT Synt Tekno Multikarya</b> (&ldquo;<b>Synteel</b>&rdquo;) dan setiap orang yang memakai aplikasi Synteel (&ldquo;<b>Pengguna</b>&rdquo;).",
+   "en": "These Terms and Conditions (the &ldquo;<b>Terms</b>&rdquo;) are an agreement between <b>PT Synt Tekno Multikarya</b> (&ldquo;<b>Synteel</b>&rdquo;) and everyone who uses the Synteel app (a &ldquo;<b>User</b>&rdquo;)."
+  },
+  {
+   "kind": "p",
+   "id": "Pengguna menyatakan telah membaca, memahami dan menyetujui Syarat ini serta <a href=\"/privasi/\">Kebijakan Privasi</a> Synteel dengan mencentang pernyataan persetujuan lalu menekan <b>Daftar</b> atau <b>Gabung</b>, atau dengan mencentangnya di layar persetujuan dalam aplikasi. Pengguna yang tidak setuju tidak boleh memakai Layanan.",
+   "en": "A User declares that they have read, understood and agreed to these Terms and to the Synteel <a href=\"/privasi/\">Privacy Policy</a> by ticking the consent statement and then tapping <b>Daftar</b> or <b>Gabung</b>, or by ticking it on the consent screen in the app. A User who does not agree may not use the Service."
+  },
+  {
+   "kind": "h2",
+   "id": "Pasal 1. Definisi",
+   "en": "Article 1. Definitions"
+  },
+  {
+   "kind": "p",
+   "id": "1. <b>Aplikasi</b>: aplikasi Synteel di eel.synt.fun/app beserta situs eel.synt.fun.",
+   "en": "1. <b>App</b>: the Synteel app at eel.synt.fun/app, together with the website eel.synt.fun."
+  },
+  {
+   "kind": "p",
+   "id": "2. <b>Layanan</b>: semua fungsi yang tersedia melalui Aplikasi.",
+   "en": "2. <b>Service</b>: every function available through the App."
+  },
+  {
+   "kind": "p",
+   "id": "3. <b>Tambak</b>: unit usaha budidaya yang didaftarkan di Aplikasi, beserta kolam-kolamnya.",
+   "en": "3. <b>Farm</b>: an aquaculture business registered in the App, with its ponds."
+  },
+  {
+   "kind": "p",
+   "id": "4. <b>Pemilik Tambak</b>: Pengguna yang mendaftarkan Tambak, atau Pengguna lain yang diberi peran pemilik di Tambak itu.",
+   "en": "4. <b>Farm Owner</b>: the User who registers a Farm, or another User given the owner role in that Farm."
+  },
+  {
+   "kind": "p",
+   "id": "5. <b>Pekerja</b>: Pengguna yang bergabung ke Tambak dengan kode undangan.",
+   "en": "5. <b>Worker</b>: a User who joins a Farm with an invite code."
+  },
+  {
+   "kind": "p",
+   "id": "6. <b>Catatan</b>: data kolam yang dimasukkan Pengguna, antara lain hasil ukur air, pakan, jumlah sidat mati, kasus dan catatan bebas.",
+   "en": "6. <b>Records</b>: pond data entered by Users, including water measurements, feed, the number of dead eels, cases and free notes."
+  },
+  {
+   "kind": "p",
+   "id": "7. <b>Konten Pengguna</b>: foto, video, rekaman suara dan teks yang dikirim Pengguna melalui Aplikasi.",
+   "en": "7. <b>User Content</b>: photos, videos, voice recordings and text that Users send through the App."
+  },
+  {
+   "kind": "p",
+   "id": "8. <b>Fitur AI</b>: fungsi yang memakai model kecerdasan buatan untuk membaca Konten Pengguna menjadi Catatan, menulis ringkasan, atau membacakan isi layar.",
+   "en": "8. <b>AI Features</b>: functions that use artificial intelligence models to read User Content into Records, write summaries or read the screen aloud."
+  },
+  {
+   "kind": "p",
+   "id": "9. <b>Peringatan</b>: tingkat risiko, layar Waspada, alarm, ringkasan malam, catatan pola dan langkah yang ditampilkan Aplikasi.",
+   "en": "9. <b>Warnings</b>: the risk levels, the night watch screen (Waspada), alarms, night summaries, pattern notes and steps shown by the App."
+  },
+  {
+   "kind": "p",
+   "id": "10. <b>Demo</b>: salinan Aplikasi berisi data contoh yang dibuka melalui &ldquo;Coba demo&rdquo;.",
+   "en": "10. <b>Demo</b>: a copy of the App with sample data, opened through &ldquo;Coba demo&rdquo;."
+  },
+  {
+   "kind": "p",
+   "id": "11. <b>Kebijakan Privasi</b>: kebijakan privasi Synteel di eel.synt.fun/privasi, yang merupakan bagian dari Syarat ini.",
+   "en": "11. <b>Privacy Policy</b>: the Synteel privacy policy at eel.synt.fun/privasi, which is part of these Terms."
+  },
+  {
+   "kind": "h2",
+   "id": "Pasal 2. Layanan",
+   "en": "Article 2. The Service"
+  },
+  {
+   "kind": "p",
+   "id": "(1) Layanan membantu Pengguna mencatat kondisi kolam, menilai risiko kekurangan oksigen dan masalah lain pada kolam sidat, serta mendapat Peringatan.",
+   "en": "(1) The Service helps Users record pond conditions, judge the risk of low oxygen and other problems in eel ponds, and receive Warnings."
+  },
+  {
+   "kind": "p",
+   "id": "(2) Saat ini Layanan diberikan tanpa biaya. Pemakaian Fitur AI dibatasi dengan kredit AI. Bila Synteel menawarkan kredit tambahan atau fitur berbayar lain, harga dan ketentuannya diumumkan sebelum berlaku. Synteel tidak menarik biaya tanpa persetujuan Pengguna.",
+   "en": "(2) The Service is currently free of charge. Use of the AI Features is limited by AI credits. If Synteel offers extra credits or other paid features, it will announce the price and terms before they apply. Synteel will not charge a User without the User&rsquo;s consent."
+  },
+  {
+   "kind": "p",
+   "id": "(3) Synteel boleh menambah, mengubah atau menghapus fitur untuk memperbaiki Layanan.",
+   "en": "(3) Synteel may add, change or remove features to improve the Service."
+  },
+  {
+   "kind": "h2",
+   "id": "Pasal 3. Sifat Layanan: alat bantu keputusan",
+   "en": "Article 3. What the Service is: a decision aid"
+  },
+  {
+   "kind": "p",
+   "id": "(1) Layanan adalah <b>alat bantu keputusan</b>. Layanan tidak menggantikan pengawasan langsung terhadap kolam, pengukuran dengan alat ukur, atau nasihat tenaga ahli perikanan.",
+   "en": "(1) The Service is a <b>decision aid</b>. It does not replace watching the ponds directly, measuring with instruments, or the advice of fisheries experts."
+  },
+  {
+   "kind": "p",
+   "id": "(2) Layanan <b>tidak memberikan diagnosis penyakit dan tidak memberikan resep atau dosis obat</b>.",
+   "en": "(2) The Service <b>does not diagnose disease and does not prescribe medicine or doses</b>."
+  },
+  {
+   "kind": "p",
+   "id": "(3) Synteel menghitung tingkat risiko dengan aturan tetap dari Catatan yang dimasukkan Pengguna dan data cuaca dari pihak ketiga. Fitur AI dipakai untuk membaca Konten Pengguna menjadi Catatan, menulis ringkasan dan membacakan isi layar. Peringatan dapat keliru atau tidak lengkap, terutama bila Catatan tidak lengkap atau tidak benar.",
+   "en": "(3) Synteel calculates risk levels with fixed rules from the Records entered by Users and weather data from third parties. The AI Features are used to read User Content into Records, write summaries and read the screen aloud. Warnings can be wrong or incomplete, especially when Records are incomplete or incorrect."
+  },
+  {
+   "kind": "p",
+   "id": "(4) Fitur AI dapat salah membaca atau salah merangkum walaupun Synteel sudah berhati-hati. Aplikasi menampilkan hasil bacaan AI kepada Pengguna sebelum disimpan, dan Pengguna wajib memeriksanya sebelum menyimpannya sebagai Catatan.",
+   "en": "(4) The AI Features can misread or mis-summarise even when Synteel has taken care. The App shows the AI&rsquo;s reading to the User before it is saved, and the User must check it before saving it as a Record."
+  },
+  {
+   "kind": "p",
+   "id": "(5) Keputusan pengelolaan Tambak, termasuk penanganan kolam, pemberian pakan, pemakaian obat dan penanganan sidat, adalah keputusan Pengguna.",
+   "en": "(5) Decisions about running the Farm, including handling the ponds, feeding, using medicine and handling the eels, are the User&rsquo;s decisions."
+  },
+  {
+   "kind": "p",
+   "id": "(6) Synteel tidak menjamin hasil panen atau tingkat hidup sidat, dan tidak menjamin kematian sidat dapat dicegah.",
+   "en": "(6) Synteel does not guarantee harvests or eel survival rates, and does not guarantee that eel deaths can be prevented."
+  },
+  {
+   "kind": "h2",
+   "id": "Pasal 4. Kewajiban Synteel",
+   "en": "Article 4. Synteel&rsquo;s obligations"
+  },
+  {
+   "kind": "p",
+   "id": "(1) Synteel wajib menjalankan Layanan dengan kehati-hatian yang wajar, yang meliputi:",
+   "en": "(1) Synteel must run the Service with reasonable care, which includes:"
+  },
+  {
+   "kind": "list",
+   "items": [
+    {
+     "id": "a. menghitung tingkat risiko dengan aturan tetap yang dapat dijelaskan, bukan semata-mata dengan Fitur AI;",
+     "en": "a. calculating risk levels with fixed rules that can be explained, not solely with the AI Features;"
+    },
+    {
+     "id": "b. menampilkan hasil bacaan Fitur AI kepada Pengguna untuk diperiksa sebelum disimpan;",
+     "en": "b. showing the AI Features&rsquo; readings to the User to check before they are saved;"
+    },
+    {
+     "id": "c. menandai bagian Layanan yang dihasilkan Fitur AI atau yang belum dapat diandalkan;",
+     "en": "c. marking the parts of the Service produced by the AI Features or not yet reliable;"
+    },
+    {
+     "id": "d. memperbaiki kesalahan Layanan yang dilaporkan atau diketahui Synteel dalam waktu yang wajar;",
+     "en": "d. fixing errors in the Service that are reported to or found by Synteel within a reasonable time;"
+    },
+    {
+     "id": "e. memberi tahu Pengguna melalui Aplikasi bila Synteel mengetahui gangguan atau kesalahan yang dapat memengaruhi Peringatan.",
+     "en": "e. telling Users in the App when Synteel knows of a disruption or error that can affect Warnings."
+    }
+   ],
+   "alpha": true
+  },
+  {
+   "kind": "p",
+   "id": "(2) Kewajiban Synteel adalah berusaha sebaik-baiknya sesuai ayat (1), bukan menjamin hasil tertentu.",
+   "en": "(2) Synteel&rsquo;s obligation is to make its best effort as set out in paragraph (1), not to guarantee a particular result."
+  },
+  {
+   "kind": "h2",
+   "id": "Pasal 5. Alarm dan pemberitahuan",
+   "en": "Article 5. Alarms and notifications"
+  },
+  {
+   "kind": "p",
+   "id": "(1) Alarm dan pemberitahuan berjalan di HP Pengguna. Alarm hanya dapat berbunyi bila HP menyala, baterai cukup, volume aktif, izin pemberitahuan diberikan, dan HP tidak membatasi Aplikasi melalui mode senyap, mode hemat daya atau pengaturan peramban.",
+   "en": "(1) Alarms and notifications run on the User&rsquo;s phone. An alarm can only ring when the phone is on, the battery is charged, the sound is on, notification permission is given, and the phone does not restrict the App through silent mode, battery saver or browser settings."
+  },
+  {
+   "kind": "p",
+   "id": "(2) Hal-hal tersebut berada di luar kendali Synteel. Karena itu Synteel tidak dapat menjamin setiap alarm berbunyi atau setiap pemberitahuan sampai.",
+   "en": "(2) These things are outside Synteel&rsquo;s control, so Synteel cannot guarantee that every alarm rings or every notification arrives."
+  },
+  {
+   "kind": "p",
+   "id": "(3) Pengguna tetap memeriksa kolam secara langsung sesuai kebiasaan kerja Tambak, termasuk pada malam hari.",
+   "en": "(3) Users keep checking the ponds in person as the Farm&rsquo;s work routine requires, including at night."
+  },
+  {
+   "kind": "h2",
+   "id": "Pasal 6. Akun",
+   "en": "Article 6. Accounts"
+  },
+  {
+   "kind": "p",
+   "id": "(1) Pengguna harus berumur <b>18 tahun ke atas</b>. Orang yang belum berumur 18 tahun hanya boleh memakai Layanan sebagai Pekerja atau sebagai peserta penelitian, magang atau praktik kerja, dengan izin orang tua atau wali.",
+   "en": "(1) Users must be <b>18 years or older</b>. A person under 18 may use the Service only as a Worker or as a research, internship or work-placement participant, with the permission of a parent or guardian."
+  },
+  {
+   "kind": "p",
+   "id": "(2) Pengguna wajib memberikan data yang benar dan memperbaruinya bila berubah.",
+   "en": "(2) Users must give correct data and update it when it changes."
+  },
+  {
+   "kind": "p",
+   "id": "(3) Satu akun hanya untuk satu orang. PIN wajib dirahasiakan. Pengguna bertanggung jawab atas kegiatan yang dilakukan melalui akunnya, kecuali kegiatan itu terjadi karena kesalahan Synteel.",
+   "en": "(3) One account is for one person. The PIN must be kept secret. A User is responsible for what is done through their account, unless it happened because of Synteel&rsquo;s fault."
+  },
+  {
+   "kind": "p",
+   "id": "(4) Pengguna yang menduga akunnya dipakai orang lain wajib segera menghubungi Synteel melalui kontak di Pasal 21.",
+   "en": "(4) A User who suspects someone else is using their account must contact Synteel straight away through the contacts in Article 21."
+  },
+  {
+   "kind": "h2",
+   "id": "Pasal 7. Tambak, Pemilik Tambak dan Pekerja",
+   "en": "Article 7. Farms, Farm Owners and Workers"
+  },
+  {
+   "kind": "p",
+   "id": "(1) Pemilik Tambak dapat mengundang Pekerja dengan kode undangan dan dapat mencabut akses Pekerja.",
+   "en": "(1) A Farm Owner can invite Workers with an invite code and can remove a Worker&rsquo;s access."
+  },
+  {
+   "kind": "p",
+   "id": "(2) Pemilik Tambak yang mengundang Pekerja berumur di bawah 18 tahun wajib memastikan adanya izin orang tua atau wali, dan bertanggung jawab atas kepatuhan terhadap peraturan ketenagakerjaan yang berlaku bagi pekerja anak.",
+   "en": "(2) A Farm Owner who invites a Worker under 18 must make sure a parent or guardian has given permission, and is responsible for following the employment rules that apply to child workers."
+  },
+  {
+   "kind": "p",
+   "id": "(3) Semua anggota Tambak dapat melihat Catatan Tambak itu. Pemilik Tambak dapat melihat nama dan nomor HP anggota, sedangkan Pekerja hanya dapat melihat nama.",
+   "en": "(3) Every member of a Farm can see that Farm&rsquo;s Records. Farm Owners can see members&rsquo; names and phone numbers; Workers can see names only."
+  },
+  {
+   "kind": "p",
+   "id": "(4) Catatan Tambak berada dalam penguasaan Pemilik Tambak. Catatan yang dibuat Pekerja tetap tersimpan di Tambak setelah Pekerja keluar atau menghapus akun, tanpa nama Pekerja tersebut.",
+   "en": "(4) A Farm&rsquo;s Records are under the Farm Owner&rsquo;s control. Records made by a Worker stay with the Farm after the Worker leaves or deletes the account, without that Worker&rsquo;s name."
+  },
+  {
+   "kind": "h2",
+   "id": "Pasal 8. Catatan dan Konten Pengguna",
+   "en": "Article 8. Records and User Content"
+  },
+  {
+   "kind": "p",
+   "id": "(1) Pengguna tetap memiliki Catatan dan Konten Pengguna.",
+   "en": "(1) Users keep ownership of their Records and User Content."
+  },
+  {
+   "kind": "p",
+   "id": "(2) Pengguna memberi Synteel izin yang terbatas, tidak eksklusif dan tanpa royalti untuk menyimpan, memproses dan mengirim Catatan dan Konten Pengguna kepada penyedia layanan yang disebut dalam Kebijakan Privasi. Izin ini hanya untuk menjalankan Layanan dan berakhir ketika data tersebut dihapus.",
+   "en": "(2) Users give Synteel a limited, non-exclusive, royalty-free permission to store, process and send Records and User Content to the service providers named in the Privacy Policy. This permission is only for running the Service and ends when the data is deleted."
+  },
+  {
+   "kind": "p",
+   "id": "(3) Synteel tidak menjual data Pengguna, tidak memakainya untuk iklan dan tidak memakainya untuk melatih model AI.",
+   "en": "(3) Synteel does not sell Users&rsquo; data, does not use it for ads and does not use it to train AI models."
+  },
+  {
+   "kind": "p",
+   "id": "(4) Synteel memakai foto atau rekaman Pengguna untuk promosi hanya dengan persetujuan tertulis tersendiri dari Pengguna.",
+   "en": "(4) Synteel uses a User&rsquo;s photos or recordings for promotion only with that User&rsquo;s separate written consent."
+  },
+  {
+   "kind": "p",
+   "id": "(5) Pengguna menjamin berhak mengirim Konten Pengguna. Konten Pengguna tidak boleh melanggar hak orang lain, termasuk hak atas foto atau suara orang lain.",
+   "en": "(5) Users confirm they have the right to send their User Content. User Content must not infringe other people&rsquo;s rights, including rights over other people&rsquo;s photos or voices."
+  },
+  {
+   "kind": "p",
+   "id": "(6) Pengelolaan data pribadi tunduk pada Kebijakan Privasi.",
+   "en": "(6) Personal data is handled under the Privacy Policy."
+  },
+  {
+   "kind": "h2",
+   "id": "Pasal 9. Larangan",
+   "en": "Article 9. What Users may not do"
+  },
+  {
+   "kind": "p",
+   "id": "Pengguna dilarang:",
+   "en": "Users may not:"
+  },
+  {
+   "kind": "list",
+   "items": [
+    {
+     "id": "a. memakai Layanan untuk kegiatan yang melanggar hukum;",
+     "en": "a. use the Service for anything unlawful;"
+    },
+    {
+     "id": "b. mencoba masuk ke akun atau Tambak milik orang lain tanpa izin;",
+     "en": "b. try to enter another person&rsquo;s account or Farm without permission;"
+    },
+    {
+     "id": "c. mengganggu, membebani atau mencoba menembus keamanan server Synteel;",
+     "en": "c. disrupt or overload Synteel&rsquo;s servers or try to break their security;"
+    },
+    {
+     "id": "d. mengambil data dari Aplikasi secara otomatis tanpa izin tertulis Synteel;",
+     "en": "d. collect data from the App automatically without Synteel&rsquo;s written permission;"
+    },
+    {
+     "id": "e. mengunggah perangkat lunak berbahaya atau konten yang melanggar hukum;",
+     "en": "e. upload malicious software or unlawful content;"
+    },
+    {
+     "id": "f. menyalahgunakan Demo, termasuk membuat salinan Demo secara berulang untuk membebani Layanan;",
+     "en": "f. misuse the Demo, including opening Demo copies repeatedly to overload the Service;"
+    },
+    {
+     "id": "g. menjual kembali atau menyewakan Layanan tanpa perjanjian tertulis dengan Synteel.",
+     "en": "g. resell or rent out the Service without a written agreement with Synteel."
+    }
+   ],
+   "alpha": true
+  },
+  {
+   "kind": "h2",
+   "id": "Pasal 10. Hak kekayaan intelektual",
+   "en": "Article 10. Intellectual property"
+  },
+  {
+   "kind": "p",
+   "id": "(1) Aplikasi, kode program, nama dan logo Synteel, desain dan isi Aplikasi selain Catatan dan Konten Pengguna adalah milik PT Synt Tekno Multikarya.",
+   "en": "(1) The App, its program code, the Synteel name and logo, its design and its content other than Records and User Content belong to PT Synt Tekno Multikarya."
+  },
+  {
+   "kind": "p",
+   "id": "(2) Kode program yang dapat dilihat publik tidak memberi izin untuk memakai, menyalin atau mengubahnya, kecuali Synteel menyatakan lisensinya secara tertulis.",
+   "en": "(2) Program code that the public can see gives no permission to use, copy or change it, unless Synteel states a licence for it in writing."
+  },
+  {
+   "kind": "h2",
+   "id": "Pasal 11. Layanan pihak ketiga",
+   "en": "Article 11. Third-party services"
+  },
+  {
+   "kind": "p",
+   "id": "(1) Layanan memakai penyedia pihak ketiga, antara lain penyedia model AI dan data cuaca, sebagaimana disebut dalam Kebijakan Privasi.",
+   "en": "(1) The Service uses third-party providers, including AI model and weather data providers, as named in the Privacy Policy."
+  },
+  {
+   "kind": "p",
+   "id": "(2) Gangguan pada layanan pihak ketiga dapat membuat sebagian fitur tidak berjalan atau berjalan terlambat. Synteel berusaha memulihkan fitur secepatnya.",
+   "en": "(2) A disruption at a third-party service can stop some features or delay them. Synteel works to restore them as soon as possible."
+  },
+  {
+   "kind": "h2",
+   "id": "Pasal 12. Ketersediaan Layanan",
+   "en": "Article 12. Availability of the Service"
+  },
+  {
+   "kind": "p",
+   "id": "(1) Synteel berusaha menjaga Layanan tetap tersedia. Layanan dapat terhenti sementara karena pemeliharaan, gangguan jaringan, gangguan server atau sebab lain.",
+   "en": "(1) Synteel works to keep the Service available. The Service can stop for a while because of maintenance, network problems, server problems or other causes."
+  },
+  {
+   "kind": "p",
+   "id": "(2) Bila Synteel menghentikan Layanan secara permanen, Synteel memberi tahu Pengguna paling lambat <b>30 hari</b> sebelumnya dan memberi kesempatan kepada Pengguna untuk meminta salinan Catatannya.",
+   "en": "(2) If Synteel stops the Service for good, it tells Users at least <b>30 days</b> beforehand and gives them the chance to ask for a copy of their Records."
+  },
+  {
+   "kind": "h2",
+   "id": "Pasal 13. Demo, simulator dan perangkat uji coba",
+   "en": "Article 13. Demo, simulator and trial devices"
+  },
+  {
+   "kind": "p",
+   "id": "(1) Data di Demo adalah data contoh. Setiap salinan Demo dihapus otomatis 48 jam setelah dibuat.",
+   "en": "(1) Data in the Demo is sample data. Each Demo copy is deleted automatically 48 hours after it is made."
+  },
+  {
+   "kind": "p",
+   "id": "(2) Simulator di eel.synt.fun/sim dan perangkat sensor yang belum dijual adalah peragaan. Keduanya bukan produk yang dapat diandalkan untuk Tambak.",
+   "en": "(2) The simulator at eel.synt.fun/sim and sensor devices not yet on sale are demonstrations. Neither is a product to rely on for a Farm."
+  },
+  {
+   "kind": "p",
+   "id": "(3) Penjualan atau penyewaan perangkat akan diatur dalam ketentuan tersendiri.",
+   "en": "(3) Selling or renting out devices will be governed by separate terms."
+  },
+  {
+   "kind": "h2",
+   "id": "Pasal 14. Tanggung jawab",
+   "en": "Article 14. Responsibility"
+  },
+  {
+   "kind": "p",
+   "id": "(1) Synteel bertanggung jawab atas kerugian yang timbul karena Synteel tidak menjalankan kewajibannya sebagaimana dimaksud dalam Pasal 4, sesuai peraturan perundang-undangan.",
+   "en": "(1) Synteel is responsible for losses that arise because Synteel did not carry out its obligations under Article 4, in line with the laws and regulations."
+  },
+  {
+   "kind": "p",
+   "id": "(2) Kesalahan Fitur AI yang terjadi walaupun Synteel telah menjalankan kewajiban sebagaimana dimaksud dalam Pasal 4 tidak dengan sendirinya merupakan kelalaian Synteel.",
+   "en": "(2) An error of the AI Features that happens even though Synteel has carried out its obligations under Article 4 is not in itself negligence by Synteel."
+  },
+  {
+   "kind": "p",
+   "id": "(3) Synteel tidak bertanggung jawab atas kerugian yang timbul semata-mata karena:",
+   "en": "(3) Synteel is not responsible for losses that arise solely because of:"
+  },
+  {
+   "kind": "list",
+   "items": [
+    {
+     "id": "a. keputusan pengelolaan Tambak oleh Pengguna, sebagaimana dimaksud dalam Pasal 3 ayat (5);",
+     "en": "a. the User&rsquo;s decisions in running the Farm, as referred to in Article 3 paragraph (5);"
+    },
+    {
+     "id": "b. Catatan atau Konten Pengguna yang salah atau tidak lengkap, termasuk hasil bacaan AI yang telah diperiksa dan disimpan oleh Pengguna;",
+     "en": "b. Records or User Content that are wrong or incomplete, including an AI reading that the User checked and saved;"
+    },
+    {
+     "id": "c. HP, jaringan, listrik atau peralatan Tambak yang berada di luar kendali Synteel, termasuk keadaan sebagaimana dimaksud dalam Pasal 5;",
+     "en": "c. phones, networks, electricity or farm equipment outside Synteel&rsquo;s control, including the conditions referred to in Article 5;"
+    },
+    {
+     "id": "d. pelanggaran Syarat ini oleh Pengguna, atau PIN yang dibocorkan oleh Pengguna;",
+     "en": "d. the User breaking these Terms, or a PIN the User gave away;"
+    },
+    {
+     "id": "e. Keadaan Kahar sebagaimana dimaksud dalam Pasal 15.",
+     "en": "e. Force Majeure as referred to in Article 15."
+    }
+   ],
+   "alpha": true
+  },
+  {
+   "kind": "p",
+   "id": "(4) Bila kerugian timbul karena peran Synteel dan peran Pengguna bersama-sama, misalnya Pengguna hanya mengandalkan Aplikasi tanpa memeriksa kolam sebagaimana dimaksud dalam Pasal 5 ayat (3), tanggung jawab masing-masing pihak ditimbang sesuai besarnya peran masing-masing.",
+   "en": "(4) Where a loss arises from Synteel&rsquo;s part and the User&rsquo;s part together, for example when a User relies only on the App without checking the ponds as referred to in Article 5 paragraph (3), each party&rsquo;s responsibility is weighed according to the size of its part."
+  },
+  {
+   "kind": "p",
+   "id": "(5) Tidak ada ketentuan dalam Syarat ini yang menghapus atau membatasi tanggung jawab yang menurut hukum tidak dapat dihapus atau dibatasi, termasuk hak Pengguna menurut Undang-Undang Nomor 8 Tahun 1999 tentang Perlindungan Konsumen.",
+   "en": "(5) Nothing in these Terms removes or limits any responsibility that by law cannot be removed or limited, including the User&rsquo;s rights under Law No. 8 of 1999 on Consumer Protection."
+  },
+  {
+   "kind": "h2",
+   "id": "Pasal 15. Keadaan Kahar",
+   "en": "Article 15. Force majeure"
+  },
+  {
+   "kind": "p",
+   "id": "Synteel tidak dianggap lalai bila tidak dapat menjalankan kewajibannya karena keadaan di luar kendali wajar Synteel, antara lain bencana alam, kebakaran, pemadaman listrik atau jaringan yang luas, gangguan penyedia pusat data, huru-hara, wabah, atau tindakan pemerintah. Synteel memberi tahu Pengguna dan berusaha memulihkan Layanan secepatnya.",
+   "en": "Synteel is not considered at fault when it cannot carry out its obligations because of events beyond its reasonable control, including natural disasters, fire, widespread power or network outages, data centre provider outages, riots, epidemics or government action. Synteel tells Users and works to restore the Service as soon as possible."
+  },
+  {
+   "kind": "h2",
+   "id": "Pasal 16. Pengakhiran",
+   "en": "Article 16. Ending the agreement"
+  },
+  {
+   "kind": "p",
+   "id": "(1) Pengguna dapat berhenti kapan saja dengan menghapus akun melalui Profil, lalu <b>Hapus akun</b>. Akibatnya terhadap data diatur dalam Kebijakan Privasi.",
+   "en": "(1) A User can stop at any time by deleting the account: Profil, then <b>Hapus akun</b>. What happens to the data is set out in the Privacy Policy."
+  },
+  {
+   "kind": "p",
+   "id": "(2) Synteel dapat menangguhkan atau menutup akun yang melanggar Syarat ini setelah memberi tahu Pengguna beserta alasannya. Untuk pelanggaran berat atau yang membahayakan Pengguna lain, Synteel dapat bertindak lebih dulu lalu memberi tahu Pengguna.",
+   "en": "(2) Synteel may suspend or close an account that breaks these Terms after telling the User and giving the reason. For a serious breach, or one that endangers other Users, Synteel may act first and then tell the User."
+  },
+  {
+   "kind": "h2",
+   "id": "Pasal 17. Perubahan Syarat",
+   "en": "Article 17. Changes to these Terms"
+  },
+  {
+   "kind": "p",
+   "id": "(1) Synteel memberi tahu Pengguna di Aplikasi paling lambat <b>14 hari</b> sebelum perubahan penting berlaku.",
+   "en": "(1) Synteel tells Users in the App at least <b>14 days</b> before an important change takes effect."
+  },
+  {
+   "kind": "p",
+   "id": "(2) Pengguna yang tidak setuju dengan perubahan dapat menghapus akun sebelum perubahan berlaku. Pengguna yang tetap memakai Layanan setelah tanggal berlaku dianggap menyetujui perubahan itu.",
+   "en": "(2) A User who does not agree with a change may delete the account before it takes effect. A User who keeps using the Service after the effective date is taken to agree to the change."
+  },
+  {
+   "kind": "h2",
+   "id": "Pasal 18. Hukum yang berlaku dan penyelesaian sengketa",
+   "en": "Article 18. Governing law and disputes"
+  },
+  {
+   "kind": "p",
+   "id": "(1) Syarat ini tunduk pada hukum Negara Republik Indonesia.",
+   "en": "(1) These Terms are governed by the law of the Republic of Indonesia."
+  },
+  {
+   "kind": "p",
+   "id": "(2) Sengketa diselesaikan lebih dulu secara musyawarah dalam waktu 30 hari sejak salah satu pihak memberi tahu pihak lain secara tertulis.",
+   "en": "(2) A dispute is first settled by deliberation (musyawarah) within 30 days of one party notifying the other in writing."
+  },
+  {
+   "kind": "p",
+   "id": "(3) Bila musyawarah tidak berhasil, sengketa diselesaikan melalui pengadilan negeri yang berwenang atau melalui Badan Penyelesaian Sengketa Konsumen, sesuai peraturan perundang-undangan.",
+   "en": "(3) If deliberation does not succeed, the dispute is settled through the competent district court or through the Consumer Dispute Settlement Agency (BPSK), in line with the laws and regulations."
+  },
+  {
+   "kind": "h2",
+   "id": "Pasal 19. Bahasa",
+   "en": "Article 19. Language"
+  },
+  {
+   "kind": "p",
+   "id": "Syarat ini dibuat dalam bahasa Indonesia dan bahasa Inggris. Bila terdapat perbedaan, versi bahasa Indonesia yang berlaku.",
+   "en": "These Terms are made in Indonesian and English. If the two differ, the Indonesian version applies."
+  },
+  {
+   "kind": "h2",
+   "id": "Pasal 20. Lain-lain",
+   "en": "Article 20. Other provisions"
+  },
+  {
+   "kind": "p",
+   "id": "(1) Bila salah satu ketentuan dinyatakan tidak sah, ketentuan lain tetap berlaku.",
+   "en": "(1) If one provision is found invalid, the other provisions still apply."
+  },
+  {
+   "kind": "p",
+   "id": "(2) Bila Synteel tidak menegakkan suatu ketentuan, hal itu tidak berarti Synteel melepaskan haknya.",
+   "en": "(2) If Synteel does not enforce a provision, that does not mean Synteel gives up its right."
+  },
+  {
+   "kind": "p",
+   "id": "(3) Pengguna tidak boleh mengalihkan hak dan kewajibannya berdasarkan Syarat ini tanpa persetujuan Synteel. Synteel dapat mengalihkannya dalam penggabungan, pengambilalihan atau perubahan usaha dengan memberi tahu Pengguna.",
+   "en": "(3) A User may not transfer their rights and obligations under these Terms without Synteel&rsquo;s consent. Synteel may transfer them in a merger, acquisition or change of business, after telling Users."
+  },
+  {
+   "kind": "h2",
+   "id": "Pasal 21. Kontak",
+   "en": "Article 21. Contact"
+  }
+ ]
+}

@@ -3,10 +3,13 @@ import { api, API, ApiError, type Me, type Role } from '../api.ts';
 import { fmtClock } from '../labels.ts';
 import { Field, fmtPhone, Glyph, GLYPH, Icon, LangSwitch, Notice, PinBoxes, roleLabel } from '../ui.tsx';
 import type { SignInMode } from './welcome.tsx';
-import { lang, siteInAppLanguage, t } from '../i18n.ts';
+import { lang, t } from '../i18n.ts';
+import { TermsConsent } from './privacy.tsx';
 
 /** 'reset': Lupa PIN, a code to the account's e-mail and a new PIN. */
 type Mode = SignInMode | 'reset';
+
+const NOT_AGREED = t('Centang persetujuan dulu', 'Tick the agreement first');
 
 const BUTTONS: Record<Mode, string> = {
   login: t('Masuk', 'Sign in'),
@@ -186,6 +189,8 @@ export function SignIn({
   const [wrong, setWrong] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // Daftar and Gabung: the Syarat dan Ketentuan tick, unticked until the person ticks it.
+  const [agreed, setAgreed] = useState(false);
   /** Remounts the PIN boxes so "Lihat PIN" starts right for the mode. */
   const [pinKey, setPinKey] = useState(0);
 
@@ -279,6 +284,7 @@ export function SignIn({
     if (mode === 'reset' && !sentTo) return sendCode();
     if (pin.length !== 6) return setError(PIN_SHORT);
     if (mode === 'login') return run(() => login(phone, pin));
+    if (mode !== 'reset' && !agreed) return setError(NOT_AGREED);
     if (mode === 'register' && emailOn && !sentTo) return sendCode();
     if ((mode === 'register' && emailOn) || mode === 'reset') {
       if (emailCode.length !== 6) return setError(t('Masukkan 6 angka dari email', 'Enter the 6 digits from the e-mail'));
@@ -486,6 +492,16 @@ export function SignIn({
         {locked && (
           <Notice tone="info" icon="lock" title={t('Terlalu banyak percobaan', 'Too many tries')} role="alert" />
         )}
+        {showForm && mode !== 'login' && !reset && !taken && (
+          <TermsConsent
+            on={agreed}
+            onChange={(on) => {
+              setAgreed(on);
+              if (on && error === NOT_AGREED) setError('');
+            }}
+            minor={join}
+          />
+        )}
 
         {error && (
           <p class="error" role="alert">
@@ -526,21 +542,6 @@ export function SignIn({
               )}
             </button>
           )
-        )}
-        {showForm && mode !== 'login' && !reset && !taken && (
-          <div class="label ink2 center" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <span>{t('Data dikelola PT Synt Tekno Multikarya.', 'Data is handled by PT Synt Tekno Multikarya.')}</span>
-            <a
-              class="inline-link"
-              href="https://eel.synt.fun/privasi/"
-              target="_blank"
-              rel="noopener"
-              onClick={siteInAppLanguage}
-              style={{ minHeight: 44, display: 'inline-flex', alignItems: 'center', textDecoration: 'underline', textUnderlineOffset: 3 }}
-            >
-              {t('Baca kebijakan privasi', 'Read the privacy policy')}
-            </a>
-          </div>
         )}
 
         {join && inviteBad && (

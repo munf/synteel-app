@@ -1,7 +1,7 @@
 {
  "effective": {
-  "id": "Berlaku sejak 31 Oktober 2026",
-  "en": "In effect from 31 October 2026"
+  "id": "Berlaku sejak 1 November 2026",
+  "en": "In effect from 1 November 2026"
  },
  "blocks": [
   {
@@ -46,8 +46,8 @@
   },
   {
    "kind": "p",
-   "id": "Kebijakan ini mengikuti Undang-Undang Nomor 27 Tahun 2022 tentang Pelindungan Data Pribadi (UU PDP).",
-   "en": "This policy follows Indonesian Law No. 27 of 2022 on Personal Data Protection (UU PDP)."
+   "id": "Kebijakan ini mengikuti Undang-Undang Nomor 27 Tahun 2022 tentang Pelindungan Data Pribadi (UU PDP) dan merupakan bagian dari <a href=\"/syarat/\">Syarat dan Ketentuan</a> Synteel.",
+   "en": "This policy follows Indonesian Law No. 27 of 2022 on Personal Data Protection (UU PDP) and is part of the Synteel <a href=\"/syarat/\">Terms and Conditions</a>."
   },
   {
    "kind": "p",
@@ -365,8 +365,8 @@
   },
   {
    "kind": "p",
-   "id": "Synteel dibuat untuk petani dan pekerja tambak, bukan untuk anak di bawah 17 tahun.",
-   "en": "Synteel is made for farmers and farm workers, not for children under 17."
+   "id": "Synteel dibuat untuk petani dan pekerja tambak berumur 18 tahun ke atas. Orang yang belum berumur 18 tahun hanya boleh memakainya sebagai pekerja tambak atau peserta penelitian, magang atau praktik kerja, dengan izin orang tua atau wali, sesuai <a href=\"/syarat/\">Syarat dan Ketentuan</a>. Pemilik tambak yang mengundang pekerja seperti itu memastikan izin tersebut ada.",
+   "en": "Synteel is made for farmers and farm workers aged 18 or older. A person under 18 may use it only as a farm worker or as a research, internship or work-placement participant, with the permission of a parent or guardian, as set out in the <a href=\"/syarat/\">Terms and Conditions</a>. The farm owner who invites such a worker makes sure that permission exists."
   },
   {
    "kind": "h2",

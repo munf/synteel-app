@@ -168,6 +168,10 @@ export function openDb(path = process.env.SYNTEEL_DB ?? defaultPath) {
   // E-mail for sign-up and "Lupa PIN" codes; accounts from before it have none.
   const userCols = (db.prepare('pragma table_info(users)').all() as { name: string }[]).map((c) => c.name);
   if (!userCols.includes('email')) db.exec('alter table users add column email text');
+  // Consent to the Syarat dan Ketentuan (terms.ts): the version agreed to and when. Older accounts have none.
+  for (const col of ['terms_version', 'terms_at']) {
+    if (!userCols.includes(col)) db.exec(`alter table users add column ${col} text`);
+  }
   // Briefings in more than one language: the language, 'lang' for a re-run in another language of the
   // briefing `basis`, 'copy' for one copied into a demo farm. Older rows: Indonesian originals.
   const briefingCols = (db.prepare('pragma table_info(briefings)').all() as { name: string }[]).map((c) => c.name);
@@ -646,8 +650,11 @@ export function repo(db: Db) {
     },
 
     // ---------- users ----------
-    createUser(u: { phone: string; name: string; pinHash: string; email?: string | null }): User {
-      const { lastInsertRowid } = db.prepare('insert into users (phone, name, pin_hash, email) values (?, ?, ?, ?)').run(u.phone, u.name, u.pinHash, u.email ?? null);
+    /** `terms`: the Syarat version ticked at sign-up; null leaves the consent screen for later. */
+    createUser(u: { phone: string; name: string; pinHash: string; email?: string | null; terms?: string | null }): User {
+      const { lastInsertRowid } = db
+        .prepare("insert into users (phone, name, pin_hash, email, terms_version, terms_at) values (?, ?, ?, ?, ?, case when ? is null then null else datetime('now') end)")
+        .run(u.phone, u.name, u.pinHash, u.email ?? null, u.terms ?? null, u.terms ?? null);
       return { id: Number(lastInsertRowid), phone: u.phone, name: u.name };
     },
 
@@ -660,6 +667,15 @@ export function repo(db: Db) {
     user(id: number): User | null {
       const r = db.prepare('select id, phone, name from users where id = ?').get(id) as Row | undefined;
       return r ? { id: r.id as number, phone: r.phone as string, name: shownName(r) } : null;
+    },
+
+    termsVersion(userId: number): string | null {
+      const r = db.prepare('select terms_version from users where id = ?').get(userId) as Row | undefined;
+      return (r?.terms_version as string | null) ?? null;
+    },
+
+    acceptTerms(userId: number, version: string) {
+      db.prepare("update users set terms_version = ?, terms_at = datetime('now') where id = ?").run(version, userId);
     },
 
     setPin(userId: number, pinHash: string) {

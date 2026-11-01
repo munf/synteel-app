@@ -529,6 +529,18 @@ export function Profile({
         </span>
       </button>
 
+      <button type="button" class="go-row help-row" onClick={() => go({ name: 'terms' })}>
+        <span style={{ color: 'var(--accent)', display: 'flex' }}>
+          <Icon name="book" />
+        </span>
+        <span class="grow strong" style={{ color: 'var(--ink)' }}>
+          {t('Syarat dan ketentuan', 'Terms and conditions')}
+        </span>
+        <span style={{ color: 'var(--muted)', display: 'flex' }}>
+          <Icon name="next" size={20} />
+        </span>
+      </button>
+
       <section class="stack-sm">
         <button type="button" class="btn secondary" onClick={logout} disabled={leaving}>
           <Icon name="logout" size={20} /> {t('Keluar', 'Sign out')}

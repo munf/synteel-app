@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { farmWithWorker, server } from './helpers.ts';
+import { TERMS_VERSION } from '../src/terms.ts';
 
 test('Hapus akun: a worker leaves without a trace of their name; the farm and its records stay', async () => {
   const f = await farmWithWorker();
@@ -149,4 +150,20 @@ test('a failed e-mail says so and creates nothing', async () => {
   assert.equal(res.status, 400);
   assert.match(res.json.error, /Email gagal dikirim/);
   assert.equal(store.userByPhone('6281311112222'), null);
+});
+
+test('Syarat dan Ketentuan: the tick at Daftar and Gabung is recorded; accounts without it agree once', async () => {
+  const { client, store } = server();
+  const agreed = client();
+  assert.equal((await agreed('POST', '/auth/register', { name: 'Pak Budi', phone: '084444444444', pin: '246810', terms: true })).json.terms, true);
+
+  // An older app without the box still signs up; the account then gets the consent screen.
+  const older = client();
+  const me = (await older('POST', '/auth/register', { name: 'Bu Ani', phone: '085555555555', pin: '246810' })).json;
+  assert.equal(me.terms, false);
+  assert.equal(store.termsVersion(me.user.id), null);
+  assert.equal((await older('POST', '/auth/terms', {})).status, 400);
+  assert.equal((await older('POST', '/auth/terms', { terms: true })).json.terms, true);
+  assert.equal((await older('GET', '/auth/me')).json.terms, true);
+  assert.equal(store.termsVersion(me.user.id), TERMS_VERSION);
 });

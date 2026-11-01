@@ -29,6 +29,7 @@ import type { Light, WaterColor } from './thermal.ts';
 import { farmForecast, getBmkgForecast, regionCandidates, type BmkgForecast, type GetBmkg, type Region } from './bmkg.ts';
 import { findDesa, searchDesa, type Desa } from './desa.ts';
 import { applyPower, assessPowerNight, getStormHours, POWER_BACKUPS, type GetStorm, type PowerBackup, type PowerNight } from './power.ts';
+import { TERMS_VERSION } from './terms.ts';
 
 const thresholds = knowledge.thresholds.parameters as Threshold[];
 const stages = knowledge.nurseryProgram.stages as { weeks: [number, number]; name: string; feed: string; mesh_mm: string; water: string }[];
@@ -823,8 +824,15 @@ export function createApi(
     const farms = store.farmsOf(userId);
     const user = store.user(userId);
     // The e-mail fills "Email untuk balasan" in Hubungi bantuan; accounts from before e-mail codes have none.
-    return { user: user && { ...user, email: store.userByPhone(user.phone)?.email ?? null }, farm: farms.find((f) => f.id === farmId) ?? null, farms, demo: isDemoUser(userId) };
+    const demo = isDemoUser(userId);
+    // `terms`: agreed to the current Syarat dan Ketentuan; false shows the consent screen once (demo copies never).
+    const terms = demo || store.termsVersion(userId) === TERMS_VERSION;
+    return { user: user && { ...user, email: store.userByPhone(user.phone)?.email ?? null }, farm: farms.find((f) => f.id === farmId) ?? null, farms, demo, terms };
   }
+
+  // Daftar and Gabung send `terms: true` when the box is ticked. An older app without the box signs up
+  // anyway; the account then gets the consent screen on its first load.
+  const agreed = (body: { terms?: unknown }) => (body?.terms === true ? TERMS_VERSION : null);
 
   const isDemoUser = (userId: number) => store.user(userId)?.phone === demoPhone || store.demo.isDemoUser(userId);
 
@@ -910,7 +918,7 @@ export function createApi(
     signupLimiter.check(key);
     if (email) codes.use('register', phone, email, body.emailCode);
     signupLimiter.fail(key);
-    const user = store.createUser({ phone, name, pinHash: hashPin(pin), email });
+    const user = store.createUser({ phone, name, pinHash: hashPin(pin), email, terms: agreed(body) });
     startSession(c, user.id, null);
     return c.json(me(user.id, null), 201);
   });
@@ -970,11 +978,12 @@ export function createApi(
         limiter.fail(...keys);
         throw new AuthError(tx('Nomor ini sudah terdaftar. Masukkan PIN yang benar.', 'This number is already registered. Enter the right PIN.'));
       }
+      if (agreed(body)) store.acceptTerms(user.id, TERMS_VERSION);
     } else {
       const key = `ip:${clientIp(c)}`;
       signupLimiter.check(key);
       signupLimiter.fail(key);
-      user = { ...store.createUser({ phone, name: text(body.name, 'nama', true)!, pinHash: hashPin(checkPin(body.pin)) }), pinHash: '', email: null };
+      user = { ...store.createUser({ phone, name: text(body.name, 'nama', true)!, pinHash: hashPin(checkPin(body.pin)), terms: agreed(body) }), pinHash: '', email: null };
     }
     // Joining never demotes an owner.
     if (store.role(user.id, invite.farmId) !== 'owner') store.addMember(user.id, invite.farmId, invite.role);
@@ -1148,6 +1157,13 @@ export function createApi(
   };
 
   api.get('/auth/me', (c) => c.json(me(c.get('userId'), c.get('farmId'))));
+
+  // The consent screen for accounts made before the Syarat dan Ketentuan, or before a newer version.
+  api.post('/auth/terms', async (c) => {
+    if (!agreed(await c.req.json())) throw new BadRequest(tx('Centang persetujuan dulu', 'Tick the agreement first'));
+    store.acceptTerms(c.get('userId'), TERMS_VERSION);
+    return c.json(me(c.get('userId'), c.get('farmId')));
+  });
 
   api.post('/auth/logout', (c) => {
     store.deleteSession(c.get('tokenHash'));
