@@ -1,4 +1,4 @@
-# Synt Eel
+# Synteel
 
 A phone app that helps Indonesian eel farmers keep glass eels and elvers alive through the nursery stage.
 
@@ -7,6 +7,7 @@ Built for the **Meta Global AI Developer Hackathon** (Oct 26 to Nov 4, 2026). Tr
 | | |
 |---|---|
 | Try the app | **[eel.synt.fun/preview/?lang=en](https://eel.synt.fun/preview/?lang=en)** (own demo farm, real Meta AI, in English) |
+| Android app | APK attached to the [latest release](https://github.com/munf/synteel-app/releases/latest). Android 7 or newer; it opens the same app full screen |
 | Measured results | [`docs/evaluation.md`](docs/evaluation.md) |
 | Meta models | Muse Spark 1.3, Muse Spark Open (Baseten and Fireworks), Muse Voice Transcribe, SAM 3.1 |
 
@@ -14,7 +15,9 @@ Built for the **Meta Global AI Developer Hackathon** (Oct 26 to Nov 4, 2026). Tr
 
 Farmers in Indonesia buy glass eels and raise them to elvers over the first 12 weeks (minggu 0 to 12). Glass eels are small and see-through, and pond water can turn bad in a few hours. Deaths often happen overnight: by the time someone sees eels at the surface or the first dead ones in the morning, it is too late to act. Small farms have no oxygen meter. They measure temperature, pH and TDS once or twice a day and keep records in a notebook or in their heads.
 
-Synt Eel is for these farmers and their workers. They talk or take photos at the pond, and the app turns that into pond records. From the records and the weather it estimates tonight's oxygen risk, tells them when to check, and walks them through a die-off. The goal is fewer deaths between glass eel and elver. Later, Synteel sensor prototypes will send readings that the same rules and agents read at set intervals and when something changes.
+Synteel is for these farmers and their workers. They talk or take photos at the pond, and the app turns that into pond records. From the records and the weather it estimates tonight's oxygen risk, tells them when to check, and walks them through a die-off. The goal is fewer deaths between glass eel and elver. Later, Synteel sensor prototypes will send readings that the same rules and agents read at set intervals and when something changes.
+
+A partner farmer in Sleman, Yogyakarta, runs 6 ponds alone, with no workers. Their glass eels tend to die suddenly about two weeks after capture, and the farmer traces it to measurements and care that were forgotten. Readings were kept in memory, never written down. Nobody watches the ponds at night, and the mornings go to other work. The app answers those gaps with a check schedule and night alarms, records made by voice, and steps for the moment eels rise to the surface, which the farmer calls the most reliable warning sign.
 
 **Safety.** The app gives decision support. It does not diagnose disease or dose medicine. Alarms come from fixed threshold rules that run without any model, and every AI reading is a draft the farmer confirms before it is saved.
 
@@ -45,6 +48,8 @@ The preview calls the real Meta models. Photos, voice and notebook pages share a
 | Risk forecast | Every 30 minutes the server estimates each pond's water temperature hour by hour from Open-Meteo weather. It re-anchors on each reading and learns a per-pond offset. It scores oxygen risk with reasons (warm water, eels at the surface, aerator, green water at night, density, leftover feed, rain, hours unwatched) and builds a check schedule with night alarms. No model involved. | [`nowcast.ts`](server/src/nowcast.ts), [`monitor.ts`](server/src/monitor.ts) |
 | Power-cut nights | Aerators that stop when the power goes out at night kill whole batches. For tonight (17:00 to 06:00) the server cross-checks Open-Meteo (thunderstorm codes, gusts, heavy rain, unstable air) with the BMKG forecast for the farm's village and labels the night **Rawan / Mungkin / Kecil** with its reasons, and says so when the two disagree. A risky night adds preparation checks that follow the farm's power backup (generator, battery, none: feed less and decide who checks the aerator) and raises the danger of ponds whose oxygen risk is already up. **Listrik padam** records a power cut in one tap, shows the steps and a WhatsApp message, and ends with **Listrik sudah menyala**. The BMKG village is the one nearest the farm, or the owner's pick. No model involved. | [`power.ts`](server/src/power.ts), [`bmkg.ts`](server/src/bmkg.ts), [`outage.tsx`](web/src/screens/outage.tsx) |
 | Threshold alarms | Water limits per phase from [`knowledge/`](knowledge/). A night check marked as an alarm opens a full-screen alarm with sound and vibration while the app is open in the browser. | [`rules.ts`](server/src/rules.ts), [`alarms.ts`](web/src/alarms.ts) |
+| Check schedule | Watch lists tonight's checks. A check can be marked done from 30 minutes before its time, not earlier, so nobody ticks the night off in advance. A check marked by mistake can be undone right away. | [`watch.tsx`](web/src/screens/watch.tsx) |
+| Listen | **Listen** on Watch sends the screen's text to Muse Spark, which retells it as one short spoken explanation: tonight's level, the reasons, then the next check and its time. The phone's own voice reads it. A guard keeps the facts: no new numbers, every clock time kept, no oxygen figure, treatment or diagnosis. Anything refused, slower than 15 s or without a model is read from the screen text as it is. | [`spoken.ts`](server/src/spoken.ts) |
 | Evening briefing agent | From 17:00 farm time, or on request, the agent reads the farm through tools and writes a short summary plus extra checks. See [Agents](#agents). | [`agent.ts`](server/src/agent.ts) |
 | Dead-eel case agent | A dead-eel report opens one case per pond that follows the die-off across days: dead per day, trend, a 1-hour re-check, up to 2 questions for the farmer, extra checks, and a WhatsApp message for the owner when the rules say deaths are rising or the re-check went unanswered. | [`cases.ts`](server/src/cases.ts) |
 | Problem flow | The farmer picks a pond and what they see. The app shows steps from the emergency SOPs (kept on the phone for use without signal), possible causes from the pond's records and thresholds, when to ask the owner or an extension officer, and a WhatsApp summary. | [`problem.tsx`](web/src/screens/problem.tsx) |
@@ -52,14 +57,15 @@ The preview calls the real Meta models. Photos, voice and notebook pages share a
 | English interface | Indonesian by default. English on the sign-in screen, in Profil or with `?lang=en` switches the screens and the language the server and agents write in. An agent result written in the other language is written once more in the viewer's language and both are kept. | [`i18n.ts`](web/src/i18n.ts) |
 | Demo farms | **Try the demo** copies a template farm for each visitor, with dates moved to today and the agents' results already in both languages. Copies are deleted after 48 hours; new copies are limited per network and in total. | [`demo.ts`](server/src/demo.ts) |
 | Simulated devices | **Hubungkan alat** (Connect a device) links a Synteel device by code or QR. Simulated devices made on [eel.synt.fun/sim](https://eel.synt.fun/sim) get their own ponds labelled **Simulasi**, so simulated readings never mix with real ponds. Their readings go through the same rules, forecast and alarms. | [`devices.ts`](server/src/devices.ts) |
-| Accounts | Phone number and 6-digit PIN, several farms per server, owners and workers, invite codes, installable as a PWA. | [`auth.ts`](server/src/auth.ts) |
+| Accounts | Phone number and 6-digit PIN, sign-up and forgotten PIN by e-mail code, terms accepted at sign-up, several farms per server, owners and workers, invite codes, installable as a PWA. Photos and recordings stay on the server only when the farmer turns that on in Profil, and the farmer can delete the account there. | [`auth.ts`](server/src/auth.ts), [`terms.ts`](server/src/terms.ts) |
+| Android app | A Trusted Web Activity (package `fun.synt.eel`, built with Bubblewrap) that opens the app full screen without a browser bar. It shows a crash report with a copy button if it fails to start. The APK is attached to each release. | |
 
 ## Meta models
 
 | Model | Model id | What it does | Beyond a basic call |
 |---|---|---|---|
 | Muse Spark 1.3 (Meta Model API) | `muse-spark-1.3` | Reads meter photos, video frames and notebook pages; splits voice transcripts per pond; second provider for both agents | Strict JSON schema on every read. Code re-checks every value (plausible ranges, local pond matching, numbers parsed from the written text). On 402, 429 or 5xx the next provider takes over |
-| Muse Spark Open on Baseten | `meta-models/muse-spark-open-1026` | First provider for both agents | Open-weight model in a tool-calling loop (7 tools for the briefing, 8 for the case) with a code guard on what it submits |
+| Muse Spark Open on Baseten | `meta-models/muse-spark-open-1026` | First provider for both agents and for Listen | Open-weight model in a tool-calling loop (7 tools for the briefing, 8 for the case) with a code guard on what it submits |
 | Muse Spark Open on Fireworks | `accounts/fireworks/models/muse-spark-open` | Fallback for capture reading; third provider for both agents | Automatic failover when the Meta API is down or out of credits. `SYNTEEL_AI_PROVIDER=fireworks` puts it first for capture |
 | Muse Voice Transcribe | `muse-voice-transcribe-1.0` | Voice notes, voice rounds, video soundtracks, spoken answers to case questions, spoken help messages | The phone converts audio to WAV. The transcript goes through Muse Spark extraction and the local number guards. Without ASR the recording stays queued on the phone |
 | SAM 3.1 (Meta Responses API) | `sam-3.1` | Counts dead glass eels and elvers in one photo | Four prompts in parallel: "transparent eel", "thin worm", "transparent worm" for bodies, "black eye" for heads; elver ponds add "worm". Code merges bodies that several prompts found, counts two eyes close together as one head, and treats an outline 1.7 times the typical size as possibly two eels. The phone sends the photo at 1600 px and 12% brighter so the eyes stand out |
@@ -118,13 +124,20 @@ Method, per-photo tables and limits are in [`docs/evaluation.md`](docs/evaluatio
 | Evening briefing agent, 6 live runs | 6 of 6 finished with tool calls, 7 to 8 steps, 9.3 to 13.3 s. All 12 rule checks kept in every run |
 | Not measured yet | ASR on real farmer recordings, meter photo accuracy, real notebook pages, the case agent live |
 
+## Known limits
+
+- **Alarms need the app open.** A night check alarm rings full screen with sound while the app is on screen. With the app closed nothing rings yet, and the Android app shows no system notification. Alarms that reach a closed or locked phone are planned for the update after the hackathon.
+- **Glass eel limits are still being researched.** Alarms use the Blueprint v5 limits for glass eels: 27 to 28 °C ideal, caution above 29 °C, danger above 30 °C, pH 7.0 to 7.8. The partner farmer keeps glass eels and elvers at 28 to 31 °C and pH 6.8 to 7.6, and elver ponds already use that range. We will compare both with published research before changing the rules.
+- **The Android app runs in Chrome.** Android shows a short "Running in Chrome" note, and a phone without Chrome opens the app in another browser, which may show an address bar.
+- **Not measured yet:** see [Evaluation](#evaluation).
+
 ## Built during the hackathon vs. pre-existing
 
 | Built during the hackathon (Oct 26 to Nov 4, 2026) | Pre-existing (before Oct 26) |
 |---|---|
 | All code in this repository: app, server, agents, rules engine, tests and evaluation | Synt Eel Nursery Blueprint v5, an internal design document. Its water thresholds, the 0 to 12 week glass eel program and the maintenance SOPs were transcribed into [`knowledge/`](knowledge/) as data |
 | The knowledge base format and how the agents use it | 3D model of the Synt Nursery v5 system, shown only as a labelled pre-hackathon vision |
-| Elver-stage practice from an interview with a partner eel farmer in Sleman ([`knowledge/partner-practice.json`](knowledge/partner-practice.json)) | Website [eel.synt.fun](https://eel.synt.fun), revised during the event. It is not part of this submission |
+| Glass eel and elver practice from a partner eel farmer in Sleman, Oct 27 and Nov 1 ([`knowledge/partner-practice.json`](knowledge/partner-practice.json)) | Website [eel.synt.fun](https://eel.synt.fun), revised during the event. It is not part of this submission |
 
 Commit history in this repository starts on Oct 26, 2026.
 
