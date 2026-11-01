@@ -41,6 +41,8 @@
 .w-next { background: var(--surface); border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 16px; border: 2px solid var(--accent); }
 .w-next .kicker { font-size: 0.875rem; font-weight: 800; color: var(--accent-ink); letter-spacing: 0.04em; }
 .w-next .time { font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.w-undo { background: var(--surface); border-radius: 16px; padding: 8px 8px 8px 16px; gap: 12px; }
+.w-undo .btn { width: auto; min-height: 44px; padding: 0 16px; flex: none; }
 .w-ai { flex: none; min-height: 32px; display: inline-flex; align-items: center; padding: 0 12px; border-radius: 999px; background: var(--tint); color: var(--accent-ink); font-size: 0.875rem; font-weight: 800; }
 
 .w-rows { display: flex; flex-direction: column; }

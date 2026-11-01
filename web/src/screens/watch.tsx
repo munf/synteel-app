@@ -140,6 +140,10 @@ function pondList(names: string[]) {
 const spokenTimes = (s: string) => s.replace(/\b(\d{2})\.(\d{2})\b/g, (_, h, m) => `${Number(h)}${m === '00' ? '' : ` lewat ${Number(m)}`}`);
 
 const ALL_DONE = t('Semua cek malam ini sudah selesai.', 'All checks for tonight are done.');
+// A check can be marked from this long before its time, not earlier: after the 18.00 check the card shows
+// 21.00 at once, and a second tap must not tick it off hours early.
+const EARLY = 30 * 60_000;
+const opensAt = (at: number) => t(`Bisa ditandai mulai jam ${fmtClock(at - EARLY)}`, `Can be marked from ${fmtClock(at - EARLY)}`);
 const alarmAt = (at: number) => t(`Alarm berbunyi di HP ini jam ${fmtClock(at)}.`, `The alarm rings on this phone at ${fmtClock(at)}.`);
 
 interface Row {
@@ -200,6 +204,14 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
   const spokenCache = useRef<{ screen: string; text: string } | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [permission, setPermission] = useState(notifyPermission);
+  // The row just ticked off from the main card, offered for undoing until the next tick.
+  const [justDone, setJustDone] = useState<string | null>(null);
+  // Redraw every 30 seconds so a check unlocks when its time comes.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setTick((n) => n + 1), 30_000);
+    return () => clearInterval(timer);
+  }, []);
 
   const [briefRunning, setBriefRunning] = useState(false);
   const loadBriefing = () =>
@@ -291,7 +303,12 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
   const doneCount = rows.filter((r) => r.done).length;
   const hasAlarm = rows.some((r) => r.alarm && !r.done);
 
+  const due = (row: Row) => row.t - EARLY <= now;
+  const undone = justDone ? rows.find((r) => r.key === justDone && r.done) : undefined;
+
   const toggle = (row: Row) => {
+    if (!row.done && !due(row)) return;
+    setJustDone(row.done ? null : row.key);
     const nextDone = { ...done };
     for (const c of row.checks) nextDone[c.key] = !row.done;
     setDone(nextDone);
@@ -554,11 +571,20 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
             </div>
             {next.why && <span class="label ink2">{next.why}</span>}
             {next.alarm && <span class="label ink2">{alarmAt(next.t)}</span>}
-            <button class="btn primary" onClick={() => toggle(next)}>
+            <button class="btn primary" disabled={!due(next)} onClick={() => toggle(next)}>
               <Icon name="check" size={20} stroke={3} />
               {t('Sudah dicek', 'Checked')}
             </button>
+            {!due(next) && <span class="label ink2" style={{ textAlign: 'center' }}>{opensAt(next.t)}</span>}
           </article>
+        )}
+        {undone && (
+          <div class="row between w-undo" role="status">
+            <span class="label">{t(`Cek jam ${fmtClock(undone.t)} ditandai selesai.`, `The ${fmtClock(undone.t)} check is marked done.`)}</span>
+            <button type="button" class="btn secondary" onClick={() => toggle(undone)}>
+              {t('Batalkan', 'Undo')}
+            </button>
+          </div>
         )}
         {rows.length > 0 && !next && <p class="note ok">{ALL_DONE}</p>}
 
@@ -589,9 +615,13 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
                   <div class="more">
                     {r.why && <span>{r.why}</span>}
                     {r.alarm && !r.done && <span>{alarmAt(r.t)}</span>}
-                    <button type="button" onClick={() => toggle(r)}>
-                      {r.done ? t('Batal, belum dicek', 'Undo, not checked yet') : t('Tandai sudah dicek', 'Mark as checked')}
-                    </button>
+                    {r.done || due(r) ? (
+                      <button type="button" onClick={() => toggle(r)}>
+                        {r.done ? t('Batal, belum dicek', 'Undo, not checked yet') : t('Tandai sudah dicek', 'Mark as checked')}
+                      </button>
+                    ) : (
+                      <span>{opensAt(r.t)}</span>
+                    )}
                   </div>
                 )}
               </div>

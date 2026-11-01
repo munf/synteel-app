@@ -314,6 +314,8 @@ a { color: var(--accent-ink); }
 details.more > summary { list-style: none; min-height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; }
 details.more > summary::-webkit-details-marker { display: none; }
 details.more[open] > summary svg { transform: rotate(180deg); }
+/* A closed card keeps only its summary: the gap to the hidden contents made the space below it bigger than above. */
+details.more:not([open]) { gap: 0; }
 
 /* ---------- pickers and tiles ---------- */
 .picker { position: relative; display: flex; flex-direction: column; gap: 8px; }
