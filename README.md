@@ -2,7 +2,7 @@
 
 A phone app that helps Indonesian eel farmers keep glass eels and elvers alive through the nursery stage.
 
-Built for the **Meta Global AI Developer Hackathon** (Oct 26 to Nov 4, 2026). Track: Indie. Theme: Build for Your World.
+Built for the **Meta Global AI Developer Hackathon** (Oct 26 to Nov 4, 2026). Track: Startup (Synteel is built by PT Synt Tekno Multikarya, Indonesia). Theme: Build for Your World.
 
 | | |
 |---|---|
