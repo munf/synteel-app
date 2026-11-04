@@ -8,6 +8,7 @@ Built for the **Meta Global AI Developer Hackathon** (Oct 26 to Nov 4, 2026). Tr
 |---|---|
 | Try the app | **[eel.synt.fun/preview/?lang=en](https://eel.synt.fun/preview/?lang=en)** (own demo farm, real Meta AI, in English) |
 | Android app | APK attached to the [latest release](https://github.com/munf/synteel-app/releases/latest). Android 7 or newer; it opens the same app full screen |
+| Demo video | **[youtu.be/Ok2DkrIHnmA](https://youtu.be/Ok2DkrIHnmA)** (English) |
 | Measured results | [`docs/evaluation.md`](docs/evaluation.md) |
 | Meta models | Muse Spark 1.3, Muse Spark Open (Baseten and Fireworks), Muse Voice Transcribe, SAM 3.1 |
 
