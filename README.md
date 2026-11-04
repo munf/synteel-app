@@ -62,6 +62,8 @@ The preview calls the real Meta models. Photos, voice and notebook pages share a
 
 ## Meta models
 
+All model calls go from the server; the phone never holds a key. Muse Spark 1.3, Muse Voice Transcribe and SAM 3.1 run on Meta's hosted Model API. Muse Spark Open is Meta's open-weight model, served by Baseten and Fireworks. No model from another company is used in the app.
+
 | Model | Model id | What it does | Beyond a basic call |
 |---|---|---|---|
 | Muse Spark 1.3 (Meta Model API) | `muse-spark-1.3` | Reads meter photos, video frames and notebook pages; splits voice transcripts per pond; second provider for both agents | Strict JSON schema on every read. Code re-checks every value (plausible ranges, local pond matching, numbers parsed from the written text). On 402, 429 or 5xx the next provider takes over |
@@ -112,9 +114,30 @@ What the agents may and may not do:
 
 The guard drops a check with an unknown pond, a time past 18 hours, a duplicate of a rule check, or unsafe words. A summary that fails the guard is replaced by the rules summary. The app shows which tools the agent called, so the farmer can see what it looked at.
 
+## Other components (not Meta models)
+
+| Component | Where | Role |
+|---|---|---|
+| Phone text-to-speech | **Listen** on Watch | The browser's built-in speech (Web Speech API, the voice of the phone's operating system) reads the text Muse Spark wrote. It is not a Meta model and nothing is sent anywhere for it |
+| Rules, forecast, alarms | `rules.ts`, `nowcast.ts`, `monitor.ts`, `power.ts` | Plain TypeScript, no model. The water temperature estimate is arithmetic on weather data |
+| Open-Meteo, BMKG | Server | Weather and village forecast data, see [Data sources](#data-sources-and-licences) |
+| Hono, Preact, Vite, `node:sqlite`, `@meta-sam/parser` | Server and app | Open-source libraries (see `package.json` files) |
+| Plus Jakarta Sans | App | Typeface, SIL Open Font License, bundled via `@fontsource-variable` |
+| Bubblewrap, Chrome | Android app | Google's tool that wraps the web app as a Trusted Web Activity; it runs in the phone's Chrome |
+| Demo video | Not in this repo | Animated with Remotion. The English narration is an AI voice from ElevenLabs, made for the video only; the app never calls it. Screens in the video are recreated from the app, and simulated parts are labelled |
+
 ## Evaluation
 
 Method, per-photo tables and limits are in [`docs/evaluation.md`](docs/evaluation.md). Live runs were on 29 and 30 October 2026.
+
+Steps you cannot rerun yourself, and where their recorded output is:
+
+| Step | Recorded output |
+|---|---|
+| Live SAM 3.1 counts on 14 photos | Per-photo tables in [`docs/evaluation.md`](docs/evaluation.md); one SAM answer kept as the test fixture `server/test/fixtures/sam-synth8.txt`, replayed by `npm run eval` |
+| 6 live runs of the evening briefing agent | Steps, times and kept checks per run in [`docs/evaluation.md`](docs/evaluation.md) |
+| Partner farm visits (Oct 27, Nov 1) | What the farmer said, in [`knowledge/partner-practice.json`](knowledge/partner-practice.json). Photos and recordings from the farm stay private |
+| Android build and signing | The signed APK in the [latest release](https://github.com/munf/synteel-app/releases/latest); the signing key stays private |
 
 | What | Result |
 |---|---|
@@ -136,10 +159,11 @@ Method, per-photo tables and limits are in [`docs/evaluation.md`](docs/evaluatio
 | Built during the hackathon (Oct 26 to Nov 4, 2026) | Pre-existing (before Oct 26) |
 |---|---|
 | All code in this repository: app, server, agents, rules engine, tests and evaluation | Synt Eel Nursery Blueprint v5, an internal design document. Its water thresholds, the 0 to 12 week glass eel program and the maintenance SOPs were transcribed into [`knowledge/`](knowledge/) as data |
-| The knowledge base format and how the agents use it | 3D model of the Synt Nursery v5 system, shown only as a labelled pre-hackathon vision |
-| Glass eel and elver practice from a partner eel farmer in Sleman, Oct 27 and Nov 1 ([`knowledge/partner-practice.json`](knowledge/partner-practice.json)) | Website [eel.synt.fun](https://eel.synt.fun), revised during the event. It is not part of this submission |
+| The knowledge base format and how the agents use it | Website [eel.synt.fun](https://eel.synt.fun), revised during the event. It is not part of this submission |
+| Glass eel and elver practice from a partner eel farmer in Sleman, Oct 27 and Nov 1 ([`knowledge/partner-practice.json`](knowledge/partner-practice.json)) | |
+| The Android app (Trusted Web Activity) and the demo video | |
 
-Commit history in this repository starts on Oct 26, 2026.
+Commit history in this repository starts on Oct 26, 2026 (first commit 22:12 UTC).
 
 ## Architecture
 
@@ -155,10 +179,18 @@ The phone talks only to the server. The server calls the Meta Model API (Muse Sp
 
 ## Run locally
 
-Requires Node.js 24 or newer.
+Requires Node.js 24 or newer. No account or API key is needed: with `SYNTEEL_AI_MOCK=1` every AI step returns a labelled example draft and everything else (rules, forecast, alarms, demo farm) runs as normal.
 
 ```sh
 npm install
+npm run seed:demo
+SYNTEEL_AI_MOCK=1 SYNTEEL_DEMO_PHONE=620000000000 npm run dev:server   # http://localhost:8787
+npm run dev:web                                                         # http://localhost:5173, tap "Coba demo" (Try the demo)
+```
+
+With keys, for the real Meta models:
+
+```sh
 # Keys go in ~/.synteel.env, outside the repo (see .env.example):
 #   META_API_KEY=...        Muse Spark, Muse Voice Transcribe, SAM 3.1
 #   BASETEN_API_KEY=...     optional: Muse Spark Open for the agents
@@ -169,7 +201,7 @@ SYNTEEL_DEMO_PHONE=620000000000 npm run dev:server   # http://localhost:8787, en
 npm run dev:web                                 # http://localhost:5173, proxies /api to the server
 ```
 
-Without keys, start the server with `SYNTEEL_AI_MOCK=1` for labelled example drafts. `SYNTEEL_AI_DAILY_CAP` and `SYNTEEL_AI_FARM_CAP` limit real AI reads per day.
+Never commit a key: the file lives outside the repo, and `.env.example` holds only empty names. `SYNTEEL_AI_DAILY_CAP` and `SYNTEEL_AI_FARM_CAP` limit real AI reads per day.
 
 ## Tests
 

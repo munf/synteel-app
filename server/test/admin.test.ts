@@ -58,7 +58,8 @@ test('accounts and farms: contacts masked, demo visitors not counted', async () 
   await owner('POST', '/auth/register', { name: 'Bu Sumarni', phone: '081234564471', pin: '246810' });
   await owner('PUT', '/farm', { name: 'Tambak Sidat Mitra' });
   await owner('POST', '/ponds', { name: 'Kolam A' });
-  s.db.prepare("update users set email = 'sumarni@gmail.com'").run();
+  // the account row gets SQLite's real clock; pin it to the test clock so "signed up today" holds on any date
+  s.db.prepare("update users set email = 'sumarni@gmail.com', created_at = ?").run(s.now.t.toISOString());
   // A "Coba demo" visitor (phone demo-…) is never a user.
   s.db.prepare("insert into users (phone, name, pin_hash, created_at) values ('demo-abc', 'Petani Demo', 'x', ?)").run(s.now.t.toISOString());
 
