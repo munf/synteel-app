@@ -2,10 +2,12 @@ import '@fontsource-variable/plus-jakarta-sans/wght.css';
 import { render } from 'preact';
 import { App } from './app.tsx';
 import { applyTextSize } from './prefs.ts';
+import { watchKeyboard } from './keyboard.ts';
 import { isEn } from './i18n.ts';
 import './style.css';
 
 applyTextSize();
+watchKeyboard();
 // index.html and the manifest are written in Indonesian (the default); English swaps them here.
 if (isEn) {
   document.querySelector('meta[name="description"]')?.setAttribute('content', 'Helps eel farmers watch their ponds and act sooner');

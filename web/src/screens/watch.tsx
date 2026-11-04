@@ -5,7 +5,7 @@ import { actionIcon, armAlarms, askNotifyPermission, canNotify, GLYPH, loadDone,
 import { NowcastChart } from '../chart.tsx';
 import { fmtClock, fmtTemp, readingWord } from '../labels.ts';
 import { usePrefs } from '../prefs.ts';
-import { Icon, Shape, type Tone } from '../ui.tsx';
+import { Icon, LoadError, Shape, Skeleton, type Tone } from '../ui.tsx';
 import { isEn, t } from '../i18n.ts';
 import { OutageBanner, PowerNightCard } from './power.tsx';
 import './watch.css';
@@ -185,7 +185,7 @@ function groupRows(checks: NightCheck[], done: Record<string, boolean>): Row[] {
   });
 }
 
-export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: FarmState; nowcast: NowcastState | null; onChanged: () => void; go: Go }) {
+export function Watch({ state, nowcast, nowcastError, onRetryNowcast, onChanged: _onChanged, go }: { state: FarmState; nowcast: NowcastState | null; nowcastError: string; onRetryNowcast: () => unknown; onChanged: () => void; go: Go }) {
   const prefs = usePrefs();
   const [open, setOpen] = useState(prefs.techOpen);
   const [done, setDone] = useState(loadDone);
@@ -257,7 +257,11 @@ export function Watch({ state, nowcast, onChanged: _onChanged, go }: { state: Fa
     return (
       <div class="screen">
         <h1>{t('Waspada malam ini', "Tonight's watch")}</h1>
-        <p class="muted">{t('Memuat perkiraan…', 'Loading the forecast…')}</p>
+        {nowcastError ? (
+          <LoadError title={t('Perkiraan belum bisa dimuat', 'The forecast could not be loaded')} message={nowcastError} onRetry={onRetryNowcast} />
+        ) : (
+          <Skeleton cards={3} />
+        )}
       </div>
     );
 

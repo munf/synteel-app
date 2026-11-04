@@ -179,6 +179,16 @@ export interface Member {
 export const API = `${import.meta.env.BASE_URL}api`;
 
 /** An error from the server, with its Indonesian message and the HTTP status. */
+/** One phone or computer signed in to this account (Profil → Perangkat yang masuk). */
+export interface SignedInDevice {
+  id: string;
+  /** "Chrome · Android 14"; null for sessions from before devices were named. */
+  device: string | null;
+  createdAt: string;
+  seenAt: string | null;
+  current: boolean;
+}
+
 export class ApiError extends Error {
   status: number;
   code: string | undefined;
@@ -192,6 +202,43 @@ export class ApiError extends Error {
 
 /** The pond's cover picture, or null for the pond icon. The key in the address makes a new picture a new address. */
 export const coverUrl = (p: { id: number; cover?: string | null }) => (p.cover ? `${API}/ponds/${p.id}/cover?v=${encodeURIComponent(p.cover)}` : null);
+
+/**
+ * No answer from the server: no signal, the server unreachable, or a connection too slow to finish. It extends
+ * TypeError because the offline queue and the problem flow read any TypeError from fetch() as "no signal yet".
+ */
+export class NetworkError extends TypeError {
+  kind: 'offline' | 'timeout' | 'unreachable';
+  constructor(kind: 'offline' | 'timeout' | 'unreachable') {
+    super(
+      kind === 'offline'
+        ? t('Belum ada sinyal. Periksa koneksi, lalu coba lagi.', 'No signal. Check the connection, then try again.')
+        : kind === 'timeout'
+          ? t('Koneksi terlalu lambat. Coba lagi.', 'The connection is too slow. Try again.')
+          : t('Server belum bisa dihubungi. Coba lagi sebentar.', 'The server cannot be reached. Try again in a moment.'),
+    );
+    this.name = 'NetworkError';
+    this.kind = kind;
+  }
+}
+
+/** fetch() with a time limit; a failed or timed-out request becomes a NetworkError with a message the farmer can act on. */
+async function send(url: string, init: RequestInit, limitMs: number): Promise<Response> {
+  try {
+    // AbortSignal.timeout is missing on old Android browsers: there the request just has no limit
+    return await fetch(url, typeof AbortSignal.timeout === 'function' ? { ...init, signal: AbortSignal.timeout(limitMs) } : init);
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'TimeoutError') throw new NetworkError('timeout');
+    throw new NetworkError(navigator.onLine ? 'unreachable' : 'offline');
+  }
+}
+
+/** The server's own message, or a plain one when a proxy answered (502 and the like) without JSON. */
+const failMessage = (json: { error?: string }, status: number) =>
+  json.error ??
+  (status >= 500
+    ? `${t('Server sedang bermasalah. Coba lagi sebentar.', 'The server has a problem. Try again in a moment.')} (${status})`
+    : `${t('Gagal', 'Failed')} (${status})`);
 
 export const isAuthError = (e: unknown) => e instanceof ApiError && e.status === 401;
 
@@ -207,26 +254,31 @@ export const onSessionLost = (fn: (() => void) | null) => {
 export const baseHeaders = (): Record<string, string> => ({ 'x-lang': lang, ...(getPrefs().shareData ? { 'x-keep-media': '1' } : {}) });
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`${API}${path}`, {
-    method,
-    headers: body === undefined ? baseHeaders() : { 'content-type': 'application/json', ...baseHeaders() },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  // 90 s: the agent runs (evening briefing, dead-eel case) can take half a minute when a provider falls over to the next
+  const res = await send(
+    `${API}${path}`,
+    {
+      method,
+      headers: body === undefined ? baseHeaders() : { 'content-type': 'application/json', ...baseHeaders() },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    },
+    90_000,
+  );
   if (res.status === 204) return undefined as T;
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     if (res.status === 401 && !PUBLIC.test(path)) sessionLost?.();
-    throw new ApiError(json.error ?? `${t('Gagal', 'Failed')} (${res.status})`, res.status, json.code);
+    throw new ApiError(failMessage(json, res.status), res.status, json.code);
   }
   return json as T;
 }
 
 async function upload<T>(path: string, form: FormData): Promise<T> {
-  const res = await fetch(`${API}${path}`, { method: 'POST', body: form, headers: baseHeaders() });
+  const res = await send(`${API}${path}`, { method: 'POST', body: form, headers: baseHeaders() }, 180_000);
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     if (res.status === 401) sessionLost?.();
-    throw new ApiError(json.error ?? `${t('Gagal', 'Failed')} (${res.status})`, res.status, json.code);
+    throw new ApiError(failMessage(json, res.status), res.status, json.code);
   }
   return json as T;
 }
@@ -245,6 +297,10 @@ export const api = {
   /** The one-time consent screen: agree to the current Syarat dan Ketentuan. */
   acceptTerms: () => call<Me>('POST', '/auth/terms', { terms: true }),
   logout: () => call<void>('POST', '/auth/logout'),
+  /** Profil → Perangkat yang masuk. */
+  sessions: () => call<{ sessions: SignedInDevice[] }>('GET', '/auth/sessions'),
+  endSession: (id: string) => call<void>('DELETE', `/auth/sessions/${encodeURIComponent(id)}`),
+  endOtherSessions: () => call<{ ended: number }>('POST', '/auth/sessions/others'),
   switchFarm: (farmId: number) => call<Me>('POST', '/auth/switch', { farmId }),
   /** Signed in: join the farm of an invite code (after the person saw its name) and switch to it. */
   joinFarm: (code: string) => call<Me>('POST', '/farm/join', { code }),

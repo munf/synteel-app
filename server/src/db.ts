@@ -172,6 +172,11 @@ export function openDb(path = process.env.SYNTEEL_DB ?? defaultPath) {
   for (const col of ['terms_version', 'terms_at']) {
     if (!userCols.includes(col)) db.exec(`alter table users add column ${col} text`);
   }
+  // Sessions list their phone and when they were last used, so Profil can show them and sign one out.
+  const sessionCols = (db.prepare('pragma table_info(sessions)').all() as { name: string }[]).map((c) => c.name);
+  for (const col of ['device', 'seen_at']) {
+    if (!sessionCols.includes(col)) db.exec(`alter table sessions add column ${col} text`);
+  }
   // Briefings in more than one language: the language, 'lang' for a re-run in another language of the
   // briefing `basis`, 'copy' for one copied into a demo farm. Older rows: Indonesian originals.
   const briefingCols = (db.prepare('pragma table_info(briefings)').all() as { name: string }[]).map((c) => c.name);
@@ -735,15 +740,39 @@ export function repo(db: Db) {
     },
 
     // ---------- sessions ----------
-    createSession(tokenHash: string, userId: number, farmId: number | null, days: number) {
+    createSession(tokenHash: string, userId: number, farmId: number | null, days: number, device: string | null = null) {
       const created = new Date();
-      db.prepare('insert into sessions (token_hash, user_id, farm_id, created_at, expires_at) values (?, ?, ?, ?, ?)').run(
+      db.prepare('insert into sessions (token_hash, user_id, farm_id, created_at, expires_at, device, seen_at) values (?, ?, ?, ?, ?, ?, ?)').run(
         tokenHash,
         userId,
         farmId,
         created.toISOString(),
         new Date(created.getTime() + days * 86400_000).toISOString(),
+        device,
+        created.toISOString(),
       );
+    },
+
+    /** Marks a session as used now, at most every 5 minutes (one small write per phone, not per request). */
+    touchSession(tokenHash: string) {
+      const at = new Date();
+      db.prepare('update sessions set seen_at = ? where token_hash = ? and (seen_at is null or seen_at < ?)').run(at.toISOString(), tokenHash, new Date(at.getTime() - 5 * 60_000).toISOString());
+    },
+
+    /** The person's live sessions, last used first. The id is the start of the token's hash: it cannot sign anyone in. */
+    sessionsOf(userId: number): { id: string; tokenHash: string; device: string | null; createdAt: string; seenAt: string | null }[] {
+      const rows = db.prepare('select token_hash, device, created_at, seen_at from sessions where user_id = ? and expires_at > ? order by coalesce(seen_at, created_at) desc').all(userId, now()) as Row[];
+      return rows.map((r) => ({ id: (r.token_hash as string).slice(0, 16), tokenHash: r.token_hash as string, device: r.device as string | null, createdAt: r.created_at as string, seenAt: r.seen_at as string | null }));
+    },
+
+    /** Ends one of the person's sessions by its id; false when there is none (already ended, or someone else's). */
+    endSession(userId: number, id: string): boolean {
+      return db.prepare('delete from sessions where user_id = ? and substr(token_hash, 1, 16) = ?').run(userId, id).changes > 0;
+    },
+
+    /** Ends every session of the person except the one in use. Returns how many ended. */
+    endOtherSessions(userId: number, keepTokenHash: string): number {
+      return Number(db.prepare('delete from sessions where user_id = ? and token_hash <> ?').run(userId, keepTokenHash).changes);
     },
 
     session(tokenHash: string): { userId: number; farmId: number | null } | null {

@@ -7,7 +7,7 @@ import { askNotifyPermission } from '../alarms.ts';
 import { setPrefs, usePrefs, type Prefs, type Theme } from '../prefs.ts';
 import { isEn, lang, LOCALE, setLang, t, type Lang, siteInAppLanguage } from '../i18n.ts';
 import { Field, Icon, initialOf, roleLabel, Shape, Soon, Switch, Tick, Glyph, GLYPH } from '../ui.tsx';
-import { ChangePin, DeleteAccount, Members } from './members.tsx';
+import { ChangePin, DeleteAccount, Members, SignedInDevices } from './members.tsx';
 import { MediaDone, QuotaBar } from './quota.tsx';
 import { LocateButton, useLocate } from './setup.tsx';
 import { BackupCard } from './power.tsx';
@@ -492,6 +492,7 @@ export function Profile({
       </section>
 
       {!me.demo && <ChangePin />}
+      <SignedInDevices demo={me.demo} />
       {!me.demo && <DeleteAccount owner={owner} onDeleted={onLogout} />}
 
       {me.demo && (

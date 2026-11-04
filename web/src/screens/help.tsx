@@ -6,6 +6,7 @@ import type { Go } from '../app.tsx';
 import { isEn, t } from '../i18n.ts';
 import { Field, Icon, roleLabel, Tick } from '../ui.tsx';
 import { canRecordAudio, startRecording, voiceToWav } from '../capture/media.ts';
+import { isDenied, MicAsk, MicDenied, useMic } from './record-pond.tsx';
 import './help.css';
 
 const TOPICS: { key: SupportTopic; label: string; hint: string }[] = [
@@ -43,17 +44,23 @@ export function SpeakToText({ onText, hint }: { onText: (text: string) => void; 
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
   const [heard, setHeard] = useState(false);
+  // The same microphone steps as Catat: explain before the phone asks, show the settings steps after a refusal.
+  const mic = useMic();
   if (!canRecordAudio()) return null;
 
   const start = async () => {
     setNote('');
     setHeard(false);
+    if (!(await mic.ready())) return;
     try {
       setRec(await startRecording(60));
-    } catch {
-      setNote(t('Mikrofon belum diizinkan. Ketik saja dulu.', 'The microphone is not allowed yet. Type it in for now.'));
+    } catch (e) {
+      if (isDenied(e)) mic.denied();
+      else setNote(t('Mikrofon tidak bisa dipakai di HP ini. Ketik saja.', 'The microphone does not work on this phone. Type it in instead.'));
     }
   };
+  if (mic.panel === 'ask') return <MicAsk onAllow={mic.allow} onType={mic.close} />;
+  if (mic.panel === 'denied') return <MicDenied onRetry={mic.allow} onType={mic.close} />;
   const stop = async () => {
     if (!rec) return;
     const audio = await rec.stop();
@@ -89,7 +96,7 @@ export function SpeakToText({ onText, hint }: { onText: (text: string) => void; 
           {t('Periksa teksnya sebelum dikirim.', 'Check the text before sending.')}
         </p>
       ) : (
-        <span class="label ink2">{note || hint || t('Yang terkirim hanya teksnya. Tidak memakai kredit AI.', 'Only the text is sent. It does not use your daily AI reads.')}</span>
+        <span class="label ink2">{note || mic.error || (mic.granted ? t('Mikrofon siap. Ketuk Bicara.', 'The microphone is ready. Tap Speak.') : '') || hint || t('Yang terkirim hanya teksnya. Tidak memakai kredit AI.', 'Only the text is sent. It does not use your daily AI reads.')}</span>
       )}
     </div>
   );

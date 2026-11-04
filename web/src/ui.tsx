@@ -499,6 +499,55 @@ export function Notice({
 }
 
 /**
+ * Grey blocks in the shape of the screen's cards while its data loads, so a slow phone or weak signal shows the layout
+ * coming instead of a blank page. They fade in after 0.3 s (CSS), so a fast load never flashes them.
+ */
+export function Skeleton({ cards = 3, hero = false }: { cards?: number; hero?: boolean }) {
+  return (
+    <div class="skel" role="status" aria-live="polite">
+      <span class="sr-only">{t('Memuat…', 'Loading…')}</span>
+      {hero && <div class="skel-card hero" aria-hidden="true" />}
+      {Array.from({ length: cards }, (_, i) => (
+        <div key={i} class="skel-card" aria-hidden="true">
+          <span class="skel-bar" style={{ width: '55%' }} />
+          <span class="skel-bar" style={{ width: '90%' }} />
+          <span class="skel-bar" style={{ width: i % 2 ? '35%' : '70%' }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** A screen's data could not be loaded: what went wrong and "Coba lagi". The message comes from api.ts (no signal, too slow, server problem). */
+export function LoadError({ message, onRetry, title }: { message: string; onRetry: () => unknown; title?: string }) {
+  const [busy, setBusy] = useState(false);
+  const retry = async () => {
+    setBusy(true);
+    try {
+      await onRetry();
+    } catch {
+      // the screen shows the new error itself
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div class="card load-error" role="alert">
+      <div class="row top">
+        <Icon name="offline" size={24} />
+        <div class="stack-xs grow">
+          <p class="strong">{title ?? t('Belum bisa dimuat', 'Could not load')}</p>
+          <p class="ink2">{message}</p>
+        </div>
+      </div>
+      <button type="button" class="btn secondary block" disabled={busy} onClick={retry}>
+        <Icon name="refresh" size={20} /> {busy ? t('Memuat ulang…', 'Loading again…') : t('Coba lagi', 'Try again')}
+      </button>
+    </div>
+  );
+}
+
+/**
  * Shown on top of the current screen when a refresh fails but data is already on screen.
  * The app retries by itself every 30 seconds; "Coba lagi" retries at once.
  */
@@ -659,6 +708,7 @@ export function PinBoxes({
 export function ActionBar({ children }: { children: ComponentChildren }) {
   return (
     <div
+      class="action-bar"
       style={{
         position: 'sticky',
         bottom: 'calc(72px + env(safe-area-inset-bottom, 0px))',

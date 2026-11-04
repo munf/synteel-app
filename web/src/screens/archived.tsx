@@ -2,15 +2,23 @@ import { useEffect, useState } from 'preact/hooks';
 import { api } from '../api.ts';
 import type { Go } from '../app.tsx';
 import { t } from '../i18n.ts';
-import { Icon } from '../ui.tsx';
+import { Icon, LoadError, Skeleton } from '../ui.tsx';
 
 /** Kolam yang dihapus (owner, from Profil): ponds taken off the list with "Hapus kolam"; Kembalikan brings one back with its records. */
 export function ArchivedPonds({ go, onRestored }: { go: Go; onRestored: () => void }) {
   const [ponds, setPonds] = useState<{ id: number; name: string }[] | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
   const [error, setError] = useState('');
+  const load = () =>
+    api.archivedPonds().then(
+      (r) => {
+        setPonds(r.ponds);
+        setError('');
+      },
+      (e) => setError(e.message),
+    );
   useEffect(() => {
-    api.archivedPonds().then((r) => setPonds(r.ponds), (e) => setError(e.message));
+    load();
   }, []);
   const restore = async (id: number) => {
     setBusy(id);
@@ -35,6 +43,8 @@ export function ArchivedPonds({ go, onRestored }: { go: Go; onRestored: () => vo
           <span class="meta">{t('Catatan lamanya masih tersimpan.', 'Their records are still kept.')}</span>
         </div>
       </header>
+      {!ponds && !error && <Skeleton cards={1} />}
+      {!ponds && error && <LoadError message={error} onRetry={load} />}
       {ponds && ponds.length === 0 && <p class="ink2">{t('Tidak ada kolam yang dihapus.', 'No deleted ponds.')}</p>}
       {ponds && ponds.length > 0 && (
         <section class="card list">
@@ -48,7 +58,7 @@ export function ArchivedPonds({ go, onRestored }: { go: Go; onRestored: () => vo
           ))}
         </section>
       )}
-      {error && <p class="error">{error}</p>}
+      {error && ponds && <p class="error">{error}</p>}
     </div>
   );
 }

@@ -2,7 +2,7 @@ import type { FarmState, Nowcast, NowcastState, PondSummary } from '../api.ts';
 import type { Go } from '../app.tsx';
 import { useState } from 'preact/hooks';
 import { fmtAgo, fmtClock, fmtNum, fmtTemp, greeting, phaseLabel, readingWord } from '../labels.ts';
-import { EmptyState, Icon, initialOf, PondThumb, pondMeta, Shape, SimChip, StatusPill, type IconName } from '../ui.tsx';
+import { EmptyState, Icon, initialOf, LoadError, Skeleton, PondThumb, pondMeta, Shape, SimChip, StatusPill, type IconName } from '../ui.tsx';
 import { alarmReason, sensorCritical, silenceSensorAlarm, useSensorRinging } from '../sensor-alarm.ts';
 import { DueRechecks, useRechecks } from './recheck.tsx';
 import { CaseBrief, useCases } from './case.tsx';
@@ -388,6 +388,7 @@ export function Today({
   state,
   userName,
   nowcast,
+  nowcastError,
   go,
   onRetryWeather,
   onWeatherChanged,
@@ -395,6 +396,8 @@ export function Today({
   state: FarmState;
   userName: string;
   nowcast: NowcastState | null;
+  /** The estimate could not be loaded: the weather card offers "Coba lagi". */
+  nowcastError: string;
   go: Go;
   onRetryWeather: () => void;
   /** The owner changed the BMKG village: reload the estimate. */
@@ -580,7 +583,11 @@ export function Today({
       {nowcast ? (
         <WeatherCard nowcast={nowcast} focus={focus} pond={focusPond} many={ponds.length > 1} onRetry={onRetryWeather} onPlace={() => go({ name: 'profile' })} owner={owner} onWeatherChanged={onWeatherChanged} />
       ) : (
-        <p class="label ink2">{t('Memuat cuaca…', 'Loading the weather…')}</p>
+        nowcastError ? (
+          <LoadError title={t('Cuaca belum bisa dimuat', 'The weather could not be loaded')} message={nowcastError} onRetry={onWeatherChanged} />
+        ) : (
+          <Skeleton cards={1} />
+        )
       )}
 
       <button class="card" style={{ border: 0, flexDirection: 'row', alignItems: 'center', gap: 12, textAlign: 'left' }} onClick={() => go({ name: 'rewards' })}>

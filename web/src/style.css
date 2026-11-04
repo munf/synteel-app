@@ -257,6 +257,9 @@ a { color: var(--accent-ink); }
 .hero .progress { background: rgba(255, 255, 255, 0.15); }
 
 /* ---------- bottom navigation ---------- */
+/* While the keyboard is open (keyboard.ts sets data-kb) the tab bar steps aside and the action bars drop to the edge. */
+:root[data-kb] .tabs { display: none; }
+:root[data-kb] .action-bar, :root[data-kb] .problem-bar { bottom: 0 !important; }
 .tabs {
   /* One bar docked to the bottom edge, like WhatsApp, Instagram and X. */
   position: fixed; z-index: 10; left: 0; right: 0; bottom: 0;
@@ -453,6 +456,19 @@ a.note, button.note { text-decoration: none; border: 0; width: 100%; text-align:
 .profile-link .more { display: inline-flex; align-items: center; gap: 4px; font-size: 0.875rem; font-weight: 600; color: var(--accent-ink); }
 .summary-link { display: flex; flex-direction: column; gap: 8px; border: 0; background: none; padding: 0; width: 100%; text-align: left; color: var(--ink); }
 .hero .recheck-line { display: flex; gap: 8px; align-items: center; font-size: 0.875rem; color: #fbd38d; }
+
+/* Loading: grey blocks shaped like cards, faded in after 0.3 s so a fast load never flashes them. */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.skel { display: flex; flex-direction: column; gap: 16px; animation: skel-in 200ms ease-out 300ms both; }
+.skel-card { background: var(--surface); border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+.skel-card.hero { background: var(--line); min-height: 148px; }
+.skel-bar { display: block; height: 14px; border-radius: 7px; background: var(--line); }
+.skel-card .skel-bar:first-child { height: 18px; }
+.skel-card.hero, .skel-bar { animation: skel-pulse 1.6s ease-in-out 500ms infinite; }
+@keyframes skel-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes skel-pulse { 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .skel-card.hero, .skel-bar { animation: none; } }
+.load-error svg { flex: none; color: var(--ink-2); }
 
 /* Connection lost while data is on screen (auto-retry every 30 s). */
 .conn-wrap { max-width: 560px; margin: 0 auto; padding: calc(16px + env(safe-area-inset-top, 0px)) max(20px, env(safe-area-inset-right, 0px)) 0 max(20px, env(safe-area-inset-left, 0px)); }

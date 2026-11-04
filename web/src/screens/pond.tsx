@@ -6,7 +6,7 @@ import { applyDraft, errorWords, PondPhoto, profileBody, ProfileFields, profileL
 import type { Go } from '../app.tsx';
 import { aerationLabel, fmtAgo, fmtNum, fmtTemp, fmtTime, phaseLabel, readingWord, sourceLabel, summarizeLog } from '../labels.ts';
 import { usePrefs } from '../prefs.ts';
-import { ActionBar, Chips, Field, Icon, kindLabel, Notice, Shape, SimChip, StatusPill, tankPath, toneOf, type Tone } from '../ui.tsx';
+import { ActionBar, Chips, Field, Icon, kindLabel, LoadError, Notice, Skeleton, Shape, SimChip, StatusPill, tankPath, toneOf, type Tone } from '../ui.tsx';
 import { isEn, LOCALE, t } from '../i18n.ts';
 import './pond.css';
 
@@ -654,8 +654,16 @@ export function PondDetail({
   const { done, toggle } = useSteps(id);
   const cases = useCases(id, data?.logs.length);
 
+  const load = () =>
+    api.pond(id).then(
+      (d) => {
+        setData(d);
+        setError('');
+      },
+      (e) => setError(e.message),
+    );
   useEffect(() => {
-    api.pond(id).then(setData, (e) => setError(e.message));
+    load();
   }, [id]);
 
   // A pond fed by a device gets new readings by itself: reload every 30 seconds while the app is in front.
@@ -668,16 +676,16 @@ export function PondDetail({
     return () => clearInterval(timer);
   }, [id, hasDevice]);
 
-  if (error)
+  if (error && !data)
     return (
       <div class="screen">
-        <p class="error">{error}</p>
+        <LoadError title={t('Kolam belum bisa dimuat', 'The pond could not be loaded')} message={error} onRetry={load} />
       </div>
     );
   if (!data)
     return (
       <div class="screen">
-        <p class="muted">{t('Memuat…', 'Loading…')}</p>
+        <Skeleton hero cards={3} />
       </div>
     );
 

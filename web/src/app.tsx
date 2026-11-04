@@ -22,7 +22,7 @@ import { Alarm } from './screens/alarm.tsx';
 import { ConnectDevice, formatCode } from './screens/device.tsx';
 import { checkSensorAlarms } from './sensor-alarm.ts';
 import { useAlarms, useWatchDot } from './alarms.ts';
-import { ConnectionBanner, Icon, Notice, type IconName } from './ui.tsx';
+import { ConnectionBanner, Icon, LoadError, Notice, Skeleton, type IconName } from './ui.tsx';
 import { t } from './i18n.ts';
 import { leaveHeld } from './leave.ts';
 
@@ -91,6 +91,19 @@ export function App() {
   const [error, setError] = useState('');
   const [route, setRoute] = useState<Route>({ name: 'today' });
   const [nowcast, setNowcast] = useState<NowcastState | null>(null);
+  // The estimate could not be loaded: Waspada and the weather card offer "Coba lagi" instead of loading forever.
+  const [nowcastError, setNowcastError] = useState('');
+  const loadNowcast = useCallback(
+    () =>
+      api.nowcast().then(
+        (n) => {
+          setNowcast(n);
+          setNowcastError('');
+        },
+        (e) => setNowcastError((e as Error).message),
+      ),
+    [],
+  );
   /** Signed out because the session was lost (PIN reset, signed in elsewhere): Masuk says why. */
   const [ended, setEnded] = useState<{ phone: string } | null>(null);
   /** Last time the farm data loaded, for the connection banner. */
@@ -132,14 +145,14 @@ export function App() {
           setError('');
           setSyncedAt(Date.now());
           // The estimate is a bonus: if it fails, the rest of the app still works.
-          if (s.farm) api.nowcast().then(setNowcast, () => {});
+          if (s.farm) loadNowcast();
         },
         (e) => {
           if (isAuthError(e)) return;
           setError(e.message);
         },
       ),
-    [],
+    [loadNowcast],
   );
 
   const loadMe = useCallback(() => {
@@ -195,9 +208,9 @@ export function App() {
     refresh();
     if (farmId === undefined) return;
     // Keep the estimate fresh while the app stays open on the pond side.
-    const timer = setInterval(() => api.nowcast().then(setNowcast, () => {}), 5 * 60_000);
+    const timer = setInterval(loadNowcast, 5 * 60_000);
     return () => clearInterval(timer);
-  }, [userId, farmId, refresh]);
+  }, [userId, farmId, refresh, loadNowcast]);
 
   const go: Go = (r) => {
     const move = () => {
@@ -270,10 +283,7 @@ export function App() {
   if (error && (me === undefined || !state)) {
     body = (
       <div class="screen">
-        <p class="error">{t('Tidak bisa terhubung ke server', 'Cannot reach the server')}: {error}</p>
-        <button class="btn secondary" onClick={me ? refresh : loadMe}>
-          {t('Coba lagi', 'Try again')}
-        </button>
+        <LoadError title={t('Tidak bisa terhubung ke server', 'Cannot reach the server')} message={error} onRetry={me ? refresh : loadMe} />
       </div>
     );
   } else if (me === null) {
@@ -303,7 +313,7 @@ export function App() {
   } else if (!me || !state) {
     body = (
       <div class="screen">
-        <p class="muted">{t('Memuat…', 'Loading…')}</p>
+        <Skeleton hero cards={3} />
       </div>
     );
   } else if (!me.terms) {
@@ -351,7 +361,7 @@ export function App() {
   } else if (route.name === 'record') {
     body = <Record key={route.pondId ?? 0} state={state} initialPondId={route.pondId} onSaved={refresh} go={go} />;
   } else if (route.name === 'watch') {
-    body = <Watch state={state} nowcast={nowcast} onChanged={refresh} go={go} />;
+    body = <Watch state={state} nowcast={nowcast} nowcastError={nowcastError} onRetryNowcast={loadNowcast} onChanged={refresh} go={go} />;
   } else if (route.name === 'problem') {
     body = <Problem key={route.pondId ?? 0} ponds={state.ponds} initialPondId={route.pondId} onSaved={refresh} go={go} />;
   } else if (route.name === 'outage') {
@@ -379,7 +389,7 @@ export function App() {
   } else if (route.name === 'alarm') {
     body = <Alarm ponds={state.ponds} at={route.at} pondId={route.pondId} role={role} onSaved={refresh} go={go} />;
   } else {
-    body = <Today state={state} userName={me.user.name} nowcast={nowcast} go={go} onRetryWeather={refresh} onWeatherChanged={() => api.nowcast().then(setNowcast, () => {})} />;
+    body = <Today state={state} userName={me.user.name} nowcast={nowcast} nowcastError={nowcastError} go={go} onRetryWeather={refresh} onWeatherChanged={loadNowcast} />;
   }
 
   const ready = Boolean(me && state?.farm && state.ponds.length);

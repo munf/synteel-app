@@ -116,8 +116,8 @@
   },
   {
    "kind": "p",
-   "id": "Kuki masuk (httpOnly) agar pengguna tetap masuk. Server memakai alamat IP sebentar untuk membatasi percobaan masuk yang gagal dan pesan berulang; hitungan ini disimpan di memori server, bukan di database.",
-   "en": "A sign-in cookie (httpOnly) that keeps the user signed in. The server uses the IP address for a short time to limit failed sign-in attempts and repeated messages; it holds these counts in memory, not in the database."
+   "id": "Kuki masuk (httpOnly) agar pengguna tetap masuk. Untuk tiap perangkat yang masuk, server menyimpan nama peramban dan sistemnya (misalnya \"Chrome · Android 14\") dan kapan terakhir dipakai, supaya pengguna bisa melihat perangkat itu di Profil dan mengeluarkannya. Server memakai alamat IP sebentar untuk membatasi percobaan masuk yang gagal dan pesan berulang; hitungan ini disimpan di memori server, bukan di database.",
+   "en": "A sign-in cookie (httpOnly) that keeps the user signed in. For each signed-in device the server keeps the browser and system name (for example \"Chrome · Android 14\") and when it was last used, so the user can see these devices in Profil and sign any of them out. The server uses the IP address for a short time to limit failed sign-in attempts and repeated messages; it holds these counts in memory, not in the database."
   },
   {
    "kind": "p",

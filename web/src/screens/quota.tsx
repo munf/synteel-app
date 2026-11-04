@@ -4,7 +4,7 @@ import { api, type QuotaState, type Role } from '../api.ts';
 import type { Go } from '../app.tsx';
 import { t } from '../i18n.ts';
 import { fmtClock } from '../labels.ts';
-import { Icon, initialOf, roleLabel, Soon, Tick, type IconName } from '../ui.tsx';
+import { Icon, initialOf, roleLabel, Skeleton, Soon, Tick, type IconName } from '../ui.tsx';
 import './quota.css';
 
 /** The remaining-reads bar. Running out is not a Perhatian status, so it is never amber. */
@@ -123,7 +123,7 @@ export function Quota({ role, go }: { role: Role | null; go: Go }) {
         </div>
       </header>
 
-      {!q && !error && <p class="muted">{t('Memuat…', 'Loading…')}</p>}
+      {!q && !error && <Skeleton cards={2} />}
       {error && (
         <div class="stack-sm">
           <p class="error">

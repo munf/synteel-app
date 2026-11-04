@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { api, type HistoryLog, type Limits, type LogData, type LogSource, type PondSummary, type ReadingKey, type Role } from '../api.ts';
 import type { Go } from '../app.tsx';
 import { aerationCheckLabel, behaviorLabel, colorLabel, fmtNum, leftoverLabel, phaseLabel, readingLabel, smellLabel, summarizeLog } from '../labels.ts';
-import { Icon, roleLabel, Shape, type IconName, type Tone } from '../ui.tsx';
+import { Icon, LoadError, roleLabel, Shape, Skeleton, type IconName, type Tone } from '../ui.tsx';
 import { isEn, LOCALE, t } from '../i18n.ts';
 import './history.css';
 
@@ -152,7 +152,14 @@ export function History({ ponds, pondId, days: initialDays, onChanged, go }: { p
   const [notices, setNotices] = useState<Record<number, Notice>>({});
 
   const [days, setDays] = useState(Math.max(14, initialDays ?? 14));
-  const load = (d = days) => api.history(pondId, d === 14 ? undefined : d).then((r) => setLogs(r.logs), (e) => setError(e.message));
+  const load = (d = days) =>
+    api.history(pondId, d === 14 ? undefined : d).then(
+      (r) => {
+        setLogs(r.logs);
+        setError('');
+      },
+      (e) => setError(e.message),
+    );
   useEffect(() => {
     load();
     api.me().then((m) => setMe(m.user), () => {});
@@ -319,8 +326,9 @@ export function History({ ponds, pondId, days: initialDays, onChanged, go }: { p
         <span>{t('Setiap perubahan tetap tercatat.', 'Every change stays on record.')}</span>
       </div>
 
-      {error && <p class="error">{error}</p>}
-      {!logs && !error && <p class="muted">{t('Memuat…', 'Loading…')}</p>}
+      {error && !logs && <LoadError title={t('Riwayat belum bisa dimuat', 'The history could not be loaded')} message={error} onRetry={() => load()} />}
+      {error && logs && <p class="error">{error}</p>}
+      {!logs && !error && <Skeleton cards={4} />}
       {logs && shown.length === 0 && (
         <div class="card">
           <p>{t(`Belum ada catatan ${days} hari terakhir.`, `No records in the last ${days} days.`)}</p>

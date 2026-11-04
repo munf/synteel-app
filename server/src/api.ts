@@ -30,6 +30,7 @@ import { farmForecast, getBmkgForecast, regionCandidates, type BmkgForecast, typ
 import { findDesa, searchDesa, type Desa } from './desa.ts';
 import { applyPower, assessPowerNight, getStormHours, POWER_BACKUPS, type GetStorm, type PowerBackup, type PowerNight } from './power.ts';
 import { TERMS_VERSION } from './terms.ts';
+import { deviceLabel } from './useragent.ts';
 
 const thresholds = knowledge.thresholds.parameters as Threshold[];
 const stages = knowledge.nurseryProgram.stages as { weeks: [number, number]; name: string; feed: string; mesh_mm: string; water: string }[];
@@ -786,7 +787,7 @@ export function createApi(
 
   function startSession(c: Context, userId: number, farmId: number | null, days = SESSION_DAYS) {
     const token = newToken();
-    store.createSession(hashToken(token), userId, farmId, days);
+    store.createSession(hashToken(token), userId, farmId, days, deviceLabel(c.req.header('user-agent')));
     setCookie(c, cookieName, token, {
       httpOnly: true,
       sameSite: 'Lax',
@@ -796,12 +797,15 @@ export function createApi(
     });
   }
 
+  const current16 = (c: Context<Env>) => c.get('tokenHash').slice(0, 16);
+
   /** The signed-in person, or null. */
   function readSession(c: Context) {
     const token = getCookie(c, cookieName);
     const session = token ? store.session(hashToken(token)) : null;
     if (!token || !session) return null;
     events?.seen(session.userId);
+    store.touchSession(hashToken(token));
     const role = session.farmId === null ? null : store.role(session.userId, session.farmId);
     return { tokenHash: hashToken(token), userId: session.userId, farmId: role ? session.farmId : null, role };
   }
@@ -1170,6 +1174,23 @@ export function createApi(
     deleteCookie(c, cookieName, { path: '/' });
     return c.body(null, 204);
   });
+
+  // Profil → Perangkat yang masuk: every phone signed in to this account, and signing one or all others out.
+  api.get('/auth/sessions', (c) => {
+    const current = c.get('tokenHash');
+    return c.json({
+      sessions: store.sessionsOf(c.get('userId')).map(({ tokenHash, ...s }) => ({ ...s, current: tokenHash === current })),
+    });
+  });
+
+  api.delete('/auth/sessions/:id', (c) => {
+    const id = c.req.param('id');
+    if (current16(c) === id) throw new AuthError(tx('Ini HP yang sedang dipakai. Pakai Keluar.', 'This is the phone in use. Use Sign out.'), 400);
+    if (!store.endSession(c.get('userId'), id)) throw new AuthError(tx('Perangkat itu sudah keluar', 'That device is already signed out'), 404);
+    return c.body(null, 204);
+  });
+
+  api.post('/auth/sessions/others', (c) => c.json({ ended: store.endOtherSessions(c.get('userId'), c.get('tokenHash')) }));
 
   api.post('/auth/switch', async (c) => {
     const farmId = Number((await c.req.json()).farmId);

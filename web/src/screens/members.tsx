@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { api, type Member, type Role } from '../api.ts';
+import { api, type Member, type Role, type SignedInDevice } from '../api.ts';
+import { fmtAgo } from '../labels.ts';
 import { t } from '../i18n.ts';
-import { Field, fmtPhone, Icon, initialOf, PinInput, roleLabel, Tick } from '../ui.tsx';
+import { Field, fmtPhone, Icon, initialOf, LoadError, PinInput, roleLabel, Tick } from '../ui.tsx';
 
 type Pending = { kind: 'pin' | 'remove'; member: Member } | null;
 
@@ -16,7 +17,10 @@ export function Members({ farmName, owner, inviteOpen, onInviteOpen }: { farmNam
 
   const load = () =>
     api.members().then(
-      (r) => setMembers(r.members),
+      (r) => {
+        setMembers(r.members);
+        setError('');
+      },
       (e) => setError(e.message),
     );
   useEffect(() => {
@@ -51,7 +55,13 @@ export function Members({ farmName, owner, inviteOpen, onInviteOpen }: { farmNam
         {members && <span class="meta">{t(`${members.length} orang`, `${members.length} ${members.length === 1 ? 'person' : 'people'}`)}</span>}
       </div>
 
-      {!members && !error && <p class="muted">{t('Memuat…', 'Loading…')}</p>}
+      {!members && !error && (
+        <div class="stack-sm" role="status" aria-label={t('Memuat…', 'Loading…')}>
+          <span class="skel-bar" style={{ width: '60%' }} />
+          <span class="skel-bar" style={{ width: '45%' }} />
+        </div>
+      )}
+      {!members && error && <LoadError message={error} onRetry={load} />}
 
       {members && (
         <div class="stack-xs">
@@ -155,7 +165,7 @@ export function Members({ farmName, owner, inviteOpen, onInviteOpen }: { farmNam
         </div>
       )}
 
-      {error && (
+      {error && members && (
         <p class="error" role="alert">
           {error}
         </p>
@@ -326,6 +336,98 @@ export function ChangePin() {
           {t('Simpan PIN baru', 'Save new PIN')}
         </button>
       </form>
+    </details>
+  );
+}
+
+/** Profil → Perangkat yang masuk: every phone signed in to this account; sign one out, or all except this one. */
+export function SignedInDevices({ demo = false }: { demo?: boolean }) {
+  const [list, setList] = useState<SignedInDevice[] | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState('');
+  const load = () =>
+    api.sessions().then(
+      (r) => {
+        setList(r.sessions);
+        setError('');
+      },
+      (e) => setError((e as Error).message),
+    );
+  const act = async (key: string, run: () => Promise<unknown>, done: string) => {
+    setBusy(key);
+    setError('');
+    setNote('');
+    try {
+      await run();
+      setNote(done);
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const others = list?.filter((d) => !d.current).length ?? 0;
+  return (
+    <details class="card more" onToggle={(e) => (e.currentTarget as HTMLDetailsElement).open && !list && load()}>
+      <summary>
+        <span class="row">
+          <span class="icon-box">
+            <Icon name="login" />
+          </span>
+          <span class="stack-xs">
+            <span class="strong">{t('Perangkat yang masuk', 'Signed-in devices')}</span>
+          </span>
+        </span>
+        <Icon name="down" />
+      </summary>
+      <div class="stack" style={{ marginTop: 16 }}>
+        {!list && !error && (
+          <div class="stack-sm" role="status" aria-label={t('Memuat…', 'Loading…')}>
+            <span class="skel-bar" style={{ width: '70%' }} />
+            <span class="skel-bar" style={{ width: '50%' }} />
+          </div>
+        )}
+        {!list && error && <LoadError message={error} onRetry={load} />}
+        {list && (
+          <div class="list">
+            {list.map((d) => (
+              <div key={d.id} class="list-row" style={{ minHeight: 64, padding: '8px 0', gap: 12 }}>
+                <span class="grow stack-xs" style={{ gap: 0 }}>
+                  <span class="semi">{d.device ?? t('Perangkat lain', 'Another device')}</span>
+                  <span class="meta">
+                    {d.current
+                      ? t('HP ini', 'This phone')
+                      : `${t('Terakhir dipakai', 'Last used')} ${fmtAgo(Date.parse(d.seenAt ?? d.createdAt))}`}
+                  </span>
+                </span>
+                {!d.current && (
+                  <button type="button" class="btn secondary compact" disabled={busy !== null} onClick={() => act(d.id, () => api.endSession(d.id), t('Perangkat itu sudah dikeluarkan.', 'That device is signed out.'))}>
+                    {busy === d.id ? t('Mengeluarkan…', 'Signing out…') : t('Keluarkan', 'Sign out')}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {list && error && (
+          <p class="error" role="alert">
+            {error}
+          </p>
+        )}
+        {note && (
+          <p class="note ok" role="status">
+            <Icon name="check" size={20} stroke={3} /> {note}
+          </p>
+        )}
+        {others > 1 && (
+          <button type="button" class="btn secondary" disabled={busy !== null} onClick={() => act('all', api.endOtherSessions, t('Semua perangkat lain sudah dikeluarkan.', 'All other devices are signed out.'))}>
+            {busy === 'all' ? t('Mengeluarkan…', 'Signing out…') : t('Keluarkan semua perangkat lain', 'Sign out all other devices')}
+          </button>
+        )}
+        {!demo && <p class="meta">{t('Ganti PIN juga mengeluarkan semua perangkat lain.', 'Changing the PIN also signs out every other device.')}</p>}
+      </div>
     </details>
   );
 }
