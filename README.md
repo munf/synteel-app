@@ -1,5 +1,7 @@
 # Synteel
 
+[![CI](https://github.com/munf/synteel-app/actions/workflows/ci.yml/badge.svg)](https://github.com/munf/synteel-app/actions/workflows/ci.yml)
+
 A phone app that helps Indonesian eel farmers keep glass eels and elvers alive through the nursery stage.
 
 Built for the **Meta Global AI Developer Hackathon** (Oct 26 to Nov 4, 2026). Track: Startup (Synteel is built by PT Synt Tekno Multikarya, Indonesia). Theme: Build for Your World.
@@ -195,6 +197,7 @@ knowledge/  Thresholds, the week 0 to 12 program, SOPs, emergencies, partner pra
 scripts/    Demo seed, offline evaluation and benchmark, nowcast check, Meta API check
 eval/       Labelled items for the benchmark, and how to add more
 docs/       Evaluation, benchmark results (docs/eval-results/)
+docker/     Container start script (Dockerfile, compose.yaml)
 ```
 
 The phone talks only to the server. The server calls the Meta Model API (Muse Spark 1.3, Muse Voice Transcribe, SAM 3.1), Baseten and Fireworks (Muse Spark Open), Open-Meteo for weather and BMKG for the village forecast. Rules, forecast and alarms are plain TypeScript with no model in the path.
@@ -225,6 +228,17 @@ npm run dev:web                                 # http://localhost:5173, proxies
 
 Never commit a key: the file lives outside the repo, and `.env.example` holds only empty names. `SYNTEEL_AI_DAILY_CAP` and `SYNTEEL_AI_FARM_CAP` limit real AI reads per day.
 
+### Run with Docker
+
+One container serves the API and the built app on port 8787, with the database and photos in a volume. Keys and settings come from `.env` next to `compose.yaml` (copy `.env.example`; git and the image both leave it out). Without a model key every AI step returns a labelled example draft.
+
+```sh
+cp .env.example .env              # optional; add SYNTEEL_DEMO_PHONE=620000000000 for "Coba demo"
+docker compose up --build         # http://localhost:8787
+```
+
+The image runs as an unprivileged user and has a health check on `/api/health`. With `SYNTEEL_DEMO_PHONE` set, the first start builds the demo farm. `SYNTEEL_HOST_PORT` picks another port on the host. eel.synt.fun does not run this image.
+
 ## Tests
 
 ```sh
@@ -232,6 +246,8 @@ npm test       # full test suite (node --test)
 npm run eval   # offline evaluation: SAM fixture and count rules, voice, meter and notebook guards, agent guard and fallback, rules
 npm run eval -- bench --mock   # the benchmark pipeline against a pretend API
 ```
+
+The tests are in [`server/test/`](server/test/) (one file per server module), the labelled evaluation items in [`eval/`](eval/), and recorded results in [`docs/eval-results/`](docs/eval-results/). [GitHub Actions](.github/workflows/ci.yml) runs the tests, the type check, the build and both mock evaluations on every pull request.
 
 None of these needs API keys. A live benchmark of one provider or model per task (`npm run eval -- bench --provider meta`, options at the top of [`scripts/eval.ts`](scripts/eval.ts)) does, and costs credits; [`eval/README.md`](eval/README.md) explains the data.
 
