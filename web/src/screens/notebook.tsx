@@ -8,6 +8,7 @@ import type { Go } from '../app.tsx';
 import { prepareImage } from '../capture/media.ts';
 import { fmtNum } from '../labels.ts';
 import { Icon, PondPicker, ActionBar } from '../ui.tsx';
+import { AiHow } from '../aihow.tsx';
 import { Offline, sendNotebook, type Progress } from '../upload.ts';
 import { isEn, LOCALE, t } from '../i18n.ts';
 import './notebook.css';
@@ -72,6 +73,8 @@ interface Page {
   rows: number;
   problems: string[];
   mode: NotebookPage['mode'];
+  trace?: string;
+  verify?: NotebookPage['verify'];
 }
 
 interface Session {
@@ -166,7 +169,7 @@ export function Notebook({ ponds, pondId, onSaved, go }: { ponds: PondSummary[];
       const cur = session!;
       update({
         ...cur,
-        pages: [...cur.pages, { n, url: URL.createObjectURL(blob), rows: page.rows.length, problems: page.problems, mode: page.mode }],
+        pages: [...cur.pages, { n, url: URL.createObjectURL(blob), rows: page.rows.length, problems: page.problems, mode: page.mode, trace: page.trace, verify: page.verify }],
         rows: [...cur.rows, ...page.rows.map(rowOf)],
         recorded: mergeRecorded(cur.recorded, page.recorded),
       });
@@ -497,6 +500,7 @@ function PageGroup({ page, rows, children }: { page: Page; rows: Row[]; children
       )}
       {page.rows === 0 && <p class="ink2">{t('Tidak ada baris yang terbaca di halaman ini. Pastikan gambar jelas.', 'No rows could be read on this page. Make sure the picture is clear.')}</p>}
       {children}
+      <AiHow trace={page.trace} verify={page.verify} />
     </section>
   );
 }

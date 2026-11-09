@@ -6,6 +6,8 @@ import type { Nowcast, NowcastPoint, RiskFactor, RiskLevel, SuggestedCheck } fro
 import type { Limits } from '../../server/src/rules.ts';
 import type { Outage, PowerBackup, PowerLevel, PowerNight, PowerReason } from '../../server/src/power.ts';
 import type { Draft, DraftField } from '../../server/src/ai.ts';
+import type { AiStep, Outcome, Trace, TraceStep } from '../../server/src/ledger.ts';
+import type { HeldField, Verification, VerifyCheck } from '../../server/src/verify.ts';
 import type { AutoFix, HistoryLog, LogEdit, QuotaState, ReadingField, RoundDraft, RoundIssue, RoundResult, SupportRequest, SupportTopic } from '../../server/src/contract.ts';
 import type { NotebookCheck, NotebookField, NotebookPage, NotebookRow, NotebookSaveResult, NotebookSaveRow, NotebookValueField } from '../../server/src/contract.ts';
 import type { LogSource } from '../../server/src/domain.ts';
@@ -19,6 +21,7 @@ export type { Aeration, Batch, Behavior, Farm, Finding, Level, Log, LogData, Pha
 export type { Limits, Nowcast, NowcastPoint, RiskFactor, RiskLevel, SuggestedCheck };
 export type { Outage, PowerBackup, PowerLevel, PowerNight, PowerReason };
 export type { Draft, DraftField, LogSource };
+export type { AiStep, HeldField, Outcome, Trace, TraceStep, Verification, VerifyCheck };
 export type { Light, MeasureHour, Place, PondPattern, PondPhotoDraft, ThermalModel, WaterColor };
 
 /** The pond page's water temperature card (GET /ponds/:id/temperature). */
@@ -341,9 +344,11 @@ export const api = {
   startBatch: (pondId: number, batch: { phase: Phase; stockedAt: string; initialCount?: number }) =>
     call<{ pond: PondSummary }>('POST', `/ponds/${pondId}/batches`, batch),
   /** `link`: a dead-eel report from Masalah opens or adds to the pond's case; `recheck` answers its re-check. */
-  addLog: (pondId: number, data: LogData, source: LogSource = 'manual', link: { report?: 'dead'; recheck?: 'better' | 'worse' } = {}) =>
+  addLog: (pondId: number, data: LogData, source: LogSource = 'manual', link: { report?: 'dead'; recheck?: 'better' | 'worse'; trace?: string } = {}) =>
     call<{ log: Log; pond: PondSummary }>('POST', `/ponds/${pondId}/logs`, { ...data, source, ...link }),
   aiMode: () => call<{ mode: 'meta' | 'mock' | 'off' }>('GET', '/ai'),
+  /** "Cara AI memproses ini": steps, models, time and the code checks behind one AI result (no costs). */
+  aiTrace: (id: string) => call<{ trace: Trace }>('GET', `/ai/trace/${encodeURIComponent(id)}`),
   /** `running`: the agent is writing it in this language (it had one only in the other); poll until done. */
   briefing: () => call<{ briefing: Briefing | null; running?: boolean }>('GET', '/briefing'),
   makeBriefing: () => call<{ briefing: Briefing }>('POST', '/briefing'),

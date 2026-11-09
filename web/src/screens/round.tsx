@@ -5,6 +5,7 @@ import { startRecording, voiceToWav } from '../capture/media.ts';
 import { fmtAgo, fmtClock, fmtNum, summarizeLog } from '../labels.ts';
 import { clips, readClip, waitReason, type Clip, type RoundItem } from '../queue.ts';
 import { Icon, kindLabel, StatusPill, Stepper } from '../ui.tsx';
+import { AiHow } from '../aihow.tsx';
 import { sendRound, type Progress } from '../upload.ts';
 import { fmtDur, Glyph, isDenied, isSlow, parseNum, UploadCard, useTick, type GlyphName } from './record-pond.tsx';
 import { isEn, LOCALE, t } from '../i18n.ts';
@@ -347,6 +348,7 @@ export function Round({ ponds, queued, onSaved, go }: { ponds: PondSummary[]; qu
           </button>
         )}
         {error && <p class="error">{error}</p>}
+        <AiHow trace={result.trace} verify={result.verify} />
       </section>
       {leaveTo && <LeaveCheck pending={pending} onStay={() => setLeaveTo(null)} onLeave={() => (setLeaveTo(null), leaveTo())} />}
 
@@ -456,7 +458,7 @@ function Kept({ reason, go, onRetry }: { reason?: Clip['reason']; go: Go; onRetr
   );
 }
 
-const ICON_OF: Record<RoundIssue['kind'] | 'nopond', GlyphName> = { unclear: 'wave', implausible: 'alert', twice: 'copy', nopond: 'question' };
+const ICON_OF: Record<RoundIssue['kind'] | 'nopond', GlyphName> = { unclear: 'wave', implausible: 'alert', twice: 'copy', unverified: 'alert', nopond: 'question' };
 
 function CheckCard(props: {
   item: RoundItem;
@@ -482,7 +484,9 @@ function CheckCard(props: {
       ? t('Bagian kurang jelas', 'Part not clear')
       : kind === 'implausible'
         ? t('Angka janggal', 'Odd number')
-        : t('Disebut dua kali', 'Said twice');
+        : kind === 'unverified'
+          ? t('Cek manual', 'Check by hand')
+          : t('Disebut dua kali', 'Said twice');
   const fix = (i: number, data: LogData) => onChange({ data, fixed: it.fixed.map((f, j) => (j === i ? true : f)) });
 
   if (isDone(it))
@@ -543,13 +547,21 @@ function CheckCard(props: {
           iss.kind !== 'unclear' && open.length > 0 && (
             <span class="rs-fixed num" key={i}>
               <Icon name="check" size={18} stroke={2.6} />
-              {iss.kind === 'implausible' || iss.kind === 'twice' ? said(iss.field, it.data.readings?.[iss.field] ?? 0) : ''}
+              {iss.kind === 'implausible' || iss.kind === 'twice'
+                ? said(iss.field, it.data.readings?.[iss.field] ?? 0)
+                : iss.kind === 'unverified'
+                  ? iss.field === 'mortality'
+                    ? t(`${it.data.mortality ?? 0} mati`, `${it.data.mortality ?? 0} dead`)
+                    : said(iss.field, it.data.readings?.[iss.field] ?? 0)
+                  : ''}
             </span>
           )
         ) : iss.kind === 'implausible' ? (
           <Implausible key={i} issue={iss} onFix={(v) => fix(i, setReading(it.data, iss.field, v))} />
         ) : iss.kind === 'twice' ? (
           <Twice key={i} issue={iss} onFix={(v) => fix(i, setReading(it.data, iss.field, v))} />
+        ) : iss.kind === 'unverified' ? (
+          <Unverified key={i} issue={iss} onFix={(v) => fix(i, iss.field === 'mortality' ? { ...it.data, mortality: v } : setReading(it.data, iss.field, v))} />
         ) : (
           <Unclear key={i} issue={iss} item={it} playing={props.playing} onPlay={props.onPlay} onFix={(data) => fix(i, data)} />
         ),
@@ -660,18 +672,51 @@ function Implausible({ issue, onFix }: { issue: Extract<RoundIssue, { kind: 'imp
   );
 }
 
-function TypeValue({ field, onDone }: { field: ReadingField; onDone: (v: number) => void }) {
+/**
+ * A number the AI wrote that was not heard in the recording (verify.ts): never filled in by itself.
+ * The farmer confirms it with one tap, or types the right one.
+ */
+function Unverified({ issue, onFix }: { issue: Extract<RoundIssue, { kind: 'unverified' }>; onFix: (v: number) => void }) {
+  const [typing, setTyping] = useState(false);
+  const shown = issue.field === 'mortality' ? t(`${fmtNum(issue.value)} ekor mati`, `${fmtNum(issue.value)} dead`) : withUnit(issue.field, issue.value);
+  return (
+    <div class="stack-sm">
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <span class="strong">{issue.note}</span>
+        <span class="label muted">{t('Dengarkan rekaman, lalu pilih.', 'Listen to the recording, then choose.')}</span>
+      </div>
+      {!typing && (
+        <>
+          <button type="button" class="btn primary num" onClick={() => onFix(issue.value)}>
+            {t(`Benar, ${shown}`, `Correct, ${shown}`)}
+          </button>
+          <button type="button" class="btn secondary rs-48 label" onClick={() => setTyping(true)}>
+            {t('Bukan, ketik sendiri', 'No, type it in')}
+          </button>
+        </>
+      )}
+      {typing && <TypeValue field={issue.field} onDone={onFix} />}
+    </div>
+  );
+}
+
+const TYPED: Record<ReadingField | 'mortality', { label: string; unit: string; example: string }> = {
+  ...FIELD,
+  mortality: { label: t('Sidat mati', 'Dead eels'), unit: t('ekor', ''), example: '2' },
+};
+
+function TypeValue({ field, onDone }: { field: ReadingField | 'mortality'; onDone: (v: number) => void }) {
   const [v, setV] = useState('');
   const n = parseNum(v);
-  const ok = n !== undefined && !Number.isNaN(n);
+  const ok = n !== undefined && !Number.isNaN(n) && (field !== 'mortality' || (Number.isInteger(n) && n >= 0));
   return (
     <div class="stack-sm">
       <label class="field">
         <span class="field-label">
-          {FIELD[field].label}
-          {FIELD[field].unit ? ` (${FIELD[field].unit})` : ''}
+          {TYPED[field].label}
+          {TYPED[field].unit ? ` (${TYPED[field].unit})` : ''}
         </span>
-        <input class="input" inputMode={field === 'tds' ? 'numeric' : 'decimal'} placeholder={`${t('contoh', 'example')}: ${FIELD[field].example}`} value={v} onInput={(e) => setV(e.currentTarget.value)} autoFocus />
+        <input class="input" inputMode={field === 'tds' || field === 'mortality' ? 'numeric' : 'decimal'} placeholder={`${t('contoh', 'example')}: ${TYPED[field].example}`} value={v} onInput={(e) => setV(e.currentTarget.value)} autoFocus />
       </label>
       <button type="button" class="btn primary" disabled={!ok} onClick={() => ok && onDone(n!)}>
         {t('Pakai angka ini', 'Use this number')}

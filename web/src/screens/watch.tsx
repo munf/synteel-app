@@ -6,6 +6,7 @@ import { NowcastChart } from '../chart.tsx';
 import { fmtClock, fmtTemp, readingWord } from '../labels.ts';
 import { usePrefs } from '../prefs.ts';
 import { Icon, LoadError, Shape, Skeleton, type Tone } from '../ui.tsx';
+import { AiHow } from '../aihow.tsx';
 import { isEn, t } from '../i18n.ts';
 import { OutageBanner, PowerNightCard } from './power.tsx';
 import './watch.css';
@@ -507,7 +508,7 @@ export function Watch({ state, nowcast, nowcastError, onRetryNowcast, onChanged:
                 <span class="sub">
                   {briefRunning
                     ? t('AI sedang menulis ringkasan dalam Bahasa Indonesia…', 'The AI is writing the summary in English…')
-                    : `${briefing.source === 'agent' ? t('Ringkasan malam dari AI', 'Night summary from the AI') : t('Ringkasan malam dari aturan', 'Night summary from rules')} · ${fmtClock(briefing.generatedAt)}`}
+                    : `${briefing.source === 'agent' ? t('Ringkasan malam dari AI', 'Night summary from the AI') : briefing.verify?.status === 'failed' ? t('Ringkasan AI tidak lolos cek, ringkasan dari aturan', 'The AI summary failed a check; summary from rules') : t('Ringkasan malam dari aturan', 'Night summary from rules')} · ${fmtClock(briefing.generatedAt)}`}
                 </span>
                 <p style={{ color: 'var(--on-navy)' }}>{briefing.summary}</p>
                 {briefing.steps.length > 0 && (
@@ -527,6 +528,7 @@ export function Watch({ state, nowcast, nowcastError, onRetryNowcast, onChanged:
                     )}
                   </>
                 )}
+                <AiHow trace={briefing.trace} verify={briefing.verify} onNavy />
                 <span class="sub">{t('Saran, bukan diagnosis. AI hanya boleh menambah cek.', 'Advice, not a diagnosis. The AI can only add checks.')}</span>
               </>
             ) : (

@@ -8,6 +8,7 @@ import type { Go } from '../app.tsx';
 import { fmtClock } from '../labels.ts';
 import { t } from '../i18n.ts';
 import { Icon, Shape, Tick, type Tone } from '../ui.tsx';
+import { AiHow } from '../aihow.tsx';
 import { SpeakToText } from './help.tsx';
 import './case.css';
 
@@ -42,6 +43,7 @@ function sourceLine(run: CaseRun) {
   const when = fmtClock(run.generatedAt);
   if (run.source === 'agent') return t(`Dari AI · ${when}`, `From the AI · ${when}`);
   if (run.source === 'mock') return t(`Mode contoh, bukan hasil AI · ${when}`, `Sample mode, not from the AI · ${when}`);
+  if (run.verify?.status === 'failed') return t(`Saran AI tidak lolos cek, dari aturan · ${when}`, `The AI advice failed a check; from the rules · ${when}`);
   return t(`Dari aturan · ${when}`, `From the rules · ${when}`);
 }
 
@@ -228,6 +230,7 @@ export function CaseCard({ c, go, onChanged, onPond = false }: { c: CaseView; go
             )}
           </>
         )}
+        {onPond && <AiHow trace={run.trace} verify={run.verify} />}
       </div>
 
       {c.openQuestions.length > 0 && !c.running && <Questions key={run.generatedAt} c={c} onSaved={onChanged} />}

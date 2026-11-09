@@ -7,6 +7,7 @@ import { setForcedNight } from '../prefs.ts';
 import { isEn, LOCALE, t } from '../i18n.ts';
 import { StepList, useSteps } from '../steps.tsx';
 import { Icon, PondThumb, Shape, Stepper, Tick, TickBox, toneOf, type IconName } from '../ui.tsx';
+import { AiHow, CheckByHand } from '../aihow.tsx';
 import './problem.css';
 import { OutageBanner, useOpenOutage } from './power.tsx';
 
@@ -579,7 +580,9 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
         setFailed({ url, offline: false });
       } else {
         setCounted({ url, w: img.naturalWidth, h: img.naturalHeight, result, mock });
-        if (result.count > 0) setDead(result.count);
+        // Verify before show: a count that failed its checks is not filled in; the stepper waits for the farmer.
+        if (result.verify?.status === 'failed') setManual(true);
+        else if (result.count > 0) setDead(result.count);
       }
     } catch (err) {
       setCounted(null);
@@ -730,6 +733,8 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
                   <Icon name="info" size={20} />
                   <span>{t('Mode contoh: hitung otomatis tidak aktif di server ini. Hitung manual.', 'Sample mode: the automatic count is off on this server. Count by hand.')}</span>
                 </p>
+              ) : counted.result.verify?.status === 'failed' ? (
+                <CheckByHand reasons={[...counted.result.verify.checks.filter((c) => !c.ok).map((c) => c.reason ?? c.label), t('Hitung dari foto, lalu isi dengan − dan +.', 'Count from the photo, then set it with − and +.')]} />
               ) : (
                 <>
                   <p>
@@ -748,6 +753,7 @@ export function Problem({ ponds, initialPondId, onSaved, go }: { ponds: PondSumm
                   )}
                 </>
               )}
+              <AiHow trace={counted.result.trace} verify={counted.result.verify} />
             </div>
           )}
         </div>

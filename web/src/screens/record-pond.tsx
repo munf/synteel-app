@@ -1,6 +1,7 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { api, type Behavior, type Draft, type DraftField, type LogData, type LogSource, type PondSummary } from '../api.ts';
+import { api, type Behavior, type Draft, type DraftField, type HeldField, type LogData, type LogSource, type PondSummary, type Verification } from '../api.ts';
+import { AiHow, CheckByHand } from '../aihow.tsx';
 import type { Go } from '../app.tsx';
 import { canRecordAudio, prepareImage, prepareVideo, startRecording, voiceToWav, type PreparedImage } from '../capture/media.ts';
 import { queue, Retryable, type CaptureKind, type Job } from '../capture/queue.ts';
@@ -401,6 +402,9 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
   const [doubtful, setDoubtful] = useState<DraftField[]>([]);
   const [transcript, setTranscript] = useState('');
   const [problems, setProblems] = useState<string[]>([]);
+  // Values a code check held back (verify.ts): "Cek manual", never filled in by themselves.
+  const [held, setHeld] = useState<HeldField[]>([]);
+  const [ai, setAi] = useState<{ trace?: string; verify?: Verification }>({});
   const [source, setSource] = useState<LogSource>('manual');
   const [working, setWorking] = useState('');
   const [notice, setNotice] = useState('');
@@ -457,6 +461,8 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
     setDoubtful([]);
     setTranscript('');
     setProblems([]);
+    setHeld([]);
+    setAi({});
     setSource('manual');
     setNotice('');
     setEditing(null);
@@ -477,6 +483,9 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
         got[key] = kind;
       }
     }
+    // A value held back by a check (verify.ts) clears what an earlier capture filled in: the farmer decides it.
+    for (const h of draft.held ?? []) if (h.field === 'temperature' || h.field === 'ph' || h.field === 'tds') next[h.field] = '';
+    if (draft.held?.some((h) => h.field === 'mortality')) setMortality(0);
     setReadings(next);
     if (d.mortality) (setMortality(d.mortality), (got.mortality = kind));
     if (d.feeding?.leftover) (setLeftover([d.feeding.leftover]), (got.leftover = kind));
@@ -489,9 +498,11 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
     setDoubtful(draft.lowConfidence);
     setTranscript(draft.transcript ?? '');
     setProblems(draft.problems);
+    setHeld(draft.held ?? []);
+    setAi({ trace: draft.trace, verify: draft.verify });
     setSource(kind);
     setRedo(false);
-    if (Object.keys(got).length === 0) setNotice(t('AI tidak menemukan angka atau keterangan. Coba lagi, atau ketik sendiri.', 'The AI found no numbers or details. Try again, or type it in.'));
+    if (Object.keys(got).length === 0 && !draft.held?.length) setNotice(t('AI tidak menemukan angka atau keterangan. Coba lagi, atau ketik sendiri.', 'The AI found no numbers or details. Try again, or type it in.'));
   }
 
   /** Kept on the phone first, so closing the app mid-upload loses nothing. */
@@ -611,7 +622,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
     };
     setBusy(true);
     try {
-      const { pond } = await api.addLog(pondId, data, source);
+      const { pond } = await api.addLog(pondId, data, source, { trace: ai.trace });
       setResult(pond);
       reset();
       onSaved();
@@ -739,7 +750,9 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
   const ready = jobs.filter((j) => j.status === 'ready');
   const waiting = jobs.filter((j) => j.status === 'pending');
   const reviewing = source !== 'manual';
-  const draftKeys = (Object.keys(LABELS) as EditKey[]).filter((k) => k === 'temperature' || k === 'ph' || k === 'tds' || filled[k]);
+  const draftKeys = (Object.keys(LABELS) as EditKey[]).filter((k) => k === 'temperature' || k === 'ph' || k === 'tds' || filled[k] || held.some((h) => h.field === k));
+  /** Held-back fields the farmer has not filled in yet. */
+  const toCheck = held.filter((h) => (h.field in LABELS) && showValue(h.field as EditKey) === null);
   const blocked = !!working || !!recording;
   const typeInstead = () => (mic.close(), setManual(true));
   const folded = reviewing && !manual && !redo && !recording;
@@ -984,6 +997,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
               <span>{p}</span>
             </p>
           ))}
+          <CheckByHand reasons={toCheck.map((h) => h.reason)} />
           <div class="stack-sm">
             {draftKeys.map((k) =>
               editing === k ? (
@@ -1005,7 +1019,12 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
                 >
                   <span class="ink2">{LABELS[k]}</span>
                   <span class="row" style={{ gap: 8 }}>
-                    {doubtful.includes(k) && (
+                    {toCheck.some((h) => h.field === k) ? (
+                      <span class="pill warn" style={{ gap: 6 }}>
+                        <Icon name="alert" size={16} />
+                        {t('cek manual', 'check by hand')}
+                      </span>
+                    ) : doubtful.includes(k) && (
                       <span class="pill blue" style={{ gap: 6, color: 'var(--ink)' }}>
                         <Icon name="info" size={16} />
                         {t('cek lagi', 'check again')}
@@ -1023,6 +1042,7 @@ export function RecordPond({ ponds, pondId, onSaved, go }: { ponds: PondSummary[
           <button type="button" class="btn secondary" onClick={() => (setManual(true), setEditing(null))}>
             <Icon name="pencil" size={20} /> {t('Ketik sendiri', 'Type it in')}
           </button>
+          <AiHow trace={ai.trace} verify={ai.verify} />
         </section>
       )}
 

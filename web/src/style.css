@@ -541,3 +541,18 @@ a.note, button.note { text-decoration: none; border: 0; width: 100%; text-align:
 :root[data-theme='night'] .art-ring { stroke: #6e6e73; }
 :root[data-theme='night'] .art-plus { fill: #f5f5f5; }
 :root[data-theme='night'] .art-plus-line { stroke: #101010; }
+
+/* "Cara AI memproses ini" (aihow.tsx): the steps and the code checks behind one AI result. */
+.ai-how { max-height: calc(100dvh - 48px); overflow-y: auto; text-wrap: pretty; }
+.ai-steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.ai-steps li { display: flex; flex-direction: column; gap: 2px; }
+.ai-checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ai-checks li { display: flex; gap: 12px; align-items: flex-start; }
+.ai-mark { flex: none; width: 24px; height: 24px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; }
+.ai-checks li.ok .ai-mark { background: var(--ok-bg); color: var(--ok); }
+.ai-checks li.bad .ai-mark { background: var(--warn-bg); color: var(--warn); border-radius: 6px; }
+.ai-checks li.bad .label { color: var(--ink-2); }
+.ai-outcome.error { color: var(--warn); }
+.ai-outcome.fallback { color: var(--ink-2); }
+.note.warn .stack-xs span:not(.strong) { color: var(--ink); }
+.ai-how-link.on-navy { color: var(--on-navy); text-decoration: underline; text-underline-offset: 3px; }
