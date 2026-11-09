@@ -1,0 +1,22 @@
+{
+  "about": "Dead-eel count photos with their true counts. Source: docs/evaluation.md, 'SAM 3.1'. The photos are from the internet and stay OUT of the repo: pass their folder with --images (or SYNTEEL_EVAL_IMAGES). countedBy 'user' = checked by the user; 'hand' = counted by hand during development; approx = a dense photo whose count is approximate. 'replay' items carry a recorded SAM output instead of a photo and run in mock mode only.",
+  "items": [
+    { "id": "g17", "image": "g17.jpg", "truth": 3, "phase": "glass_eel", "label": "palm, glass eels", "countedBy": "user" },
+    { "id": "g18", "image": "g18.jpg", "truth": 4, "phase": "glass_eel", "label": "clear container, coloured elvers", "countedBy": "user" },
+    { "id": "g18-elver", "image": "g18.jpg", "truth": 4, "phase": "elver", "label": "clear container, elver prompt set", "countedBy": "user" },
+    { "id": "g19", "image": "g19.jpg", "truth": 7, "phase": "glass_eel", "label": "white background, elvers", "countedBy": "user" },
+    { "id": "g19-elver", "image": "g19.jpg", "truth": 7, "phase": "elver", "label": "white background, elver prompt set", "countedBy": "user" },
+    { "id": "g20", "image": "g20.jpg", "truth": 10, "phase": "glass_eel", "label": "dark background, glass eels", "countedBy": "user" },
+    { "id": "g7", "image": "g7.jpg", "truth": 12, "phase": "glass_eel", "label": "grey basin", "countedBy": "hand" },
+    { "id": "g11", "image": "g11.jpg", "truth": 16, "phase": "glass_eel", "label": "white basin with foam", "countedBy": "hand" },
+    { "id": "g13", "image": "g13.jpg", "truth": 18, "phase": "glass_eel", "label": "on a net", "countedBy": "hand" },
+    { "id": "g9", "image": "g9.jpg", "truth": 20, "phase": "glass_eel", "label": "palm, tangled", "countedBy": "hand", "approx": true },
+    { "id": "g12", "image": "g12.jpg", "truth": 25, "phase": "glass_eel", "label": "pink basin, crowded", "countedBy": "hand", "approx": true },
+    { "id": "g8", "image": "g8.jpg", "truth": 40, "phase": "glass_eel", "label": "two hands in a tank", "countedBy": "hand", "approx": true },
+    { "id": "g16", "image": "g16.jpg", "truth": 50, "phase": "glass_eel", "label": "tank, side view", "countedBy": "hand", "approx": true },
+    { "id": "g10", "image": "g10.jpg", "truth": 60, "phase": "glass_eel", "label": "white basin, dense", "countedBy": "hand", "approx": true },
+    { "id": "g15", "image": "g15.jpg", "truth": 60, "phase": "glass_eel", "label": "plastic bag, dense", "countedBy": "hand", "approx": true },
+    { "id": "g14", "image": "g14.jpg", "truth": 150, "phase": "glass_eel", "label": "pile", "countedBy": "hand", "approx": true },
+    { "id": "synth8", "replay": "server/test/fixtures/sam-synth8.txt", "truth": 8, "phase": "elver", "label": "rendered white basin, 8 elvers (recorded SAM output, prompt 'worm')", "countedBy": "rendered" }
+  ]
+}

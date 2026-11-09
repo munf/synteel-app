@@ -1,0 +1,4 @@
+{
+  "about": "Voice recordings (WAV) with a typed transcript of what was said, for speech-to-text word error rate. None yet: real farmer recordings need consent first (eval/README.md). Audio stays OUT of the repo: pass its folder with --audio (or SYNTEEL_EVAL_AUDIO).",
+  "items": []
+}

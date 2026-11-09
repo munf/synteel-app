@@ -1,0 +1,95 @@
+{
+  "about": "SYNTHETIC farm nights for the evening briefing agent (no real farm). There is no right answer to score: the benchmark measures whether every rule check is kept, the verification of the summary, time and cost, and saves the advice text for blind rating (eval/README.md). history maps a pond id to its compact daily rows. Same night as the offline agent fixture in scripts/eval.ts.",
+  "items": [
+    {
+      "id": "synthetic-critical-night",
+      "label": "one glass eel pond, eels surfacing, critical peak at 01:00 WIB",
+      "input": {
+        "farmName": "Tambak Uji",
+        "now": 1793181600000,
+        "timezone": "Asia/Jakarta",
+        "ponds": [
+          {
+            "id": 2,
+            "name": "Kolam B",
+            "phase": "glass_eel",
+            "week": 3,
+            "level": "critical",
+            "findings": [],
+            "latest": {},
+            "lastLogAt": null
+          }
+        ],
+        "nowcasts": [
+          {
+            "pondId": 2,
+            "generatedAt": 1793181600000,
+            "basis": {
+              "weather": true,
+              "anchor": null,
+              "calibrationPairs": 0,
+              "offset": 0,
+              "fit": []
+            },
+            "now": {
+              "t": 1793181600000,
+              "temp": 27,
+              "sigma": 0.3,
+              "score": 0,
+              "level": "warning",
+              "factors": [
+                {
+                  "id": "signs",
+                  "label": "Sidat terlihat naik ke permukaan",
+                  "points": 3
+                }
+              ]
+            },
+            "hours": [
+              {
+                "t": 1793210400000,
+                "temp": 27,
+                "sigma": 0.3,
+                "score": 0,
+                "level": "critical",
+                "factors": [
+                  {
+                    "id": "signs",
+                    "label": "Sidat terlihat naik ke permukaan",
+                    "points": 3
+                  }
+                ]
+              }
+            ],
+            "measurements": [],
+            "peak": {
+              "t": 1793210400000,
+              "temp": 27,
+              "sigma": 0.3,
+              "score": 0,
+              "level": "critical",
+              "factors": [
+                {
+                  "id": "signs",
+                  "label": "Sidat terlihat naik ke permukaan",
+                  "points": 3
+                }
+              ]
+            },
+            "checks": [
+              {
+                "t": 1793199600000,
+                "kind": "look",
+                "reason": "Cek sidat di permukaan",
+                "alarm": false
+              }
+            ],
+            "lastCheckAt": 1793178000000
+          }
+        ],
+        "weather": [],
+        "history": {}
+      }
+    }
+  ]
+}

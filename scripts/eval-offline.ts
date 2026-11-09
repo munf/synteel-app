@@ -1,5 +1,6 @@
 // Offline evaluation summary: runs the deterministic parts around each Meta model use on fixed inputs
-// and prints expected vs got. No API keys, no network, no photos. Usage: npm run eval
+// and prints expected vs got. No API keys, no network, no photos. Usage: npm run eval (scripts/eval.ts);
+// the measured benchmark per provider/model is `npm run eval -- bench` (scripts/bench.ts).
 // Live numbers (SAM on photos, the briefing agent, typed Javanese rounds) are in docs/evaluation.md.
 import { readFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';

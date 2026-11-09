@@ -1,0 +1,35 @@
+{
+  "about": "Typed voice rounds (Javanese/Indonesian) with the values the farmer said. Source: docs/evaluation.md, 'Voice logs', live check of 29-30 Oct 2026. Typed text, no audio: this scores the extraction step only (no ASR). Pond list as in the offline fixture of scripts/eval.ts.",
+  "ponds": [
+    { "id": 1, "name": "Kolam A", "nicknames": [] },
+    { "id": 2, "name": "Kolam B", "nicknames": [] },
+    { "id": 3, "name": "Kolam C1", "nicknames": [] },
+    { "id": 4, "name": "Kolam T", "nicknames": ["kolam pojok"] }
+  ],
+  "items": [
+    {
+      "id": "jv-1",
+      "transcript": "Kolam A suhune selawe koma wolu, pH pitu koma papat. Kolam be suhune wolulikur, ana sing mati loro.",
+      "expect": [
+        { "pond": 1, "temperature": 25.8, "ph": 7.4 },
+        { "pond": 2, "temperature": 28, "mortality": 2 }
+      ]
+    },
+    {
+      "id": "jv-2",
+      "transcript": "Kolam ce siji suhune selikur sanga koma lima, tds satus sewidak. Kolam pojok banyune rada ijo, pakane isih akeh.",
+      "expect": [
+        { "pond": 3, "temperature": 29.5, "tds": 160 },
+        { "pond": 4, "color": "green", "leftover": "much" }
+      ]
+    },
+    {
+      "id": "id-jv-3",
+      "transcript": "Kolam B suhu dua puluh tujuh koma tiga, pH tujuh koma satu. Kolam A pH pitu papat, suhune nemlikur.",
+      "expect": [
+        { "pond": 2, "temperature": 27.3, "ph": 7.1 },
+        { "pond": 1, "ph": 7.4, "temperature": 26 }
+      ]
+    }
+  ]
+}
