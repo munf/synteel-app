@@ -46,6 +46,8 @@ What this shows:
 - SAM gave the same answers as on 29-30 October on these 4 photos (3, 4, 6, and 10-13 with 12 filled in), so the count path is repeatable. Two right or nearly right counts (3 of 3, 6 of 7) failed verification, so the farmer sees "Cek manual" there too. Which check failed was not saved in this run; the benchmark now records the failed checks of every item.
 - Estimated cost: about $0.006 per voice round and $0.010 per dead-eel photo (4 SAM images at $2.50 per 1,000).
 
+**Replay capture run, 10 November 2026: 11 model calls** (3 Muse Spark 1.3 for the same rounds, 8 SAM 3.1 for photos g17 and g18), saved as [`docs/eval-results/2026-11-10-meta-replay.json`](eval-results/2026-11-10-meta-replay.json). Same answers as the 19-call run: 12 of 12 fields right, 29.5 °C held back as "Cek manual"; g17 counted 3 of 3 and g18 4 of 4. This run keeps every call's time, every code check in Indonesian and English, and what the farmer would have seen, so it names the check that failed on g17: one outline far larger or smaller than the others ("Ukuran garis tepi wajar"). The public replay page (`<app>/replay/`, [`web/src/replay/`](../web/src/replay/)) shows these runs and the 19-call run step by step, next to two demo runs with sample answers, each labelled real or demo; [`scripts/replay-export.ts`](../scripts/replay-export.ts) writes its bundle from benchmark files or an app database's AI call ledger, anonymised.
+
 Not measured in this run, and why:
 
 - Speech to text: there is no labelled recording yet (`eval/labelled/speech.json` is empty on purpose; real farmer clips need consent first).
