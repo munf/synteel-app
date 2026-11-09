@@ -1,0 +1,21 @@
+# Synteel on one machine: docker compose up --build, then open http://localhost:8787
+# Settings and keys come from .env next to this file (copy .env.example; never commit it). Without a model key
+# the AI steps return labelled example drafts. The database and photos stay in the synteel-data volume.
+services:
+  synteel:
+    build: .
+    image: synteel-app:local
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Inside the container; the published port is set below.
+      PORT: "8787"
+    ports:
+      - "127.0.0.1:${SYNTEEL_HOST_PORT:-8787}:8787"
+    volumes:
+      - synteel-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  synteel-data:
