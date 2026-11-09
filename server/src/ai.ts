@@ -19,6 +19,8 @@ import { READING_LIMITS, type Behavior, type LogData, type Phase, type ReadingKe
 import { guardRound, mockRound, ROUND_SCHEMA, roundInstructions, type RoundPond } from './round.ts';
 import { mockNotebook, NOTEBOOK_SCHEMA, notebookInstructions } from './notebook.ts';
 import { mockPondPhoto, POND_PHOTO_SCHEMA, pondPhotoInstructions } from './pondphoto.ts';
+import { noteCall, type CallTag } from './ledger.ts';
+import type { HeldField, Verification } from './verify.ts';
 
 export type CaptureKind = 'photo' | 'voice' | 'video';
 export type DraftField = 'temperature' | 'ph' | 'tds' | 'mortality' | 'behavior' | 'leftover' | 'color' | 'smell' | 'aeration';
@@ -42,6 +44,11 @@ export interface Draft {
   mode: 'meta' | 'mock';
   /** Which provider/model read it, e.g. "meta/muse-spark-1.3". */
   model?: string;
+  /** Values a code check held back (verify.ts): shown as "Cek manual" with the reason, never filled in. */
+  held?: HeldField[];
+  verify?: Verification;
+  /** The AI call ledger entry behind this draft (ledger.ts): "Cara AI memproses ini". */
+  trace?: string;
 }
 
 /** One voice round over many ponds: a recording, or text the farmer typed instead. */
@@ -178,20 +185,38 @@ export class Retry extends AiFailed {}
 // Fireworks sits behind Cloudflare, which turns away requests without a User-Agent.
 const authHeaders = (apiKey: string) => ({ Authorization: `Bearer ${apiKey}`, 'User-Agent': 'synteel-app' });
 
-export async function call(url: string, apiKey: string, init: RequestInit) {
+/**
+ * The one door to every model API. `tag` names the provider, model and step for the AI call ledger
+ * (ledger.ts), which writes the call under the farmer request it serves.
+ */
+export async function call(url: string, apiKey: string, init: RequestInit, tag?: CallTag) {
+  const started = Date.now();
+  const failed = (err: Error) => {
+    if (tag) noteCall(tag, started, { error: err });
+    return err;
+  };
   let res: Response;
   try {
     res = await fetch(url, { ...init, headers: { ...authHeaders(apiKey), ...init.headers }, signal: AbortSignal.timeout(90_000) });
   } catch (err) {
-    throw new Retry(`AI API unreachable: ${(err as Error).message}`);
+    throw failed(new Retry(`AI API unreachable: ${(err as Error).message}`));
   }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     const message = `AI API ${res.status}: ${body.error?.code ?? body.error?.message ?? body.message ?? 'error'}`;
     // Overload, outage or spent credits: worth trying the next provider.
-    throw res.status === 429 || res.status === 402 || res.status >= 500 ? new Retry(message) : new AiFailed(message);
+    throw failed(res.status === 429 || res.status === 402 || res.status >= 500 ? new Retry(message) : new AiFailed(message));
   }
+  if (tag) noteCall(tag, started, { body });
   return body;
+}
+
+/** Length of a WAV recording from its header, for the speech price; undefined when it is not WAV. */
+export async function wavSeconds(audio: Blob): Promise<number | undefined> {
+  const head = Buffer.from(await audio.slice(0, 44).arrayBuffer());
+  if (head.length < 44 || head.toString('ascii', 0, 4) !== 'RIFF' || head.toString('ascii', 8, 12) !== 'WAVE') return undefined;
+  const byteRate = head.readUInt32LE(28);
+  return byteRate > 0 ? Math.max(0, audio.size - 44) / byteRate : undefined;
 }
 
 /** Muse Voice Transcribe takes WAV only; the phone converts voice notes before sending. */
@@ -199,7 +224,7 @@ async function transcribe(t: Transcriber, audio: Blob): Promise<string> {
   const form = new FormData();
   form.append('request', new Blob([JSON.stringify({ model: t.model, audioEncoding: 'WAV', mode: 'PUSH_TO_TALK' })], { type: 'application/json' }));
   form.append('audio', audio, 'audio.wav');
-  const body = await call(`${t.base}/asr/transcribe`, t.apiKey, { method: 'POST', body: form, headers: { Accept: 'application/json' } });
+  const body = await call(`${t.base}/asr/transcribe`, t.apiKey, { method: 'POST', body: form, headers: { Accept: 'application/json' } }, { provider: 'meta', model: t.model, step: 'speech', audioSeconds: await wavSeconds(audio) });
   return String(body.transcript ?? '').trim();
 }
 
@@ -219,7 +244,7 @@ async function chatJson(p: ChatProvider, system: string, content: unknown, name:
       max_tokens: maxTokens,
       reasoning_effort: 'low',
     }),
-  });
+  }, { provider: p.name, model: p.model, step: 'read' });
   try {
     return JSON.parse(body.choices?.[0]?.message?.content);
   } catch {

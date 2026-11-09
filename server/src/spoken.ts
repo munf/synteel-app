@@ -79,7 +79,7 @@ export function spokenWriter(providers: ChatProvider[], max = 500) {
             max_tokens: 1500,
             reasoning_effort: 'low',
           }),
-        });
+        }, { provider: p.name, model: p.model, step: 'rewrite' });
         const text = guardSpoken(original, JSON.parse(body.choices?.[0]?.message?.content ?? '{}').text);
         if (text) result = { text, source: 'agent' };
         else console.warn(`spoken: rewrite refused: ${String(body.choices?.[0]?.message?.content ?? '').slice(0, 300)}`);

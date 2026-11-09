@@ -10,6 +10,7 @@
 import { decodeMaskToRaster, decodeMaskToSVGPath, parseImageStream, recordsOfKind, type ResponsesEvent } from '@meta-sam/parser';
 import { AiFailed, call } from './ai.ts';
 import type { Phase } from './domain.ts';
+import type { Verification } from './verify.ts';
 
 const BODY_PROMPTS = ['transparent eel', 'thin worm', 'transparent worm'];
 const ELVER_PROMPT = 'worm';
@@ -54,6 +55,9 @@ export interface CountResult {
   review: boolean;
   model: string;
   ms: number;
+  /** The code checks on the count (verify.ts): failed means "Cek manual", the number is not filled in. */
+  verify?: Verification;
+  trace?: string;
 }
 
 async function* once(text: string): AsyncIterable<ResponsesEvent> {
@@ -81,7 +85,7 @@ async function find(dataUrl: string, prompt: string, sam: SamProvider): Promise<
       input: [{ role: 'user', content: [{ type: 'input_text', text: prompt }, { type: 'input_image', image_url: dataUrl }] }],
       metadata: { include_confidence: 'true', mask_encoding: 'one_bit' },
     }),
-  });
+  }, { provider: 'meta', model: 'sam-3.1', step: 'segment', images: 1 });
   return parseMasks(body.output?.[0]?.content?.[0]?.text ?? '');
 }
 

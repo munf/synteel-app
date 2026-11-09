@@ -130,7 +130,7 @@ export async function toolLoop<T>(providers: ChatProvider[], o: LoopOptions<T>):
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ model: provider.model, messages, tools: o.tools, tool_choice: 'auto', max_tokens: 3000, reasoning_effort: 'low' }),
-        });
+        }, { provider: provider.name, model: provider.model, step: 'agent' });
         const msg = body.choices?.[0]?.message;
         if (!msg) throw new AiFailed('empty answer');
         messages.push({ role: 'assistant', content: msg.content ?? '', tool_calls: msg.tool_calls });
