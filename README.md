@@ -115,6 +115,20 @@ What the agents may and may not do:
 
 The guard drops a check with an unknown pond, a time past 18 hours, a duplicate of a rule check, or unsafe words. A summary that fails the guard is replaced by the rules summary. The app shows which tools the agent called, so the farmer can see what it looked at.
 
+## Verify before show, and the AI call ledger
+
+Every model result passes code checks ([`verify.ts`](server/src/verify.ts)) before the farmer sees it. No model is asked:
+
+| Result | Checks | When a check fails |
+|---|---|---|
+| Drafted log (photo, voice note, video) | Readings within plausible ranges (temperature, pH, TDS, DO), unit conversions flagged, every number in the log said in the recording (Indonesian, Javanese and English number words), the pond named is this pond on this farm | The value is held back: the field shows **Cek manual** with the reason and is not filled in |
+| Voice round | The same per pond; the pond matched locally | The number becomes a question the farmer confirms or types |
+| SAM 3.1 dead-eel count | Outlines non-empty, bodies and heads agree within 25%, no outline far larger or smaller than the others | **Cek manual**: the count is not filled in, the farmer counts from the photo |
+| Evening briefing, case update | No medicine, dose or diagnosis; no "safe" or "calm" where the alarm rules see a warning or danger; no heavy rain or measured oxygen the data does not show | The rules' own summary is shown: the rules win |
+| Notebook page | Each cell's own checks (`notebook.ts`) summed up | Cells marked for a look, as before |
+
+Every model call goes through one function, `call()` in [`ai.ts`](server/src/ai.ts), and is written to the `ai_ledger` table ([`ledger.ts`](server/src/ledger.ts)): request id and kind, provider and model id, start time and latency, input and output tokens when the API returns them, an estimated cost from a small price table (sources in the file, marked as an estimate), the outcome (`ok`, `fallback`, `error`, `mock`), the result's verification, and the farm, pond and result it served. No audio, images or farmer text are stored. Under each AI result the farmer can open **Cara AI memproses ini**: the steps, model names, time taken and each check with a tick or a cross, without costs. The team dashboard (Pemakaian AI) lists recent calls, totals per model and the estimated cost per pond per night.
+
 ## Other components (not Meta models)
 
 | Component | Where | Role |
