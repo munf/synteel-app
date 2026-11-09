@@ -23,6 +23,8 @@ import type { Endpoint, Task } from '../server/src/providers.ts';
 import type { RoundPond } from '../server/src/round.ts';
 import { countDeadEels } from '../server/src/sam.ts';
 import { verifyCount, verifyDraft, verifyRound, type Verification } from '../server/src/verify.ts';
+import { withLang } from '../server/src/i18n.ts';
+import type { ReplayCall, ReplayCheck, ReplayResult } from '../server/src/replay.ts';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 
@@ -118,6 +120,8 @@ export interface ItemResult {
   error?: string;
   /** Advice text (agent), for blind rating. */
   output?: string;
+  /** Rounds and counts: each call, every code check (Indonesian and English) and what the farmer would see, for the replay page. */
+  replay?: { calls: ReplayCall[]; checks: ReplayCheck[]; result: ReplayResult };
 }
 
 export interface TaskSummary {
@@ -253,11 +257,12 @@ const MAX_CALLS: Record<Task, (phase?: string) => number> = { speech: () => 1, e
 export async function runTask(task: Task, o: RunOptions): Promise<{ items: ItemResult[]; skipped: { id: string; why: string }[] }> {
   const db = openDb(':memory:');
   const ledger = aiLedger(db);
-  const rowsOf = db.prepare('select provider, model, ms, cost_usd_estimate as cost, outcome, started_at from ai_ledger where request_id = ? order by id');
+  const rowsOf = db.prepare('select step, provider, model, ms, cost_usd_estimate as cost, outcome, started_at from ai_ledger where request_id = ? order by id');
   const ds = datasets();
   const skipped: { id: string; why: string }[] = [];
   const keep = (id: string) => !o.only || o.only.includes(id);
-  type Job = { id: string; kind: AiKind; budget: number; run: () => Promise<Pick<ItemResult, 'score' | 'shown' | 'detail' | 'verify' | 'output'>> };
+  type Out = Pick<ItemResult, 'score' | 'shown' | 'detail' | 'verify' | 'output'> & { replay?: Omit<NonNullable<ItemResult['replay']>, 'calls'> };
+  type Job = { id: string; kind: AiKind; budget: number; run: () => Promise<Out> };
   const jobs: Job[] = [];
 
   if (task === 'extract') {
@@ -273,7 +278,16 @@ export async function runTask(task: Task, o: RunOptions): Promise<{ items: ItemR
           const s = scoreFields(item.expect, roundFields(raw));
           const r = verifyRound(raw, ponds);
           const shown = scoreFields(item.expect, roundFields(r));
-          return { score: s.total ? s.right / s.total : null, shown: shown.total ? shown.right / shown.total : null, detail: { right: s.right, total: s.total, wrong: s.wrong, extra: s.extra, held: heldOf(r), failedChecks: failedChecks(r.verify) }, verify: r.verify.status };
+          const checks = [...replayChecks('id', r.verify), ...replayChecks('en', withLang('en', () => verifyRound(raw, ponds)).verify)];
+          const result: ReplayResult = {
+            type: 'round',
+            ponds: r.drafts.map((d) => ({
+              pond: ponds.find((p) => p.id === d.pondId)?.name ?? d.heardName,
+              values: flatFields(d.data) as Record<string, number | string>,
+              held: d.issues.filter((i) => i.kind === 'unverified').map((i) => i.field),
+            })),
+          };
+          return { score: s.total ? s.right / s.total : null, shown: shown.total ? shown.right / shown.total : null, detail: { right: s.right, total: s.total, wrong: s.wrong, extra: s.extra, held: heldOf(r), failedChecks: failedChecks(r.verify) }, verify: r.verify.status, replay: { checks, result } };
         },
       });
     }
@@ -341,7 +355,9 @@ export async function runTask(task: Task, o: RunOptions): Promise<{ items: ItemR
           const r = await countDeadEels(photo, o.route, item.phase);
           const s = scoreCount(item.truth, r);
           const v = verifyCount(r);
-          return { score: s.within1 ? 1 : 0, detail: { truth: item.truth, count: r.count, low: r.low, high: r.high, atLeast: r.atLeast, ...s, failedChecks: failedChecks(v) }, verify: v.status };
+          const checks = [...replayChecks('id', v), ...replayChecks('en', withLang('en', () => verifyCount(r)))];
+          const result: ReplayResult = { type: 'count', count: r.count, low: r.low, high: r.high, atLeast: r.atLeast, filled: v.status === 'passed', truth: item.truth };
+          return { score: s.within1 ? 1 : 0, detail: { truth: item.truth, count: r.count, low: r.low, high: r.high, atLeast: r.atLeast, ...s, failedChecks: failedChecks(v) }, verify: v.status, replay: { checks, result } };
         },
       });
     }
@@ -379,7 +395,7 @@ export async function runTask(task: Task, o: RunOptions): Promise<{ items: ItemR
     }
     const started = performance.now();
     let id = '';
-    let out: Pick<ItemResult, 'score' | 'shown' | 'detail' | 'verify' | 'output'> | null = null;
+    let out: Out | null = null;
     let error: string | undefined;
     try {
       out = await ledger.track(job.kind, (rid) => ((id = rid), job.run()));
@@ -387,7 +403,7 @@ export async function runTask(task: Task, o: RunOptions): Promise<{ items: ItemR
       error = (err as Error).message.slice(0, 200);
     }
     const ms = performance.now() - started;
-    const rows = (id ? rowsOf.all(id) : []) as { provider: string; model: string; cost: number | null; outcome: string }[];
+    const rows = (id ? rowsOf.all(id) : []) as { step: string; provider: string; model: string; ms: number; cost: number | null; outcome: string; started_at: string }[];
     calls += rows.length;
     const answered = rows.filter((r) => r.outcome === 'ok' || r.outcome === 'fallback');
     items.push({
@@ -404,6 +420,9 @@ export async function runTask(task: Task, o: RunOptions): Promise<{ items: ItemR
       fallbacks: rows.filter((r) => r.outcome === 'fallback').length,
       ...(error && { error }),
       ...(out?.output && { output: out.output }),
+      ...(out?.replay && {
+        replay: { ...out.replay, calls: rows.map((r) => ({ step: r.step as ReplayCall['step'], provider: r.provider, model: r.model, at: r.started_at, ms: r.ms, calls: 1, outcome: r.outcome as ReplayCall['outcome'] })) },
+      }),
     });
   }
   return { items, skipped };
@@ -413,6 +432,9 @@ export async function runTask(task: Task, o: RunOptions): Promise<{ items: ItemR
 export const roundFields = (r: RoundResult) => r.drafts.map((d) => ({ pondId: d.pondId, fields: flatFields(d.data) }));
 /** "agree: …" per failed code check, so a failed verification can be looked into. */
 const failedChecks = (v: Verification | null | undefined) => (v?.checks ?? []).filter((c) => !c.ok).map((c) => `${c.id}: ${c.reason ?? c.label}`);
+/** Every code check in one language, for the replay page. */
+const replayChecks = (lang: 'id' | 'en', v: Verification | null | undefined): ReplayCheck[] =>
+  (v?.checks ?? []).map((c) => ({ lang, ok: c.ok, label: c.label, ...(c.reason && { reason: c.reason }) }));
 const heldOf = (r: RoundResult) => r.drafts.flatMap((d) => d.issues.filter((i) => i.kind === 'unverified').map((i) => `${d.heardName} ${i.field}`));
 
 // ---------- Mock: a pretend API answering from the labels ----------

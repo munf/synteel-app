@@ -1,0 +1,892 @@
+{
+  "about": "Synteel replayable runs. origin \"real\": a real model API answered (Meta Model API). origin \"demo\": demo farm or sample answers, no model. Partner farm data is pseudonymous; no faces, phone numbers, e-mail addresses or places finer than the village.",
+  "exportedAt": "2026-11-09T19:24:41.708Z",
+  "runs": [
+    {
+      "id": "2026-11-10-meta-jv-1",
+      "origin": "real",
+      "source": {
+        "id": "Uji dengan API model nyata, 2026-11-10, 19 panggilan model (docs/eval-results/2026-11-10-meta.json)",
+        "en": "Real API run, 2026-11-10, 19 model calls (docs/eval-results/2026-11-10-meta.json)"
+      },
+      "kind": "round",
+      "at": null,
+      "input": {
+        "type": "transcript",
+        "text": "Kolam A suhune selawe koma wolu, pH pitu koma papat. Kolam be suhune wolulikur, ana sing mati loro.",
+        "note": {
+          "id": "Kalimat uji yang diketik (bahasa Jawa dan Indonesia) dari eval/labelled/rounds.json, bukan rekaman petani.",
+          "en": "Typed test sentence (Javanese and Indonesian) from eval/labelled/rounds.json, not a farmer recording."
+        }
+      },
+      "calls": [
+        {
+          "step": "read",
+          "provider": "meta",
+          "model": "muse-spark-1.3",
+          "at": null,
+          "ms": 11392,
+          "calls": 1,
+          "outcome": "ok"
+        }
+      ],
+      "checks": {
+        "status": "passed",
+        "items": [
+          {
+            "lang": "id",
+            "ok": true,
+            "label": "Setiap angka terdengar di rekaman"
+          },
+          {
+            "lang": "en",
+            "ok": true,
+            "label": "Every number was heard in the recording"
+          }
+        ],
+        "partial": true
+      },
+      "result": {
+        "type": "round",
+        "ponds": [
+          {
+            "pond": "Kolam A",
+            "values": {
+              "temperature": 25.8,
+              "ph": 7.4
+            },
+            "held": []
+          },
+          {
+            "pond": "Kolam B",
+            "values": {
+              "temperature": 28,
+              "mortality": 2
+            },
+            "held": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "2026-11-10-meta-jv-2",
+      "origin": "real",
+      "source": {
+        "id": "Uji dengan API model nyata, 2026-11-10, 19 panggilan model (docs/eval-results/2026-11-10-meta.json)",
+        "en": "Real API run, 2026-11-10, 19 model calls (docs/eval-results/2026-11-10-meta.json)"
+      },
+      "kind": "round",
+      "at": null,
+      "input": {
+        "type": "transcript",
+        "text": "Kolam ce siji suhune selikur sanga koma lima, tds satus sewidak. Kolam pojok banyune rada ijo, pakane isih akeh.",
+        "note": {
+          "id": "Kalimat uji yang diketik (bahasa Jawa dan Indonesia) dari eval/labelled/rounds.json, bukan rekaman petani.",
+          "en": "Typed test sentence (Javanese and Indonesian) from eval/labelled/rounds.json, not a farmer recording."
+        }
+      },
+      "calls": [
+        {
+          "step": "read",
+          "provider": "meta",
+          "model": "muse-spark-1.3",
+          "at": null,
+          "ms": 10368,
+          "calls": 1,
+          "outcome": "ok"
+        }
+      ],
+      "checks": {
+        "status": "failed",
+        "items": [
+          {
+            "lang": "id",
+            "ok": false,
+            "label": "Setiap angka terdengar di rekaman",
+            "reason": "Ditahan: suhu di \"Kolam ce siji\""
+          },
+          {
+            "lang": "en",
+            "ok": false,
+            "label": "Every number was heard in the recording",
+            "reason": "Held back: temperature for \"Kolam ce siji\""
+          }
+        ],
+        "partial": true
+      },
+      "result": {
+        "type": "round",
+        "ponds": [
+          {
+            "pond": "Kolam C1",
+            "values": {
+              "temperature": 29.5,
+              "tds": 160
+            },
+            "held": [
+              "temperature"
+            ]
+          },
+          {
+            "pond": "Kolam T",
+            "values": {
+              "color": "green",
+              "leftover": "much"
+            },
+            "held": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "2026-11-10-meta-id-jv-3",
+      "origin": "real",
+      "source": {
+        "id": "Uji dengan API model nyata, 2026-11-10, 19 panggilan model (docs/eval-results/2026-11-10-meta.json)",
+        "en": "Real API run, 2026-11-10, 19 model calls (docs/eval-results/2026-11-10-meta.json)"
+      },
+      "kind": "round",
+      "at": null,
+      "input": {
+        "type": "transcript",
+        "text": "Kolam B suhu dua puluh tujuh koma tiga, pH tujuh koma satu. Kolam A pH pitu papat, suhune nemlikur.",
+        "note": {
+          "id": "Kalimat uji yang diketik (bahasa Jawa dan Indonesia) dari eval/labelled/rounds.json, bukan rekaman petani.",
+          "en": "Typed test sentence (Javanese and Indonesian) from eval/labelled/rounds.json, not a farmer recording."
+        }
+      },
+      "calls": [
+        {
+          "step": "read",
+          "provider": "meta",
+          "model": "muse-spark-1.3",
+          "at": null,
+          "ms": 8720,
+          "calls": 1,
+          "outcome": "ok"
+        }
+      ],
+      "checks": {
+        "status": "passed",
+        "items": [
+          {
+            "lang": "id",
+            "ok": true,
+            "label": "Setiap angka terdengar di rekaman"
+          },
+          {
+            "lang": "en",
+            "ok": true,
+            "label": "Every number was heard in the recording"
+          }
+        ],
+        "partial": true
+      },
+      "result": {
+        "type": "round",
+        "ponds": [
+          {
+            "pond": "Kolam B",
+            "values": {
+              "temperature": 27.3,
+              "ph": 7.1
+            },
+            "held": []
+          },
+          {
+            "pond": "Kolam A",
+            "values": {
+              "ph": 7.4,
+              "temperature": 26
+            },
+            "held": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "2026-11-10-meta-g17",
+      "origin": "real",
+      "source": {
+        "id": "Uji dengan API model nyata, 2026-11-10, 19 panggilan model (docs/eval-results/2026-11-10-meta.json)",
+        "en": "Real API run, 2026-11-10, 19 model calls (docs/eval-results/2026-11-10-meta.json)"
+      },
+      "kind": "count",
+      "at": null,
+      "input": {
+        "type": "photo",
+        "note": {
+          "id": "Foto uji dari internet (\"palm, glass eels\"): tidak ditampilkan karena bukan milik kami. Jumlah sebenarnya 3, dicek orang.",
+          "en": "Test photo from the internet (\"palm, glass eels\"): not shown, it is not ours to publish. True count 3, checked by a person."
+        }
+      },
+      "calls": [
+        {
+          "step": "segment",
+          "provider": "meta",
+          "model": "sam-3.1",
+          "at": null,
+          "ms": 3414,
+          "calls": 4,
+          "outcome": "ok"
+        }
+      ],
+      "checks": {
+        "status": "failed",
+        "items": [],
+        "partial": true
+      },
+      "result": {
+        "type": "count",
+        "count": 3,
+        "low": 3,
+        "high": 3,
+        "atLeast": false,
+        "filled": false,
+        "truth": 3
+      }
+    },
+    {
+      "id": "2026-11-10-meta-g18",
+      "origin": "real",
+      "source": {
+        "id": "Uji dengan API model nyata, 2026-11-10, 19 panggilan model (docs/eval-results/2026-11-10-meta.json)",
+        "en": "Real API run, 2026-11-10, 19 model calls (docs/eval-results/2026-11-10-meta.json)"
+      },
+      "kind": "count",
+      "at": null,
+      "input": {
+        "type": "photo",
+        "note": {
+          "id": "Foto uji dari internet (\"clear container, coloured elvers\"): tidak ditampilkan karena bukan milik kami. Jumlah sebenarnya 4, dicek orang.",
+          "en": "Test photo from the internet (\"clear container, coloured elvers\"): not shown, it is not ours to publish. True count 4, checked by a person."
+        }
+      },
+      "calls": [
+        {
+          "step": "segment",
+          "provider": "meta",
+          "model": "sam-3.1",
+          "at": null,
+          "ms": 2356,
+          "calls": 4,
+          "outcome": "ok"
+        }
+      ],
+      "checks": {
+        "status": "passed",
+        "items": [],
+        "partial": true
+      },
+      "result": {
+        "type": "count",
+        "count": 4,
+        "low": 4,
+        "high": 4,
+        "atLeast": false,
+        "filled": true,
+        "truth": 4
+      }
+    },
+    {
+      "id": "2026-11-10-meta-g19",
+      "origin": "real",
+      "source": {
+        "id": "Uji dengan API model nyata, 2026-11-10, 19 panggilan model (docs/eval-results/2026-11-10-meta.json)",
+        "en": "Real API run, 2026-11-10, 19 model calls (docs/eval-results/2026-11-10-meta.json)"
+      },
+      "kind": "count",
+      "at": null,
+      "input": {
+        "type": "photo",
+        "note": {
+          "id": "Foto uji dari internet (\"white background, elvers\"): tidak ditampilkan karena bukan milik kami. Jumlah sebenarnya 7, dicek orang.",
+          "en": "Test photo from the internet (\"white background, elvers\"): not shown, it is not ours to publish. True count 7, checked by a person."
+        }
+      },
+      "calls": [
+        {
+          "step": "segment",
+          "provider": "meta",
+          "model": "sam-3.1",
+          "at": null,
+          "ms": 1783,
+          "calls": 4,
+          "outcome": "ok"
+        }
+      ],
+      "checks": {
+        "status": "failed",
+        "items": [],
+        "partial": true
+      },
+      "result": {
+        "type": "count",
+        "count": 6,
+        "low": 6,
+        "high": 6,
+        "atLeast": false,
+        "filled": false,
+        "truth": 7
+      }
+    },
+    {
+      "id": "2026-11-10-meta-g20",
+      "origin": "real",
+      "source": {
+        "id": "Uji dengan API model nyata, 2026-11-10, 19 panggilan model (docs/eval-results/2026-11-10-meta.json)",
+        "en": "Real API run, 2026-11-10, 19 model calls (docs/eval-results/2026-11-10-meta.json)"
+      },
+      "kind": "count",
+      "at": null,
+      "input": {
+        "type": "photo",
+        "note": {
+          "id": "Foto uji dari internet (\"dark background, glass eels\"): tidak ditampilkan karena bukan milik kami. Jumlah sebenarnya 10, dicek orang.",
+          "en": "Test photo from the internet (\"dark background, glass eels\"): not shown, it is not ours to publish. True count 10, checked by a person."
+        }
+      },
+      "calls": [
+        {
+          "step": "segment",
+          "provider": "meta",
+          "model": "sam-3.1",
+          "at": null,
+          "ms": 2353,
+          "calls": 4,
+          "outcome": "ok"
+        }
+      ],
+      "checks": {
+        "status": "passed",
+        "items": [],
+        "partial": true
+      },
+      "result": {
+        "type": "count",
+        "count": 12,
+        "low": 10,
+        "high": 13,
+        "atLeast": false,
+        "filled": true,
+        "truth": 10
+      }
+    },
+    {
+      "id": "2026-11-10-meta-jv-1",
+      "origin": "real",
+      "source": {
+        "id": "Uji dengan API model nyata, 2026-11-10, 11 panggilan model (docs/eval-results/2026-11-10-meta-replay.json)",
+        "en": "Real API run, 2026-11-10, 11 model calls (docs/eval-results/2026-11-10-meta-replay.json)"
+      },
+      "kind": "round",
+      "at": "2026-11-09T19:16:14.606Z",
+      "input": {
+        "type": "transcript",
+        "text": "Kolam A suhune selawe koma wolu, pH pitu koma papat. Kolam be suhune wolulikur, ana sing mati loro.",
+        "note": {
+          "id": "Kalimat uji yang diketik (bahasa Jawa dan Indonesia) dari eval/labelled/rounds.json, bukan rekaman petani.",
+          "en": "Typed test sentence (Javanese and Indonesian) from eval/labelled/rounds.json, not a farmer recording."
+        }
+      },
+      "calls": [
+        {
+          "step": "read",
+          "provider": "meta",
+          "model": "muse-spark-1.3",
+          "at": "2026-11-09T19:16:14.606Z",
+          "ms": 15652,
+          "calls": 1,
+          "outcome": "ok"
+        }
+      ],
+      "checks": {
+        "status": "passed",
+        "items": [
+          {
+            "lang": "id",
+            "ok": true,
+            "label": "Kolam yang disebut ada di tambak"
+          },
+          {
+            "lang": "id",
+            "ok": true,
+            "label": "Angka terdengar di rekaman"
+          },
+          {
+            "lang": "en",
+            "ok": true,
+            "label": "The pond named is on the farm"
+          },
+          {
+            "lang": "en",
+            "ok": true,
+            "label": "Numbers were heard in the recording"
+          }
+        ]
+      },
+      "result": {
+        "type": "round",
+        "ponds": [
+          {
+            "pond": "Kolam A",
+            "values": {
+              "temperature": 25.8,
+              "ph": 7.4
+            },
+            "held": []
+          },
+          {
+            "pond": "Kolam B",
+            "values": {
+              "temperature": 28,
+              "mortality": 2
+            },
+            "held": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "2026-11-10-meta-jv-2",
+      "origin": "real",
+      "source": {
+        "id": "Uji dengan API model nyata, 2026-11-10, 11 panggilan model (docs/eval-results/2026-11-10-meta-replay.json)",
+        "en": "Real API run, 2026-11-10, 11 model calls (docs/eval-results/2026-11-10-meta-replay.json)"
+      },
+      "kind": "round",
+      "at": "2026-11-09T19:16:30.263Z",
+      "input": {
+        "type": "transcript",
+        "text": "Kolam ce siji suhune selikur sanga koma lima, tds satus sewidak. Kolam pojok banyune rada ijo, pakane isih akeh.",
+        "note": {
+          "id": "Kalimat uji yang diketik (bahasa Jawa dan Indonesia) dari eval/labelled/rounds.json, bukan rekaman petani.",
+          "en": "Typed test sentence (Javanese and Indonesian) from eval/labelled/rounds.json, not a farmer recording."
+        }
+      },
+      "calls": [
+        {
+          "step": "read",
+          "provider": "meta",
+          "model": "muse-spark-1.3",
+          "at": "2026-11-09T19:16:30.263Z",
+          "ms": 13073,
+          "calls": 1,
+          "outcome": "ok"
+        }
+      ],
+      "checks": {
+        "status": "failed",
+        "items": [
+          {
+            "lang": "id",
+            "ok": false,
+            "label": "Angka terdengar di rekaman",
+            "reason": "Suhu 29,5 tidak terdengar di rekaman."
+          },
+          {
+            "lang": "en",
+            "ok": false,
+            "label": "Numbers were heard in the recording",
+            "reason": "Temperature 29.5 was not heard in the recording."
+          }
+        ]
+      },
+      "result": {
+        "type": "round",
+        "ponds": [
+          {
+            "pond": "Kolam C1",
+            "values": {
+              "tds": 160
+            },
+            "held": [
+              "temperature"
+            ]
+          },
+          {
+            "pond": "Kolam T",
+            "values": {
+              "color": "green",
+              "leftover": "much"
+            },
+            "held": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "2026-11-10-meta-id-jv-3",
+      "origin": "real",
+      "source": {
+        "id": "Uji dengan API model nyata, 2026-11-10, 11 panggilan model (docs/eval-results/2026-11-10-meta-replay.json)",
+        "en": "Real API run, 2026-11-10, 11 model calls (docs/eval-results/2026-11-10-meta-replay.json)"
+      },
+      "kind": "round",
+      "at": "2026-11-09T19:16:43.339Z",
+      "input": {
+        "type": "transcript",
+        "text": "Kolam B suhu dua puluh tujuh koma tiga, pH tujuh koma satu. Kolam A pH pitu papat, suhune nemlikur.",
+        "note": {
+          "id": "Kalimat uji yang diketik (bahasa Jawa dan Indonesia) dari eval/labelled/rounds.json, bukan rekaman petani.",
+          "en": "Typed test sentence (Javanese and Indonesian) from eval/labelled/rounds.json, not a farmer recording."
+        }
+      },
+      "calls": [
+        {
+          "step": "read",
+          "provider": "meta",
+          "model": "muse-spark-1.3",
+          "at": "2026-11-09T19:16:43.339Z",
+          "ms": 9635,
+          "calls": 1,
+          "outcome": "ok"
+        }
+      ],
+      "checks": {
+        "status": "passed",
+        "items": [
+          {
+            "lang": "id",
+            "ok": true,
+            "label": "Kolam yang disebut ada di tambak"
+          },
+          {
+            "lang": "id",
+            "ok": true,
+            "label": "Angka terdengar di rekaman"
+          },
+          {
+            "lang": "en",
+            "ok": true,
+            "label": "The pond named is on the farm"
+          },
+          {
+            "lang": "en",
+            "ok": true,
+            "label": "Numbers were heard in the recording"
+          }
+        ]
+      },
+      "result": {
+        "type": "round",
+        "ponds": [
+          {
+            "pond": "Kolam B",
+            "values": {
+              "temperature": 27.3,
+              "ph": 7.1
+            },
+            "held": []
+          },
+          {
+            "pond": "Kolam A",
+            "values": {
+              "temperature": 26,
+              "ph": 7.4
+            },
+            "held": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "2026-11-10-meta-g17",
+      "origin": "real",
+      "source": {
+        "id": "Uji dengan API model nyata, 2026-11-10, 11 panggilan model (docs/eval-results/2026-11-10-meta-replay.json)",
+        "en": "Real API run, 2026-11-10, 11 model calls (docs/eval-results/2026-11-10-meta-replay.json)"
+      },
+      "kind": "count",
+      "at": "2026-11-09T19:16:52.991Z",
+      "input": {
+        "type": "photo",
+        "note": {
+          "id": "Foto uji dari internet (\"palm, glass eels\"): tidak ditampilkan karena bukan milik kami. Jumlah sebenarnya 3, dicek orang.",
+          "en": "Test photo from the internet (\"palm, glass eels\"): not shown, it is not ours to publish. True count 3, checked by a person."
+        }
+      },
+      "calls": [
+        {
+          "step": "segment",
+          "provider": "meta",
+          "model": "sam-3.1",
+          "at": "2026-11-09T19:16:52.991Z",
+          "ms": 2000,
+          "calls": 1,
+          "outcome": "ok"
+        },
+        {
+          "step": "segment",
+          "provider": "meta",
+          "model": "sam-3.1",
+          "at": "2026-11-09T19:16:52.989Z",
+          "ms": 2644,
+          "calls": 1,
+          "outcome": "ok"
+        },
+        {
+          "step": "segment",
+          "provider": "meta",
+          "model": "sam-3.1",
+          "at": "2026-11-09T19:16:52.993Z",
+          "ms": 3326,
+          "calls": 1,
+          "outcome": "ok"
+        },
+        {
+          "step": "segment",
+          "provider": "meta",
+          "model": "sam-3.1",
+          "at": "2026-11-09T19:16:52.987Z",
+          "ms": 3546,
+          "calls": 1,
+          "outcome": "ok"
+        }
+      ],
+      "checks": {
+        "status": "failed",
+        "items": [
+          {
+            "lang": "id",
+            "ok": true,
+            "label": "Setiap sidat punya garis tepi"
+          },
+          {
+            "lang": "id",
+            "ok": true,
+            "label": "Hitungan badan dan kepala cocok"
+          },
+          {
+            "lang": "id",
+            "ok": false,
+            "label": "Ukuran garis tepi wajar",
+            "reason": "1 garis tepi jauh lebih besar atau kecil dari sidat lain."
+          },
+          {
+            "lang": "en",
+            "ok": true,
+            "label": "Every eel has an outline"
+          },
+          {
+            "lang": "en",
+            "ok": true,
+            "label": "Body and head counts agree"
+          },
+          {
+            "lang": "en",
+            "ok": false,
+            "label": "Outline sizes are sensible",
+            "reason": "1 outlines are far larger or smaller than the other eels."
+          }
+        ]
+      },
+      "result": {
+        "type": "count",
+        "count": 3,
+        "low": 3,
+        "high": 3,
+        "atLeast": false,
+        "filled": false,
+        "truth": 3
+      }
+    },
+    {
+      "id": "2026-11-10-meta-g18",
+      "origin": "real",
+      "source": {
+        "id": "Uji dengan API model nyata, 2026-11-10, 11 panggilan model (docs/eval-results/2026-11-10-meta-replay.json)",
+        "en": "Real API run, 2026-11-10, 11 model calls (docs/eval-results/2026-11-10-meta-replay.json)"
+      },
+      "kind": "count",
+      "at": "2026-11-09T19:16:56.660Z",
+      "input": {
+        "type": "photo",
+        "note": {
+          "id": "Foto uji dari internet (\"clear container, coloured elvers\"): tidak ditampilkan karena bukan milik kami. Jumlah sebenarnya 4, dicek orang.",
+          "en": "Test photo from the internet (\"clear container, coloured elvers\"): not shown, it is not ours to publish. True count 4, checked by a person."
+        }
+      },
+      "calls": [
+        {
+          "step": "segment",
+          "provider": "meta",
+          "model": "sam-3.1",
+          "at": "2026-11-09T19:16:56.660Z",
+          "ms": 780,
+          "calls": 1,
+          "outcome": "ok"
+        },
+        {
+          "step": "segment",
+          "provider": "meta",
+          "model": "sam-3.1",
+          "at": "2026-11-09T19:16:56.661Z",
+          "ms": 970,
+          "calls": 1,
+          "outcome": "ok"
+        },
+        {
+          "step": "segment",
+          "provider": "meta",
+          "model": "sam-3.1",
+          "at": "2026-11-09T19:16:56.659Z",
+          "ms": 1079,
+          "calls": 1,
+          "outcome": "ok"
+        },
+        {
+          "step": "segment",
+          "provider": "meta",
+          "model": "sam-3.1",
+          "at": "2026-11-09T19:16:56.662Z",
+          "ms": 1582,
+          "calls": 1,
+          "outcome": "ok"
+        }
+      ],
+      "checks": {
+        "status": "passed",
+        "items": [
+          {
+            "lang": "id",
+            "ok": true,
+            "label": "Setiap sidat punya garis tepi"
+          },
+          {
+            "lang": "id",
+            "ok": true,
+            "label": "Hitungan badan dan kepala cocok"
+          },
+          {
+            "lang": "id",
+            "ok": true,
+            "label": "Ukuran garis tepi wajar"
+          },
+          {
+            "lang": "en",
+            "ok": true,
+            "label": "Every eel has an outline"
+          },
+          {
+            "lang": "en",
+            "ok": true,
+            "label": "Body and head counts agree"
+          },
+          {
+            "lang": "en",
+            "ok": true,
+            "label": "Outline sizes are sensible"
+          }
+        ]
+      },
+      "result": {
+        "type": "count",
+        "count": 4,
+        "low": 4,
+        "high": 4,
+        "atLeast": false,
+        "filled": true,
+        "truth": 4
+      }
+    },
+    {
+      "id": "demo-f86d79de",
+      "origin": "demo",
+      "source": {
+        "id": "Tambak demo \"Coba demo\" dengan jawaban contoh, tanpa model (scripts/replay-export.ts --demo)",
+        "en": "Demo farm \"Coba demo\" with sample answers, no model (scripts/replay-export.ts --demo)"
+      },
+      "kind": "round",
+      "at": "2026-11-09T19:24:41.700Z",
+      "input": {
+        "type": "transcript",
+        "text": "Mode contoh: Kolam A suhune pitulikur, pH pitu koma papat. Kolam B suhu 29, ana sing mati loro, pakane isih akeh. Kolam pojok banyune rada ijo.",
+        "note": {
+          "id": "Mode contoh: jawabannya contoh tetap di tambak demo, tidak dibaca dari rekaman.",
+          "en": "Sample mode: the answer is a fixed example on the demo farm, not read from a recording."
+        }
+      },
+      "calls": [
+        {
+          "step": "mock",
+          "provider": "mock",
+          "model": "mock",
+          "at": "2026-11-09T19:24:41.700Z",
+          "ms": 4,
+          "calls": 1,
+          "outcome": "mock"
+        }
+      ],
+      "checks": {
+        "status": "failed",
+        "items": [
+          {
+            "lang": "id",
+            "ok": false,
+            "label": "Kolam yang disebut ada di tambak",
+            "reason": "\"kolam pojok\" belum cocok dengan kolam mana pun."
+          }
+        ]
+      },
+      "result": {
+        "type": "round",
+        "ponds": [
+          {
+            "pond": "Kolam A",
+            "values": {
+              "temperature": 27,
+              "ph": 7.4
+            },
+            "held": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "demo-d75932e3",
+      "origin": "demo",
+      "source": {
+        "id": "Tambak demo \"Coba demo\" dengan jawaban contoh, tanpa model (scripts/replay-export.ts --demo)",
+        "en": "Demo farm \"Coba demo\" with sample answers, no model (scripts/replay-export.ts --demo)"
+      },
+      "kind": "case",
+      "at": "2026-11-09T19:24:41.553Z",
+      "input": {
+        "type": "farm",
+        "note": {
+          "id": "Kasus sidat mati: jumlah mati per hari, jawaban petani dan catatan kolam. Tambak demo: catatan buatan, bukan tambak nyata.",
+          "en": "The dead-eel case: deaths per day, answers and the pond's records. Demo farm: generated records, not a real farm."
+        }
+      },
+      "calls": [
+        {
+          "step": "mock",
+          "provider": "mock",
+          "model": "mock",
+          "at": "2026-11-09T19:24:41.553Z",
+          "ms": 28,
+          "calls": 1,
+          "outcome": "mock"
+        }
+      ],
+      "checks": null,
+      "result": {
+        "type": "text",
+        "text": {
+          "id": "Kolam B: 6 ekor mati hari ini, naik dari 3 kemarin. Catatan terakhir: kemungkinan oksigen air rendah. Angkat sidat mati, pastikan aerator nyala, lalu ukur suhu, pH dan TDS. Suhu air terakhir 29,8 °C."
+        },
+        "extra": [
+          "Jumlah sidat mati besok pagi",
+          "Sidat naik ke permukaan atau kumpul di air masuk",
+          "Sisa pakan",
+          "Risiko tinggi: sidat terlihat naik ke permukaan atau berkumpul di air masuk",
+          "Lihat sidat di permukaan dan dengar aerator",
+          "Ukur suhu, pH, TDS dan amati sidat",
+          "Lihat perilaku sidat dan aerator",
+          "Ukur suhu, pH, TDS dan buang sisa pakan"
+        ]
+      }
+    }
+  ]
+}

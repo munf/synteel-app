@@ -12,6 +12,7 @@
 //       --max-calls 20                  never more model calls than this in one run (default 20)
 //       --mock                          a pretend API answering from the labels: checks the pipeline, costs nothing
 //       --save                          writes docs/eval-results/<date>-<provider>.json
+//       --out <file>                    with --save: this file instead (keeps an earlier run of the same day)
 //   npm run eval -- pairs <a.json> <b.json> [--out <file.csv>]   blind A/B pairs of advice for a person to rate
 //   npm run eval -- tally <rated.csv> <key.json>                  counts the ratings once they are filled in
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -113,7 +114,7 @@ async function bench() {
   console.log(`\n${mock ? 'MOCK run (answers come from the labels: a pipeline check, not a model score)' : 'Live run'}: ${calls} model calls.\n`);
   console.log(table(summaries));
   if (flag('save')) {
-    const file = join(ROOT, 'docs', 'eval-results', `${today()}-${label}.json`);
+    const file = opt('out') ?? join(ROOT, 'docs', 'eval-results', `${today()}-${label}.json`);
     mkdirSync(dirname(file), { recursive: true });
     writeFileSync(file, JSON.stringify({ date: today(), label, mode: mock ? 'mock' : 'live', calls, tasks: result }, null, 2) + '\n');
     console.log(`\nSaved ${file}`);
