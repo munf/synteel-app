@@ -159,8 +159,8 @@ export interface ApiDeps {
   farmAiCap?: number;
   /** Models for the evening briefing agent, tried in order; empty = rules-only briefings. */
   agentProviders?: ChatProvider[];
-  /** Meta Model API access for SAM 3.1 (counting dead eels in a photo). */
-  sam?: SamProvider | null;
+  /** SAM 3.1 for counting dead eels in a photo: the segment route (providers.ts), tried in order. */
+  sam?: SamProvider | SamProvider[] | null;
   /** BMKG village forecast (bmkg.ts) and Open-Meteo storm signs (power.ts); tests pass fakes, no network. */
   getBmkg?: GetBmkg;
   getStorm?: GetStorm;
@@ -1843,13 +1843,13 @@ export function createApi(
       const result = await track('count', async (trace) => ({ ...sample, verify: verifyCount(sample), trace: trace || undefined }), { ...link, mock: true });
       return c.json({ result, mock: true });
     }
-    if (ai?.mode !== 'meta' || !sam?.apiKey) throw new AiUnavailable(tx('Hitung otomatis belum aktif. Hitung manual dulu.', 'Automatic counting is not on yet. Count by hand for now.'));
+    if (ai?.mode !== 'meta' || !(sam && [sam].flat().some((p) => p.apiKey))) throw new AiUnavailable(tx('Hitung otomatis belum aktif. Hitung manual dulu.', 'Automatic counting is not on yet. Count by hand for now.'));
     // Part of an emergency report: it does not use the farm's daily AI quota (the app promises that).
     // Verify before show: a count that fails its checks is shown as "Cek manual", not filled in.
     const result = await track(
       'count',
       async (trace) => {
-        const counted = await countDeadEels(image, sam, r.activeBatch(pond.id)?.phase ?? 'glass_eel');
+        const counted = await countDeadEels(image, sam!, r.activeBatch(pond.id)?.phase ?? 'glass_eel');
         return { ...counted, verify: verifyCount(counted), trace: trace || undefined };
       },
       link,

@@ -8,7 +8,7 @@
 // The prompts run at the same time; bodies are merged, eye pairs become heads, and the answer is one
 // number when bodies and heads agree, or a range the farmer settles. Nothing is saved on its own.
 import { decodeMaskToRaster, decodeMaskToSVGPath, parseImageStream, recordsOfKind, type ResponsesEvent } from '@meta-sam/parser';
-import { AiFailed, call } from './ai.ts';
+import { AiFailed, call, Retry } from './ai.ts';
 import type { Phase } from './domain.ts';
 import type { Verification } from './verify.ts';
 
@@ -21,9 +21,12 @@ const SURE_SCORE = 0.7;
 /** An outline this much larger than the typical one probably covers two crossing eels. */
 const DOUBLE_AREA = 1.7;
 
+/** The segment route's provider+model (providers.ts); name and model default to Meta's SAM 3.1. */
 export interface SamProvider {
   apiKey: string;
   base: string;
+  name?: string;
+  model?: string;
 }
 
 export interface CountedEel {
@@ -81,17 +84,32 @@ async function find(dataUrl: string, prompt: string, sam: SamProvider): Promise<
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      model: 'sam-3.1',
+      model: sam.model ?? 'sam-3.1',
       input: [{ role: 'user', content: [{ type: 'input_text', text: prompt }, { type: 'input_image', image_url: dataUrl }] }],
       metadata: { include_confidence: 'true', mask_encoding: 'one_bit' },
     }),
-  }, { provider: 'meta', model: 'sam-3.1', step: 'segment', images: 1 });
+  }, { provider: sam.name ?? 'meta', model: sam.model ?? 'sam-3.1', step: 'segment', images: 1 });
   return parseMasks(body.output?.[0]?.content?.[0]?.text ?? '');
 }
 
-export async function countDeadEels(image: Blob, sam: SamProvider, phase: Phase = 'glass_eel'): Promise<CountResult> {
-  const started = Date.now();
+/** Counts on the first provider of the route that answers; one whose every prompt hit an outage hands over to the next. */
+export async function countDeadEels(image: Blob, sam: SamProvider | SamProvider[], phase: Phase = 'glass_eel'): Promise<CountResult> {
+  const route = [sam].flat().filter((p) => p.apiKey);
+  if (!route.length) throw new AiFailed('no SAM provider');
   const dataUrl = `data:${image.type || 'image/jpeg'};base64,${Buffer.from(await image.arrayBuffer()).toString('base64')}`;
+  for (const [i, p] of route.entries()) {
+    try {
+      return await countOn(dataUrl, p, phase);
+    } catch (err) {
+      if (!(err instanceof Retry) || i === route.length - 1) throw err;
+      console.error(`${p.name ?? 'meta'} SAM: ${err.message}`);
+    }
+  }
+  throw new AiFailed('no SAM provider');
+}
+
+async function countOn(dataUrl: string, sam: SamProvider, phase: Phase): Promise<CountResult> {
+  const started = Date.now();
   const prompts = phase === 'elver' ? [ELVER_PROMPT, ...BODY_PROMPTS] : BODY_PROMPTS;
   // One failed prompt does not sink the count; all of them failing does.
   const settled = await Promise.allSettled([...prompts, EYE_PROMPT].map((p) => find(dataUrl, p, sam)));
@@ -99,7 +117,7 @@ export async function countDeadEels(image: Blob, sam: SamProvider, phase: Phase 
   if (ok.length === 0) throw (settled[0] as PromiseRejectedResult).reason;
   const eyes = settled[settled.length - 1].status === 'fulfilled' ? (settled[settled.length - 1] as PromiseFulfilledResult<CountedEel[]>).value : [];
   const bodies = settled.slice(0, -1).flatMap((s) => (s.status === 'fulfilled' ? [s.value] : []));
-  return { ...combine(bodies, eyes), ms: Date.now() - started };
+  return { ...combine(bodies, eyes, `${sam.name ?? 'meta'}/${sam.model ?? 'sam-3.1'}`), ms: Date.now() - started };
 }
 
 /** SAM's output text → one outline per mask above the score floor; split out so it can be tested offline. */
@@ -151,7 +169,7 @@ export function pairEyes(eyes: CountedEel[]): { x: number; y: number }[] {
 }
 
 /** Bodies from every prompt + eyes → one count or a range. */
-export function combine(bodyLists: CountedEel[][], eyes: CountedEel[]): Omit<CountResult, 'ms'> {
+export function combine(bodyLists: CountedEel[][], eyes: CountedEel[], model = 'meta/sam-3.1'): Omit<CountResult, 'ms'> {
   // The same eel found by two prompts: keep the surer outline.
   const merged: CountedEel[] = [];
   for (const e of bodyLists.flat().sort((a, b) => (b.score ?? 1) - (a.score ?? 1))) if (!merged.some((m) => iou(m, e) > 0.5)) merged.push(e);
@@ -174,7 +192,7 @@ export function combine(bodyLists: CountedEel[][], eyes: CountedEel[]): Omit<Cou
 
   // Reading order: sure ones top to bottom, then left to right, so the numbers are easy to follow.
   eels.sort((a, b) => Number(b.sure) - Number(a.sure) || a.top - b.top || a.left - b.left);
-  return { count, low, high, atLeast, eels, heads, review, model: 'meta/sam-3.1' };
+  return { count, low, high, atLeast, eels, heads, review, model };
 }
 
 /** One prompt's output as a count (kept for the recorded fixture and older callers). */

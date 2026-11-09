@@ -3,7 +3,7 @@
 // of joined fragments. The guard keeps it to the same facts: no new numbers, every clock time kept,
 // no treatment or diagnosis words, never an oxygen figure. Anything it refuses falls back to the text as given.
 import { createHash } from 'node:crypto';
-import { call, Retry, type ChatProvider } from './ai.ts';
+import { call, reasoningOf, Retry, type ChatProvider } from './ai.ts';
 import { unsafeText } from './agentloop.ts';
 import { currentLang } from './i18n.ts';
 import { numbersOk } from './patterns.ts';
@@ -77,7 +77,7 @@ export function spokenWriter(providers: ChatProvider[], max = 500) {
             ],
             response_format: { type: 'json_schema', json_schema: { name: 'spoken', strict: true, schema: SCHEMA } },
             max_tokens: 1500,
-            reasoning_effort: 'low',
+            ...reasoningOf(p),
           }),
         }, { provider: p.name, model: p.model, step: 'rewrite' });
         const text = guardSpoken(original, JSON.parse(body.choices?.[0]?.message?.content ?? '{}').text);

@@ -40,6 +40,7 @@ export interface CallTag {
 //   Fireworks, https://fireworks.ai/models/fireworks/muse-spark-open: Muse Spark Open $1.25 / $4.25 per 1M.
 //   Baseten: no public price for Muse Spark Open could be read; assumed equal to Fireworks.
 // Fireworks and Baseten run on partner credits today: the figure is what the calls would cost, not a bill.
+// NVIDIA NIM (providers.ts, opt-in): no entry, so its rows carry no estimate until a price is read.
 interface Price {
   inPerM?: number;
   outPerM?: number;

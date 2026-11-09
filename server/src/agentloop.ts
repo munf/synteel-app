@@ -3,7 +3,7 @@
 // knowledge search tool, and the text guard. Each agent keeps its own tools, prompt and guard
 // for what it submits; this file only runs the conversation.
 import { currentLang } from './i18n.ts';
-import { AiFailed, call, Retry, type ChatProvider } from './ai.ts';
+import { AiFailed, call, reasoningOf, Retry, type ChatProvider } from './ai.ts';
 import { knowledge } from './knowledge.ts';
 
 export type Step = { tool: string; args: Record<string, unknown> };
@@ -129,7 +129,7 @@ export async function toolLoop<T>(providers: ChatProvider[], o: LoopOptions<T>):
         const body = await call(`${provider.base}/chat/completions`, provider.apiKey, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ model: provider.model, messages, tools: o.tools, tool_choice: 'auto', max_tokens: 3000, reasoning_effort: 'low' }),
+          body: JSON.stringify({ model: provider.model, messages, tools: o.tools, tool_choice: 'auto', max_tokens: 3000, ...reasoningOf(provider) }),
         }, { provider: provider.name, model: provider.model, step: 'agent' });
         const msg = body.choices?.[0]?.message;
         if (!msg) throw new AiFailed('empty answer');

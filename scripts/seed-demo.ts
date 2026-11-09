@@ -37,8 +37,8 @@ if (flag('--if-missing') && store.demo.template() && !forced) {
 }
 
 const useAi = flag('--ai') || env.aiMock;
-const ai = useAi ? createAi({ chat: env.aiChat, transcriber: env.aiTranscriber, mock: env.aiMock }) : undefined;
-const api = createApi(store, { demoPhone: env.demoPhone ?? '620000000000', ai, agentProviders: useAi ? env.agentChat.filter((p) => p.apiKey) : [] });
+const ai = useAi ? createAi({ chat: env.aiChat, transcriber: env.routes.speech, mock: env.aiMock }) : undefined;
+const api = createApi(store, { demoPhone: env.demoPhone ?? '620000000000', ai, agentProviders: useAi ? env.agentChat : [] });
 const started = Date.now();
 const farmId = await api.buildDemoTemplate();
 const r = store.farm(farmId);

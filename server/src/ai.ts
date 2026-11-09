@@ -6,7 +6,8 @@
 // Three modes:
 //   meta  an API key is set: Muse Voice Transcribe (Meta) turns speech into text; Muse
 //         Spark (Meta Model API) reads meter displays / pond frames and structures speech,
-//         with the open-weight Muse Spark Open (Fireworks) as fallback.
+//         with the open-weight Muse Spark Open (Fireworks) as fallback. Which provider and
+//         model does each task, in which order, is one table in providers.ts.
 //   mock  SYNTEEL_AI_MOCK=1: fixed, clearly labelled example drafts, for building and
 //         testing the app before Meta API access works.
 //   off   neither: capture requests fail with a friendly message, manual entry works.
@@ -20,6 +21,7 @@ import { guardRound, mockRound, ROUND_SCHEMA, roundInstructions, type RoundPond 
 import { mockNotebook, NOTEBOOK_SCHEMA, notebookInstructions } from './notebook.ts';
 import { mockPondPhoto, POND_PHOTO_SCHEMA, pondPhotoInstructions } from './pondphoto.ts';
 import { noteCall, type CallTag } from './ledger.ts';
+import type { Endpoint } from './providers.ts';
 import type { HeldField, Verification } from './verify.ts';
 
 export type CaptureKind = 'photo' | 'voice' | 'video';
@@ -167,18 +169,14 @@ export function toDraft(raw: Record<string, any>, mode: Draft['mode'], transcrip
   return { data, lowConfidence, transcript, problems, mode };
 }
 
-export interface ChatProvider {
-  name: string; // shown in logs and stored with each capture
-  apiKey: string;
-  base: string;
-  model: string;
-}
+/** A chat provider+model (providers.ts): its name is shown in logs and stored with each capture. */
+export type ChatProvider = Endpoint;
 
-export interface Transcriber {
-  apiKey: string;
-  base: string;
-  model: string;
-}
+/** A speech-to-text provider+model; `name` defaults to "meta", the only one today. */
+export type Transcriber = Omit<Endpoint, 'name'> & { name?: string };
+
+/** `reasoning_effort` for the models that take it (Muse Spark); left out for the others. */
+export const reasoningOf = (p: Pick<Endpoint, 'reasoning'>) => (p.reasoning === false ? {} : { reasoning_effort: 'low' });
 
 export class Retry extends AiFailed {}
 
@@ -224,8 +222,23 @@ async function transcribe(t: Transcriber, audio: Blob): Promise<string> {
   const form = new FormData();
   form.append('request', new Blob([JSON.stringify({ model: t.model, audioEncoding: 'WAV', mode: 'PUSH_TO_TALK' })], { type: 'application/json' }));
   form.append('audio', audio, 'audio.wav');
-  const body = await call(`${t.base}/asr/transcribe`, t.apiKey, { method: 'POST', body: form, headers: { Accept: 'application/json' } }, { provider: 'meta', model: t.model, step: 'speech', audioSeconds: await wavSeconds(audio) });
+  const body = await call(`${t.base}/asr/transcribe`, t.apiKey, { method: 'POST', body: form, headers: { Accept: 'application/json' } }, { provider: t.name ?? 'meta', model: t.model, step: 'speech', audioSeconds: await wavSeconds(audio) });
   return String(body.transcript ?? '').trim();
+}
+
+/** Speech to text on the first transcriber that answers; an outage moves on to the next. */
+async function transcribeAny(ts: Transcriber[], audio: Blob): Promise<string> {
+  let lastError: Error = new AiFailed('no speech-to-text provider');
+  for (const t of ts) {
+    try {
+      return await transcribe(t, audio);
+    } catch (err) {
+      if (!(err instanceof Retry)) throw err;
+      console.error(`${t.name ?? 'meta'} speech: ${err.message}`);
+      lastError = err;
+    }
+  }
+  throw lastError;
 }
 
 /** One chat call that must answer with JSON matching `schema`. */
@@ -242,7 +255,7 @@ async function chatJson(p: ChatProvider, system: string, content: unknown, name:
       response_format: { type: 'json_schema', json_schema: { name, strict: true, schema } },
       // Muse Spark reasons before answering; leave room for both.
       max_tokens: maxTokens,
-      reasoning_effort: 'low',
+      ...reasoningOf(p),
     }),
   }, { provider: p.name, model: p.model, step: 'read' });
   try {
@@ -276,19 +289,20 @@ async function firstAnswer<T>(chat: ChatProvider[], ask: (p: ChatProvider) => Pr
 // A long round (50 ponds) is a long transcript; anything beyond this is not a farm walk.
 const ROUND_TRANSCRIPT_MAX = 12_000;
 
-function liveAi(chat: ChatProvider[], transcriber?: Transcriber): Ai {
+function liveAi(chat: ChatProvider[], transcribers: Transcriber[]): Ai {
+  const transcriber = transcribers.length ? transcribers : undefined;
   return {
     mode: 'meta',
     async transcribe(audio) {
       if (!transcriber) throw new AiUnavailable(tx('Suara belum bisa diubah jadi teks. Ketik saja dulu.', 'Speech cannot be turned into text yet. Type it in for now.'));
-      return transcribe(transcriber, audio);
+      return transcribeAny(transcriber, audio);
     },
     async draft(input) {
       if (input.kind === 'voice' && !transcriber) {
         // 503 keeps the note queued on the phone until speech-to-text is available.
         throw new AiUnavailable(tx('Catatan suara belum bisa dibaca AI. Rekaman disimpan di HP; pakai foto atau isi manual dulu.', 'The AI cannot read voice notes yet. The recording is kept on the phone; use a photo or type it in for now.'));
       }
-      const transcript = input.audio && transcriber ? await transcribe(transcriber, input.audio) : undefined;
+      const transcript = input.audio && transcriber ? await transcribeAny(transcriber, input.audio) : undefined;
       if (input.kind === 'voice' && !transcript) throw new AiFailed('Transkrip kosong');
       return firstAnswer(chat, async (provider) => {
         const draft = toDraft(await structure(provider, input, transcript), 'meta', transcript);
@@ -303,10 +317,10 @@ function liveAi(chat: ChatProvider[], transcriber?: Transcriber): Ai {
         if (!input.audio) return guardRound({}, input.ponds, '', { model: 'none', mode: 'meta' });
         // 503 keeps the recording queued on the phone until speech-to-text is available.
         if (!transcriber) throw new AiUnavailable(tx('Rekaman keliling belum bisa dibaca AI. Rekaman disimpan di HP; isi manual dulu.', 'The AI cannot read round recordings yet. The recording is kept on the phone; type it in for now.'));
-        transcript = await transcribe(transcriber, input.audio);
+        transcript = await transcribeAny(transcriber, input.audio);
       }
       // Nothing heard is an answer too: the farmer sees "Suara belum terbaca", not an error.
-      if (!transcript) return guardRound({}, input.ponds, '', { model: transcriber?.model ?? 'none', mode: 'meta' });
+      if (!transcript) return guardRound({}, input.ponds, '', { model: transcriber?.[0].model ?? 'none', mode: 'meta' });
       const text = transcript.slice(0, ROUND_TRANSCRIPT_MAX);
       return firstAnswer(chat, async (provider) => {
         const raw = await chatJson(provider, roundInstructions(input.ponds), `Transkrip:\n${text}`, 'pond_round', ROUND_SCHEMA, 8000);
@@ -418,11 +432,11 @@ export function withDailyCap(ai: Ai, cap: number, now = () => new Date()): Ai {
   };
 }
 
-/** `chat` is tried in order: the first provider that answers writes the draft. */
-export function createAi(opts: { chat: ChatProvider[]; transcriber?: Transcriber; mock: boolean }): Ai {
+/** `chat` and `transcriber` are tried in order (providers.ts routes): the first provider that answers writes the draft. */
+export function createAi(opts: { chat: ChatProvider[]; transcriber?: Transcriber | Transcriber[]; mock: boolean }): Ai {
   if (opts.mock) return mockAi();
   const chat = opts.chat.filter((p) => p.apiKey);
-  if (chat.length) return liveAi(chat, opts.transcriber?.apiKey ? opts.transcriber : undefined);
+  if (chat.length) return liveAi(chat, [opts.transcriber ?? []].flat().filter((t) => t.apiKey));
   const off = async (): Promise<never> => {
     throw new AiUnavailable(tx('AI belum aktif. Isi manual dulu, atau coba lagi nanti.', 'The AI is not on yet. Type it in for now, or try again later.'));
   };

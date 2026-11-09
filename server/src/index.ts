@@ -12,11 +12,12 @@ import { aiLedger } from './ledger.ts';
 import { parseLang } from './i18n.ts';
 import { mailer } from './mail.ts';
 import { MONITOR_INTERVAL_MS, startMonitor } from './monitor.ts';
+import { describeRoute, TASKS } from './providers.ts';
 import type { Nowcast } from './nowcast.ts';
 
 const app = new Hono().basePath('/api');
 
-app.get('/health', (c) => c.json({ ok: true, modelApiKeyConfigured: env.aiChat.some((p) => p.apiKey !== '') }));
+app.get('/health', (c) => c.json({ ok: true, modelApiKeyConfigured: env.aiChat.length > 0 }));
 
 // The emergency steps follow the app's language (x-lang); the rest is reference data.
 app.get('/knowledge', (c) =>
@@ -29,11 +30,12 @@ const store = repo(db);
 const events = eventLog(db);
 // Every model call, with its time, tokens, estimated cost and the checks on its result (ledger.ts).
 const ledger = aiLedger(db);
-const ai = withDailyCap(withAiLog(createAi({ chat: env.aiChat, transcriber: env.aiTranscriber, mock: env.aiMock }), events), env.aiDailyCap);
-const chain = env.aiChat.filter((p) => p.apiKey).map((p) => p.name).join(' → ');
-console.log(`AI mode: ${ai.mode}${ai.mode === 'meta' ? ` (${chain}${env.aiTranscriber.apiKey ? ', voice: meta' : ', no voice'}${env.aiDailyCap ? `, cap ${env.aiDailyCap}/day` : ''})` : ''}`);
-if (ai.mode === 'meta') console.log(`Briefing and case agent: ${env.agentChat.filter((p) => p.apiKey).map((p) => p.name).join(' → ')}`);
-const api = createApi(store, { ai, saveCapture: captureStore(), cookieName: env.cookieName, demoPhone: env.demoPhone, farmAiCap: env.farmAiCap, agentProviders: env.agentChat.filter((p) => p.apiKey), sam: env.aiTranscriber.apiKey ? { apiKey: env.aiTranscriber.apiKey, base: env.aiTranscriber.base } : null, mail: mailer(env.smtp), removeFarmFiles: (farmId) => removeFarmCaptures(farmId), covers: coverStore(), demoLimits: { perIp: env.demoPerIp ?? DEMO_PER_IP_PER_DAY, maxLive: env.demoMaxLive ?? DEMO_MAX_LIVE }, events, ledger });
+const ai = withDailyCap(withAiLog(createAi({ chat: env.aiChat, transcriber: env.routes.speech, mock: env.aiMock }), events), env.aiDailyCap);
+console.log(`AI mode: ${ai.mode}${env.aiDailyCap && ai.mode === 'meta' ? ` (cap ${env.aiDailyCap}/day)` : ''}`);
+// The routes per task (providers.ts), provider and model names only.
+if (ai.mode === 'meta') for (const task of TASKS) console.log(`  ${task.padEnd(8)} ${describeRoute(env.routes[task])}`);
+for (const s of env.routesSkipped.filter((s) => s.why !== 'no key')) console.warn(`AI route ${s.task}: ${s.entry} left out (${s.why})`);
+const api = createApi(store, { ai, saveCapture: captureStore(), cookieName: env.cookieName, demoPhone: env.demoPhone, farmAiCap: env.farmAiCap, agentProviders: env.agentChat, sam: env.routes.segment, mail: mailer(env.smtp), removeFarmFiles: (farmId) => removeFarmCaptures(farmId), covers: coverStore(), demoLimits: { perIp: env.demoPerIp ?? DEMO_PER_IP_PER_DAY, maxLive: env.demoMaxLive ?? DEMO_MAX_LIVE }, events, ledger });
 console.log(`Support mail: ${env.smtp ? `${env.smtp.host}:${env.smtp.port}` : 'not configured (tickets only stored)'}`);
 // Team dashboard: off unless SYNTEEL_ADMIN_USER and SYNTEEL_ADMIN_PASSWORD are set. Registered before the app's routes.
 app.route(

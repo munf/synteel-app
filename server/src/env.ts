@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { resolveRoutes } from './providers.ts';
 
 // Secrets live outside the public repo: SYNTEEL_ENV_FILE, or ~/.synteel.env by default.
 const envFile = process.env.SYNTEEL_ENV_FILE ?? join(homedir(), '.synteel.env');
@@ -12,33 +13,18 @@ if (existsSync(envFile)) {
   }
 }
 
-const metaKey = process.env.META_API_KEY ?? process.env.MODEL_API_KEY ?? '';
-const metaBase = process.env.MODEL_API_BASE ?? 'https://api.meta.ai/v1';
-const meta = { name: 'meta', apiKey: metaKey, base: metaBase, model: 'muse-spark-1.3' };
-// Open-weight Muse Spark Open on Fireworks (partner credits): fallback when the Meta API
-// is down or out of credits. SYNTEEL_AI_PROVIDER=fireworks puts it first.
-const fireworks = {
-  name: 'fireworks',
-  apiKey: process.env.FIREWORKS_API_KEY ?? '',
-  base: 'https://api.fireworks.ai/inference/v1',
-  model: 'accounts/fireworks/models/muse-spark-open',
-};
-
-// The same open-weight Muse Spark Open on Baseten (partner credits): runs the evening briefing agent,
-// with the Meta API and Fireworks behind it.
-const baseten = {
-  name: 'baseten',
-  apiKey: process.env.BASETEN_API_KEY ?? '',
-  base: 'https://inference.baseten.co/v1',
-  model: 'meta-models/muse-spark-open-1026',
-};
+// Which provider and model does each AI task, in which order: providers.ts. Providers without a key are left out.
+const { routes, skipped } = resolveRoutes(process.env);
 
 export const env = {
-  /** Evening briefing agent, tried in order. */
-  agentChat: [baseten, meta, fireworks],
-  aiChat: process.env.SYNTEEL_AI_PROVIDER === 'fireworks' ? [fireworks, meta] : [meta, fireworks],
-  // Speech-to-text only exists on the Meta side.
-  aiTranscriber: { apiKey: metaKey, base: metaBase, model: 'muse-voice-transcribe-1.0' },
+  /** Provider+model per AI task, tried in order (speech, extract, agent, segment). */
+  routes,
+  /** Route entries left out (no key, unknown provider, task not supported), for the start-up log. */
+  routesSkipped: skipped,
+  /** Evening briefing, case agent, pattern notes and the "Dengarkan" rewrite, tried in order. */
+  agentChat: routes.agent,
+  /** Reading drafts: photos, voice transcripts, rounds, notebook pages, pond photos. */
+  aiChat: routes.extract,
   // Real AI reads per farm per day; unset means no cap.
   farmAiCap: Number(process.env.SYNTEEL_AI_FARM_CAP ?? 0),
   // Real AI reads allowed per day for the whole server; unset means no cap. Set on the public preview.
