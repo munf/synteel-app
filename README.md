@@ -73,6 +73,8 @@ All model calls go from the server; the phone never holds a key. Muse Spark 1.3,
 | Muse Voice Transcribe | `muse-voice-transcribe-1.0` | Voice notes, voice rounds, video soundtracks, spoken answers to case questions, spoken help messages | The phone converts audio to WAV. The transcript goes through Muse Spark extraction and the local number guards. Without ASR the recording stays queued on the phone |
 | SAM 3.1 (Meta Responses API) | `sam-3.1` | Counts dead glass eels and elvers in one photo | Four prompts in parallel: "transparent eel", "thin worm", "transparent worm" for bodies, "black eye" for heads; elver ponds add "worm". Code merges bodies that several prompts found, counts two eyes close together as one head, and treats an outline 1.7 times the typical size as possibly two eels. The phone sends the photo at 1600 px and 12% brighter so the eyes stand out |
 
+Which provider and model does each task, in which order, is one table in [`providers.ts`](server/src/providers.ts): speech to text, reading drafts, the agents and SAM. The order above is the default, kept until the benchmark shows a better one. A provider without its key is off, and `SYNTEEL_ROUTE_<TASK>` (e.g. `SYNTEEL_ROUTE_EXTRACT=fireworks,meta`) changes the order without a code change. An outage, overload or spent credits hands the task to the next entry, and the AI call ledger records the provider and model that answered. NVIDIA NIM (build.nvidia.com, OpenAI-compatible) is there as an opt-in entry read from `NVIDIA_API_KEY`, in no default route and not called yet. The night alarms are not a task in that table: a test checks that the rules and the forecast cannot reach a model module.
+
 ## Agents
 
 Two agents share one tool loop ([`agentloop.ts`](server/src/agentloop.ts)). Each tries the providers in order and falls back to a rules-only answer when all of them fail.
@@ -158,6 +160,7 @@ Steps you cannot rerun yourself, and where their recorded output is:
 |---|---|
 | SAM 3.1 dead eel count, 14 photos | Up to 16 eels lying apart (6 photos): every answer within 1 eel. 18 or more, or a pile (8 photos): no usable count. The low end never went above the true count (14 of 14). Median 1.8 s |
 | Muse Spark, spoken Javanese and Indonesian numbers | 12 of 12 fields from 3 typed rounds, 4.2 to 5.2 s per round |
+| Benchmark, 10 Nov 2026, Meta API (19 calls) | Typed rounds: 12 of 12 fields again; after the code checks 11 stay filled in. SAM on the 4 user-checked photos: 3 of 4 within 1 eel. Table in [`docs/evaluation.md`](docs/evaluation.md#benchmark-per-provider-and-model) |
 | Muse Spark, notebook pages (synthetic) | 216 cells over 5 reads: 200 right, 16 hard cells left empty and flagged as intended, 0 wrong |
 | Evening briefing agent, 6 live runs | 6 of 6 finished with tool calls, 7 to 8 steps, 9.3 to 13.3 s. All 12 rule checks kept in every run |
 | Not measured yet | ASR on real farmer recordings, meter photo accuracy, real notebook pages, the case agent live |
@@ -186,8 +189,9 @@ Commit history in this repository starts on Oct 26, 2026 (first commit 22:12 UTC
 web/        Vite + Preact phone app (PWA), Indonesian and English
 server/     Node 24 + Hono + built-in SQLite (node:sqlite); holds the API keys
 knowledge/  Thresholds, the week 0 to 12 program, SOPs, emergencies, partner practice (JSON)
-scripts/    Demo seed, offline evaluation, Meta API check
-docs/       Evaluation
+scripts/    Demo seed, offline evaluation and benchmark, nowcast check, Meta API check
+eval/       Labelled items for the benchmark, and how to add more
+docs/       Evaluation, benchmark results (docs/eval-results/)
 ```
 
 The phone talks only to the server. The server calls the Meta Model API (Muse Spark 1.3, Muse Voice Transcribe, SAM 3.1), Baseten and Fireworks (Muse Spark Open), Open-Meteo for weather and BMKG for the village forecast. Rules, forecast and alarms are plain TypeScript with no model in the path.
@@ -223,9 +227,10 @@ Never commit a key: the file lives outside the repo, and `.env.example` holds on
 ```sh
 npm test       # full test suite (node --test)
 npm run eval   # offline evaluation: SAM fixture and count rules, voice, meter and notebook guards, agent guard and fallback, rules
+npm run eval -- bench --mock   # the benchmark pipeline against a pretend API
 ```
 
-Neither needs API keys.
+None of these needs API keys. A live benchmark of one provider or model per task (`npm run eval -- bench --provider meta`, options at the top of [`scripts/eval.ts`](scripts/eval.ts)) does, and costs credits; [`eval/README.md`](eval/README.md) explains the data.
 
 ## Data sources and licences
 

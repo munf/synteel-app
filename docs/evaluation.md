@@ -1,6 +1,6 @@
 # Evaluation
 
-What we measured for each Meta model use in Synt Eel, how, and where it falls short. All live numbers below are from runs on 29-30 October 2026 (WIB) against the current code. The offline part can be re-run by anyone with `npm run eval` (no keys, no network); `npm test` runs the full test suite (124 tests).
+What we measured for each Meta model use in Synt Eel, how, and where it falls short. The live numbers are from runs on 29-30 October 2026 (WIB) and from the benchmark run of 10 November 2026. The offline part can be re-run by anyone with `npm run eval` (no keys, no network); `npm test` runs the full test suite (245 tests).
 
 The app gives decision support. A model never diagnoses, never doses medicine, and never saves anything by itself: every count, voice log and meter reading is a draft the farmer confirms, and alarms come from fixed rules.
 
@@ -15,6 +15,60 @@ The app gives decision support. A model never diagnoses, never doses medicine, a
 | Muse Spark vision, notebook pages | 2 synthetic handwritten pages (+1 degraded copy), 5 live reads, 216 cells | 200 right, 16 hard cells left empty and flagged as meant, 0 wrong. Synthetic pages only; real notebooks not measured yet |
 | Evening briefing agent (Muse Spark Open on Baseten, Muse Spark 1.3 on Meta) | 6 live runs on the seeded demo farm | 6 of 6 finished with tool calls, 7-8 steps, 9.3-13.3 s. All 12 rule checks kept in every run. 0 to 4 extra checks proposed per run |
 | Deterministic rules and alarms | `npm run eval`, `npm test` | No model in the path; agent failure or bad output falls back to the rules |
+
+## Benchmark per provider and model
+
+`npm run eval -- bench` ([`scripts/bench.ts`](../scripts/bench.ts)) runs labelled items through one provider+model route per task, along the path the app itself uses: the route table ([`server/src/providers.ts`](../server/src/providers.ts)), `call()`, the guards and the code checks ([`server/src/verify.ts`](../server/src/verify.ts)). Each item's calls are written to an in-memory AI call ledger, so time, tokens, estimated cost and the provider/model that answered come from the same place as in production. Any configured provider or model can be swapped in (`--provider`, `--route`); every run is saved whole in [`docs/eval-results/`](eval-results/). The labels are only the ones in this document, as data files in [`eval/labelled/`](../eval/labelled/); [`eval/README.md`](../eval/README.md) says how to add more.
+
+What is scored: **extract** (typed voice rounds), the share of labelled fields right in the model's answer after the guards, and the share still filled in after the code checks (a value held back as "Cek manual" counts as not filled in); **segment** (SAM), the share of counts within 1 eel of the true count; **speech**, word error rate; **agent**, the share of rule checks the briefing kept. Every task also gives the share of results that passed verification, the median time and the estimated cost per item (price table in [`server/src/ledger.ts`](../server/src/ledger.ts): an estimate, not a bill).
+
+**Run of 10 November 2026: Meta API, the default provider. 19 model calls in total** (3 Muse Spark 1.3 calls for the rounds, 16 SAM 3.1 calls for 4 photos × 4 prompts), capped with `--max-calls 19`. Saved as [`docs/eval-results/2026-11-10-meta.json`](eval-results/2026-11-10-meta.json).
+
+| Task | Items | Accuracy | Filled in after checks | Verification passed | Median time | Est. cost per item | Model calls |
+|---|---|---|---|---|---|---|---|
+| extract: typed Javanese/Indonesian rounds, Muse Spark 1.3 | 3 | 12 of 12 fields right (100%) | 11 of 12 (92%) | 2 of 3 | 10.4 s | $0.0064 | 3 |
+| segment: SAM 3.1, the 4 photos the user checked | 4 | 3 of 4 within 1 eel (75%) | | 2 of 4 | 2.4 s | $0.010 | 16 |
+
+| Item | Labelled | Got | Verification |
+|---|---|---|---|
+| Round jv-1 ("selawe koma wolu", "wolulikur", "mati loro") | A 25.8 °C, pH 7.4; B 28 °C, 2 dead | all 4 | passed |
+| Round jv-2 ("selikur sanga koma lima", "satus sewidak", green water, much feed left) | C1 29.5 °C, TDS 160; pojok green, much | all 4 | failed: 29.5 °C held back as not heard |
+| Round id-jv-3 ("dua puluh tujuh koma tiga", "pitu papat", "nemlikur") | B 27.3 °C, pH 7.1; A pH 7.4, 26 °C | all 4 | passed |
+| Photo g17, palm, glass eels | 3 | 3 | failed |
+| Photo g18, clear container, elvers | 4 | 4 | passed |
+| Photo g19, white background, elvers | 7 | 6 | failed |
+| Photo g20, dark background, glass eels | 10 | about 10-13 (12 filled in) | passed |
+
+What this shows:
+
+- The model reads the typed rounds as well as on 29 October: 12 of 12 again. They took twice as long (8.7-11.4 s against 4.2-5.2 s); three calls are too few to say why.
+- The code checks are now the weak spot of the voice path, not the model. "selikur sanga koma lima" was read as 29.5 (the label), but the check hears 21.5, 30.5 or 9.5 in it, so the farmer gets "Cek manual" for a right value. The usual Javanese for 29 is "sangalikur", so holding back an unusual phrase is defensible; the farmer is asked, nothing wrong is filled in. A first mock run found a real gap: "satus sewidak" (160) was not heard at all because "sewidak" (60) was missing from the check's Javanese words. That was fixed before this run (commit 3117821).
+- SAM gave the same answers as on 29-30 October on these 4 photos (3, 4, 6, and 10-13 with 12 filled in), so the count path is repeatable. Two right or nearly right counts (3 of 3, 6 of 7) failed verification, so the farmer sees "Cek manual" there too. Which check failed was not saved in this run; the benchmark now records the failed checks of every item.
+- Estimated cost: about $0.006 per voice round and $0.010 per dead-eel photo (4 SAM images at $2.50 per 1,000).
+
+Not measured in this run, and why:
+
+- Speech to text: there is no labelled recording yet (`eval/labelled/speech.json` is empty on purpose; real farmer clips need consent first).
+- Meter photos: no labelled photos yet.
+- Briefing agent: one run can take up to 8 calls and has no right answer to score; it stays in mock mode until a rated comparison is planned.
+- Fireworks, Baseten and NVIDIA NIM: the budget was one small run against the default provider. NVIDIA has no key on the server. So no eval shows a better order yet, and the hackathon order stays the default.
+
+**Blind rating of advice.** `npm run eval -- pairs <a.json> <b.json>` turns the advice two runs wrote for the same nights into a CSV of A/B pairs in random order, model names taken out, with the key in a separate file; `npm run eval -- tally` counts the ratings once a person has filled them in. No pairs have been rated yet.
+
+**Mock mode.** `npm run eval -- bench --mock` answers every request from the labels, through the same path. It shows the pipeline works (the test suite runs it) and costs nothing; its accuracy is 100% by construction and is not a model result.
+
+## Nowcast check: the night forecast against what was logged
+
+`node scripts/nowcast-check.ts --db <file.sqlite>` makes each pond's night forecast again as the app would have at 17.00 (only the records before 17.00, past weather from the database's archive) and holds it against what was logged from 17.00 to 09.00: water temperature readings against the estimate at that hour, and oxygen signs (eels surfacing or at the inlet, dissolved oxygen under 5 mg/L) against the night's peak risk. Dead eels are shown apart, per night. It runs on a copy of the database and never writes to it.
+
+Run on 10 November 2026 over the last 30 days:
+
+| Database | Pond-nights with records | Oxygen signs logged | Night temperature readings | Mean / 80% error |
+|---|---|---|---|---|
+| Public preview: the seeded demo farms (SYNTHETIC records made by the demo seed) | 90 of 174 | 0 (88 nights forecast ok, 2 warning) | 174 | 0.54 / 0.60 °C |
+| Production (real accounts, 1 farm with records) | 2 of 58 | 0 | 0 | none |
+
+The demo rows only show that the check runs: the seed's records are made up for the demo and cannot validate the forecast. In production there are two nights with records and no night reading yet, so nothing can be said about the forecast on a real pond. Night readings, and now and then a dissolved-oxygen meter reading, are what would make this check mean something.
 
 ## SAM 3.1: counting dead glass eels and elvers
 
@@ -176,12 +230,17 @@ The biggest gain is the open tarp tank, whose sun response the old fixed values 
 - No field validation yet: no partner-farm count photos, voice recordings, meter photos or notebook pages have been scored. The notebook pages above are synthetic.
 - The voice check skipped ASR. Real speech, wind and pumps at the pond will add errors before the extraction step.
 - The agent was run at one time of day on one seeded farm.
+- The benchmark run of 10 November is 3 rounds and 4 photos against one provider. Other providers and models have not been compared yet.
 
 ## Reproduce
 
 ```sh
-npm run eval   # offline: SAM fixture and count rules, voice, meter and notebook guards, agent guard and fallback, rules
-npm test       # full test suite
+npm run eval                   # offline: SAM fixture and count rules, voice, meter and notebook guards, agent guard and fallback, rules
+npm run eval -- bench --mock   # the benchmark pipeline against a pretend API, no keys
+npm test                       # full test suite
+# live, needs keys and costs credits:
+npm run eval -- bench --provider meta --tasks extract,segment --only jv-1,jv-2,id-jv-3,g17,g18,g19,g20 --images <photos> --max-calls 19 --save
+node scripts/nowcast-check.ts --db <file.sqlite> --days 30
 ```
 
-The live runs need API keys and the private photo set, so they are not in the repo.
+The live runs need API keys and the private photo set, so the photos are not in the repo; their labels are, in [`eval/labelled/`](../eval/labelled/).

@@ -1,0 +1,210 @@
+{
+  "date": "2026-11-10",
+  "label": "meta",
+  "mode": "live",
+  "calls": 19,
+  "tasks": {
+    "extract": {
+      "route": [
+        "meta/muse-spark-1.3"
+      ],
+      "summary": {
+        "task": "extract",
+        "metric": "labelled fields right",
+        "n": 3,
+        "errors": 0,
+        "accuracy": 1,
+        "shownAccuracy": 0.9166666666666666,
+        "verifyPassRate": 0.6666666666666666,
+        "medianMs": 10368,
+        "costPerItem": 0.00641425,
+        "calls": 3,
+        "fallbacks": 0,
+        "answeredBy": {
+          "meta/muse-spark-1.3": 3
+        }
+      },
+      "items": [
+        {
+          "id": "jv-1",
+          "score": 1,
+          "shown": 1,
+          "detail": {
+            "right": 4,
+            "total": 4,
+            "wrong": [],
+            "extra": 0,
+            "held": []
+          },
+          "verify": "passed",
+          "ms": 11392,
+          "calls": 1,
+          "cost": 0.0069675,
+          "answeredBy": [
+            "meta/muse-spark-1.3"
+          ],
+          "fallbacks": 0
+        },
+        {
+          "id": "jv-2",
+          "score": 1,
+          "shown": 0.75,
+          "detail": {
+            "right": 4,
+            "total": 4,
+            "wrong": [],
+            "extra": 0,
+            "held": [
+              "Kolam ce siji temperature"
+            ]
+          },
+          "verify": "failed",
+          "ms": 10368,
+          "calls": 1,
+          "cost": 0.0066957499999999994,
+          "answeredBy": [
+            "meta/muse-spark-1.3"
+          ],
+          "fallbacks": 0
+        },
+        {
+          "id": "id-jv-3",
+          "score": 1,
+          "shown": 1,
+          "detail": {
+            "right": 4,
+            "total": 4,
+            "wrong": [],
+            "extra": 0,
+            "held": []
+          },
+          "verify": "passed",
+          "ms": 8720,
+          "calls": 1,
+          "cost": 0.0055795,
+          "answeredBy": [
+            "meta/muse-spark-1.3"
+          ],
+          "fallbacks": 0
+        }
+      ],
+      "skipped": []
+    },
+    "segment": {
+      "route": [
+        "meta/sam-3.1"
+      ],
+      "summary": {
+        "task": "segment",
+        "metric": "counts within 1 eel",
+        "n": 4,
+        "errors": 0,
+        "accuracy": 0.75,
+        "shownAccuracy": null,
+        "verifyPassRate": 0.5,
+        "medianMs": 2354.5,
+        "costPerItem": 0.01,
+        "calls": 16,
+        "fallbacks": 0,
+        "answeredBy": {
+          "meta/sam-3.1": 4
+        }
+      },
+      "items": [
+        {
+          "id": "g17",
+          "score": 1,
+          "detail": {
+            "truth": 3,
+            "count": 3,
+            "low": 3,
+            "high": 3,
+            "atLeast": false,
+            "exact": true,
+            "within1": true,
+            "lowOk": true,
+            "absError": 0
+          },
+          "verify": "failed",
+          "ms": 3414,
+          "calls": 4,
+          "cost": 0.01,
+          "answeredBy": [
+            "meta/sam-3.1"
+          ],
+          "fallbacks": 0
+        },
+        {
+          "id": "g18",
+          "score": 1,
+          "detail": {
+            "truth": 4,
+            "count": 4,
+            "low": 4,
+            "high": 4,
+            "atLeast": false,
+            "exact": true,
+            "within1": true,
+            "lowOk": true,
+            "absError": 0
+          },
+          "verify": "passed",
+          "ms": 2356,
+          "calls": 4,
+          "cost": 0.01,
+          "answeredBy": [
+            "meta/sam-3.1"
+          ],
+          "fallbacks": 0
+        },
+        {
+          "id": "g19",
+          "score": 1,
+          "detail": {
+            "truth": 7,
+            "count": 6,
+            "low": 6,
+            "high": 6,
+            "atLeast": false,
+            "exact": false,
+            "within1": true,
+            "lowOk": true,
+            "absError": 1
+          },
+          "verify": "failed",
+          "ms": 1783,
+          "calls": 4,
+          "cost": 0.01,
+          "answeredBy": [
+            "meta/sam-3.1"
+          ],
+          "fallbacks": 0
+        },
+        {
+          "id": "g20",
+          "score": 0,
+          "detail": {
+            "truth": 10,
+            "count": 12,
+            "low": 10,
+            "high": 13,
+            "atLeast": false,
+            "exact": false,
+            "within1": false,
+            "lowOk": true,
+            "absError": 2
+          },
+          "verify": "passed",
+          "ms": 2353,
+          "calls": 4,
+          "cost": 0.01,
+          "answeredBy": [
+            "meta/sam-3.1"
+          ],
+          "fallbacks": 0
+        }
+      ],
+      "skipped": []
+    }
+  }
+}
