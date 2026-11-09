@@ -74,7 +74,7 @@ test('steps: numbered, with what was seen; a value held back as "Cek manual" nev
   assert.equal(m.params[2], '1) Cek aerator, batu aerasi dan selang udara; 2) Jangan beri pakan dulu sampai sidat berenang normal');
   // A count the farmer entered goes in.
   const counted = withLang('en', () => stepsMessage({ pondName: 'Kolam B', at: at21, timezone: TZ, seen: ['dead eels'], facts: [{ field: 'mortality', value: 6 }], steps: ['Check the aerator'] }));
-  assert.match(counted.text, /Seen: dead eels \(6 dead\)/);
+  assert.match(counted.text, /Seen: dead eels \(6\)/);
 });
 
 // ---------- Providers ----------
@@ -163,7 +163,7 @@ test('without the Cloud API: settings save, verification is not offered, steps o
   const text = decodeURIComponent(res.json.url.split('?text=')[1]);
   assert.match(res.json.url, /^https:\/\/wa\.me\/6281234567890\?text=/);
   assert.match(text, /Langkah untuk Kolam B/);
-  assert.match(text, /\(6 ekor mati\)/);
+  assert.match(text, /Terlihat: sidat mati \(6 ekor\)/);
   // A step that reads like medicine is dropped.
   assert.doesNotMatch(text, /obat/);
   // Recorded: kind, channel, status. Not the text, not the number.

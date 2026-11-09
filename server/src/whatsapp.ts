@@ -251,7 +251,7 @@ export function stepsMessage(p: { pondName: string; at: number; timezone: string
   const steps = p.steps.slice(0, 6);
   const text = [
     `${HEAD} · ${tx(`Langkah untuk ${p.pondName}, ${time}`, `Steps for ${p.pondName}, ${time}`)}`,
-    ...(seen ? [`${tx('Terlihat', 'Seen')}: ${seen}${dead ? ` (${factText(dead)})` : ''}`] : []),
+    ...(seen ? [`${tx('Terlihat', 'Seen')}: ${seen}${dead ? ` (${tx(`${dead.value} ekor`, String(dead.value))})` : ''}`] : []),
     ...(readings.length ? [`${tx('Catatan terakhir', 'Last records')}: ${readings.join(' · ')}`] : []),
     ...steps.map((s, i) => `${i + 1}. ${s}`),
   ].join('\n');
