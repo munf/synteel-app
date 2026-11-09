@@ -16,7 +16,7 @@ test('numbers said: digits, Indonesian, Javanese and English number words', () =
   for (const v of [28.6, 7.2, 162, 1]) assert.ok(has(id, v), `${v} in Indonesian`);
   const jv = numbersSaid('Kolam A suhune pitulikur, pH pitu koma papat. Kolam B ana sing mati loro, telung puluh');
   for (const v of [27, 7.4, 2, 30]) assert.ok(has(jv, v), `${v} in Javanese`);
-  // "satus sewidak" = 160, from the typed Javanese rounds of the benchmark (eval/data/rounds.json).
+  // "satus sewidak" = 160, from the typed Javanese rounds of the benchmark (eval/labelled/rounds.json).
   assert.ok(has(numbersSaid('tds satus sewidak'), 160), '160 in Javanese');
   const en = numbersSaid('Temperature twenty-eight point six, pH seven point two, TDS one hundred sixty-two. One dead.');
   for (const v of [28.6, 7.2, 162, 1]) assert.ok(has(en, v), `${v} in English`);

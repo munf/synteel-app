@@ -22,7 +22,7 @@ import { aiLedger, type AiKind } from '../server/src/ledger.ts';
 import type { Endpoint, Task } from '../server/src/providers.ts';
 import type { RoundPond } from '../server/src/round.ts';
 import { countDeadEels } from '../server/src/sam.ts';
-import { verifyCount, verifyDraft, verifyRound } from '../server/src/verify.ts';
+import { verifyCount, verifyDraft, verifyRound, type Verification } from '../server/src/verify.ts';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 
@@ -273,7 +273,7 @@ export async function runTask(task: Task, o: RunOptions): Promise<{ items: ItemR
           const s = scoreFields(item.expect, roundFields(raw));
           const r = verifyRound(raw, ponds);
           const shown = scoreFields(item.expect, roundFields(r));
-          return { score: s.total ? s.right / s.total : null, shown: shown.total ? shown.right / shown.total : null, detail: { right: s.right, total: s.total, wrong: s.wrong, extra: s.extra, held: heldOf(r) }, verify: r.verify.status };
+          return { score: s.total ? s.right / s.total : null, shown: shown.total ? shown.right / shown.total : null, detail: { right: s.right, total: s.total, wrong: s.wrong, extra: s.extra, held: heldOf(r), failedChecks: failedChecks(r.verify) }, verify: r.verify.status };
         },
       });
     }
@@ -293,7 +293,7 @@ export async function runTask(task: Task, o: RunOptions): Promise<{ items: ItemR
           const s = scoreFields([{ pond: 1, ...item.expect }], [{ pondId: 1, fields: flatFields(raw.data) }]);
           const d = verifyDraft(raw, pond, [pond]);
           const shown = scoreFields([{ pond: 1, ...item.expect }], [{ pondId: 1, fields: flatFields(d.data) }]);
-          return { score: s.total ? s.right / s.total : null, shown: shown.total ? shown.right / shown.total : null, detail: { right: s.right, total: s.total, wrong: s.wrong, extra: s.extra }, verify: d.verify.status };
+          return { score: s.total ? s.right / s.total : null, shown: shown.total ? shown.right / shown.total : null, detail: { right: s.right, total: s.total, wrong: s.wrong, extra: s.extra, failedChecks: failedChecks(d.verify) }, verify: d.verify.status };
         },
       });
     }
@@ -340,7 +340,8 @@ export async function runTask(task: Task, o: RunOptions): Promise<{ items: ItemR
         run: async () => {
           const r = await countDeadEels(photo, o.route, item.phase);
           const s = scoreCount(item.truth, r);
-          return { score: s.within1 ? 1 : 0, detail: { truth: item.truth, count: r.count, low: r.low, high: r.high, atLeast: r.atLeast, ...s }, verify: verifyCount(r).status };
+          const v = verifyCount(r);
+          return { score: s.within1 ? 1 : 0, detail: { truth: item.truth, count: r.count, low: r.low, high: r.high, atLeast: r.atLeast, ...s, failedChecks: failedChecks(v) }, verify: v.status };
         },
       });
     }
@@ -360,7 +361,7 @@ export async function runTask(task: Task, o: RunOptions): Promise<{ items: ItemR
           const agentChecks = b.checks.filter((c) => c.source === 'agent').map((c) => c.action);
           return {
             score: rules.length ? kept / rules.length : 1,
-            detail: { source: b.source, ruleChecks: rules.length, kept, agentChecks: agentChecks.length, steps: b.steps.length },
+            detail: { source: b.source, ruleChecks: rules.length, kept, agentChecks: agentChecks.length, steps: b.steps.length, failedChecks: failedChecks(b.verify) },
             verify: b.verify?.status ?? null,
             output: [b.summary, ...agentChecks.map((a) => `- ${a}`)].join('\n'),
           };
@@ -410,6 +411,8 @@ export async function runTask(task: Task, o: RunOptions): Promise<{ items: ItemR
 
 /** Each pond's draft of a round as flat fields, the pond as matched by code (null: the farmer picks). */
 export const roundFields = (r: RoundResult) => r.drafts.map((d) => ({ pondId: d.pondId, fields: flatFields(d.data) }));
+/** "agree: …" per failed code check, so a failed verification can be looked into. */
+const failedChecks = (v: Verification | null | undefined) => (v?.checks ?? []).filter((c) => !c.ok).map((c) => `${c.id}: ${c.reason ?? c.label}`);
 const heldOf = (r: RoundResult) => r.drafts.flatMap((d) => d.issues.filter((i) => i.kind === 'unverified').map((i) => `${d.heardName} ${i.field}`));
 
 // ---------- Mock: a pretend API answering from the labels ----------
