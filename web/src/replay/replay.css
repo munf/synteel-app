@@ -1,0 +1,19 @@
+/* Replay page (replay/index.html): the app's tokens and parts, plus the numbered stages of one run. */
+.screen.replay { padding-bottom: calc(48px + env(safe-area-inset-bottom, 0px)); }
+.replay-stages { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 16px; }
+.replay-stage { display: flex; gap: 12px; align-items: flex-start; }
+.replay-num {
+  flex: none; width: 28px; height: 28px; border-radius: 14px;
+  background: var(--tint); color: var(--accent-ink);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0.875rem; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+.replay-quote { margin: 0; padding: 12px 16px; border-radius: 16px; background: var(--bg); font-weight: 600; }
+.replay-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.replay-list li { display: flex; flex-direction: column; gap: 2px; padding: 12px; border-radius: 16px; background: var(--bg); }
+.replay-held { display: inline-flex; align-items: flex-start; gap: 6px; color: var(--warn); font-weight: 600; }
+.replay-held svg { flex: none; margin-top: 3px; }
+.replay-bullets { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+.replay .ai-checks li.bad .ai-mark { border-radius: 6px; }
+.replay h3 { font-size: 0.875rem; color: var(--ink-2); }
+.replay code { font-size: 0.875rem; }

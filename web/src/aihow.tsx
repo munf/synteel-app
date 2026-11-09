@@ -7,7 +7,7 @@ import { t } from './i18n.ts';
 import { fmtNum } from './labels.ts';
 import { Icon } from './ui.tsx';
 
-const STEP: Record<AiStep, () => string> = {
+export const STEP: Record<AiStep, () => string> = {
   speech: () => t('Suara diubah jadi teks', 'Speech turned into text'),
   read: () => t('Isi dibaca dan disusun', 'Content read and sorted'),
   segment: () => t('Sidat dicari di foto', 'Eels looked for in the photo'),

@@ -2,6 +2,7 @@ import preact from '@preact/preset-vite';
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
 
 // Fills the placeholders in dist/sw.js with the built file list (relative paths) and a
@@ -35,6 +36,8 @@ export default defineConfig({
   // Relative asset paths: the same build serves at / or under a sub-path (eel.synt.fun/preview/).
   base: './',
   plugins: [preact(), swPrecache()],
+  // Two pages: the app, and the public read-only replay of recorded AI runs (replay/, no sign-in).
+  build: { rollupOptions: { input: { main: fileURLToPath(new URL('./index.html', import.meta.url)), replay: fileURLToPath(new URL('./replay/index.html', import.meta.url)) } } },
   server: {
     host: true,
     proxy: { '/api': 'http://localhost:8787' },
