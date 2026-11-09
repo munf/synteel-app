@@ -13,6 +13,7 @@ import { LocateButton, useLocate } from './setup.tsx';
 import { BackupCard } from './power.tsx';
 import './profile.css';
 import { JoinByCode } from '../join.tsx';
+import { WhatsAppCard } from './whatsapp.tsx';
 
 /** A tappable white row: icon, title and one line under it, chevron. */
 function LinkCard({ icon, title, sub, onClick, children }: { icon: ComponentChildren; title: string; sub: ComponentChildren; onClick: () => void; children?: ComponentChildren }) {
@@ -469,6 +470,8 @@ export function Profile({
         </div>
         <Switch checked={prefs.shareData} label={t('Simpan foto dan rekaman', 'Keep photos and recordings')} onChange={(v) => setPrefs({ shareData: v })} />
       </section>
+
+      <WhatsAppCard />
 
       <section class="card list" aria-labelledby="alat-title">
         <h2 id="alat-title" style={{ paddingTop: 20, paddingBottom: 4 }}>

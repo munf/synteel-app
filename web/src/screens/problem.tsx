@@ -401,6 +401,8 @@ function Result({ report, emergencies, go, onBack, onSaved }: { report: Report; 
         </section>
       )}
 
+      {steps.length > 0 && <SendSteps report={report} steps={steps} seen={SIGNS.filter((s) => signs.includes(s.id)).map((s) => s.label.toLowerCase())} />}
+
       {/* The owner is not told by the app: the farmer sends the summary (FAKTA: automatic message is not built). */}
       <section class="card soft-bad help-card">
         <div class="row top">
@@ -482,6 +484,50 @@ function Result({ report, emergencies, go, onBack, onSaved }: { report: Report; 
         </button>
       </section>
     </div>
+  );
+}
+
+/**
+ * "Kirim langkah lewat WhatsApp": the steps to the farmer's own WhatsApp. The server sends them when Profil has it
+ * turned on with a checked number; otherwise (or without signal) WhatsApp opens here with the steps filled in.
+ * Only what the farmer confirmed goes: the dead count entered, never a count held back as "Cek manual".
+ */
+function SendSteps({ report, steps, seen }: { report: Report; steps: string[]; seen: string[] }) {
+  const [state, setState] = useState<'idle' | 'busy' | 'sent' | 'failed'>('idle');
+  // Like the other WhatsApp buttons: a new tab (or the WhatsApp app); only a blocked pop-up leaves this screen.
+  const open = (url: string) => {
+    const w = window.open(url, '_blank');
+    if (w) w.opener = null;
+    else location.href = url;
+  };
+  const send = async () => {
+    setState('busy');
+    try {
+      const r = await api.whatsappSteps({ pondId: report.pond.id, seen, steps, dead: report.dead, at: report.at });
+      if (r.status === 'sent') return setState('sent');
+      open(r.url);
+      setState(r.status === 'failed' ? 'failed' : 'idle');
+    } catch {
+      // No signal: the same steps, put together here.
+      const text = [`Synteel · ${t(`Langkah untuk ${report.pond.name}, ${fmtClock(report.at)}`, `Steps for ${report.pond.name}, ${fmtClock(report.at)}`)}`, ...steps.map((s, i) => `${i + 1}. ${s}`)].join('\n');
+      open(`https://wa.me/?text=${encodeURIComponent(text)}`);
+      setState('idle');
+    }
+  };
+  return (
+    <section class="stack-sm">
+      {state === 'sent' ? (
+        <div class="note ok" role="status">
+          <Icon name="check" />
+          <span class="grow">{t('Langkah terkirim ke WhatsApp.', 'Steps sent to WhatsApp.')}</span>
+        </div>
+      ) : (
+        <button type="button" class="btn secondary" disabled={state === 'busy'} onClick={send}>
+          <Icon name="chat" size={20} /> {t('Kirim langkah lewat WhatsApp', 'Send the steps on WhatsApp')}
+        </button>
+      )}
+      {state === 'failed' && <span class="label ink2">{t('Pesan otomatis gagal terkirim, jadi WhatsApp dibuka di HP ini.', 'The automatic message did not go out, so WhatsApp opened on this phone.')}</span>}
+    </section>
   );
 }
 

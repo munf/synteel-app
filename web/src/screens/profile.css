@@ -29,3 +29,9 @@
 /* Light / Dark / Like phone: three tiles, icon over the word. */
 .profile .night-row .lang-opt { padding: 8px 4px; flex-direction: column; gap: 4px; }
 :root[data-theme='night'] .profile .ladder-day.next { background: #f5f5f5; color: #101010; }
+
+/* Profil → WhatsApp (whatsapp.tsx): ticks with a second line, the box on the first line. */
+.wa-card .wa-check { width: 100%; align-items: flex-start; padding: 8px 0; }
+.wa-card .wa-check .check-box { margin-top: 2px; }
+.wa-card .wa-check:disabled { opacity: 0.55; }
+.wa-card .wa-ok { color: var(--ok); }

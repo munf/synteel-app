@@ -184,6 +184,23 @@ export interface Member {
 export const API = `${import.meta.env.BASE_URL}api`;
 
 /** An error from the server, with its Indonesian message and the HTTP status. */
+/** What WhatsApp can carry (server/src/whatsapp.ts). */
+export type WaKind = 'night' | 'alarm' | 'steps';
+
+/** Profil → WhatsApp: the server's channel, the farmer's number and choices, the last sends (no texts). */
+export interface WaView {
+  /** cloud: the WhatsApp Cloud API; link: WhatsApp opens on the phone with the text filled in; mock: tests and QA. */
+  channel: 'cloud' | 'link' | 'mock';
+  /** The server can send by itself; false means only the farmer's own tap sends. */
+  push: boolean;
+  phone: string | null;
+  verified: boolean;
+  optIn: boolean;
+  kinds: WaKind[];
+  consented: boolean;
+  sends: { at: string; kind: WaKind | 'code'; channel: string; status: 'sent' | 'link' | 'failed' }[];
+}
+
 /** One phone or computer signed in to this account (Profil → Perangkat yang masuk). */
 export interface SignedInDevice {
   id: string;
@@ -312,6 +329,14 @@ export const api = {
   changePin: (pin: string, newPin: string) => call<void>('PUT', '/auth/pin', { pin, newPin }),
   /** Profil → Hapus akun: the account, and every farm it is the only owner of. */
   deleteAccount: (pin: string) => call<void>('POST', '/auth/delete', { pin }),
+  /** Profil → WhatsApp. */
+  whatsapp: () => call<WaView>('GET', '/whatsapp'),
+  saveWhatsapp: (patch: { phone?: string; optIn?: boolean; kinds?: WaKind[]; consent?: true }) => call<WaView>('PUT', '/whatsapp', patch),
+  whatsappCode: (phone: string) => call<WaView>('POST', '/whatsapp/code', { phone }),
+  verifyWhatsapp: (code: string) => call<WaView>('POST', '/whatsapp/verify', { code }),
+  /** Problem flow: sent by the server when turned on and verified, else a wa.me link to open. */
+  whatsappSteps: (b: { pondId: number; seen: string[]; steps: string[]; dead: number; at: number }) =>
+    call<{ status: 'sent' } | { status: 'link' | 'failed'; url: string; blocked?: string }>('POST', '/whatsapp/steps', b),
   members: () => call<{ members: Member[] }>('GET', '/farm/members'),
   createInvite: (role: Role) => call<{ code: string; role: Role; expiresInDays: number }>('POST', '/farm/invites', { role }),
   removeMember: (userId: number) => call<void>('DELETE', `/farm/members/${userId}`),
