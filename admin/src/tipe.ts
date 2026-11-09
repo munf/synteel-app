@@ -97,6 +97,23 @@ export interface PemakaianAi {
   log: { id: string; waktu: string; fitur: FiturAi; tambak: string | null; durasiDtk: number; hasil: 'gagal' | 'lambat'; pesan: string }[]
   kuota: { tambak: string; kabupaten: Kabupaten; pakai: number; batas: number | null }[]
   ambangLambatDtk: number
+  /** Buku panggilan AI (server/src/ledger.ts); null bila server tidak menyimpannya. Biaya = perkiraan, bukan tagihan. */
+  buku?: BukuAi | null
+}
+
+export type HasilPanggilan = 'ok' | 'fallback' | 'error' | 'mock'
+export interface BukuAi {
+  panggilan: {
+    id: string; waktu: string; jenis: string; langkah: string; penyedia: string; model: string; durasiMs: number
+    tokenMasuk: number | null; tokenKeluar: number | null; biayaUsd: number | null; hasil: HasilPanggilan
+    /** hasil cek kode (verify.ts) atas jawaban yang dilayani panggilan ini */
+    cek: 'passed' | 'failed' | null; tambak: string | null; pesan: string | null
+  }[]
+  perModel: { penyedia: string; model: string; panggilan: number; gagal: number; cadangan: number; tokenMasuk: number; tokenKeluar: number; biayaUsd: number | null; rataMs: number }[]
+  /** per tambak per malam (12.00–12.00 WIB), terbaru di atas */
+  perKolamMalam: { malam: string; tambak: string; kolam: number; panggilan: number; biayaUsd: number | null; perKolamUsd: number | null }[]
+  rata7Malam: number | null
+  catatanHarga: string
 }
 
 // ─────────────────────────── 5. Kesehatan sistem ───────────────────────────

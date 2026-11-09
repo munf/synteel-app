@@ -193,6 +193,24 @@ export const PEMAKAIAN_AI: PemakaianAi = {
     { id: 'l8', waktu: jamLalu(20), fitur: 'foto', tambak: NAMA_TAMBAK_PENUH[9], durasiDtk: 31, hasil: 'lambat', pesan: 'Foto 12 MB, dikompres di server' },
     { id: 'l9', waktu: jamLalu(26), fitur: 'malam', tambak: NAMA_TAMBAK_PENUH[14], durasiDtk: 60, hasil: 'gagal', pesan: 'Batas waktu penyedia AI (timeout)' },
   ],
+  // Buku panggilan AI: data contoh untuk tampilan saja, bukan pemakaian atau biaya sungguhan.
+  buku: {
+    panggilan: [
+      { id: 'c3', waktu: jamLalu(0.5), jenis: 'voice', langkah: 'read', penyedia: 'meta', model: 'muse-spark-1.3', durasiMs: 6200, tokenMasuk: 1850, tokenKeluar: 640, biayaUsd: 0.005033, hasil: 'ok', cek: 'passed', tambak: NAMA_TAMBAK_PENUH[0], pesan: null },
+      { id: 'c2', waktu: jamLalu(0.5), jenis: 'voice', langkah: 'speech', penyedia: 'meta', model: 'muse-voice-transcribe-1.0', durasiMs: 2100, tokenMasuk: null, tokenKeluar: null, biayaUsd: 0.0015, hasil: 'ok', cek: 'passed', tambak: NAMA_TAMBAK_PENUH[0], pesan: null },
+      { id: 'c1', waktu: jamLalu(5), jenis: 'briefing', langkah: 'agent', penyedia: 'baseten', model: 'meta-models/muse-spark-open-1026', durasiMs: 0, tokenMasuk: null, tokenKeluar: null, biayaUsd: null, hasil: 'error', cek: null, tambak: NAMA_TAMBAK_PENUH[2], pesan: 'AI API 503: overloaded' },
+    ],
+    perModel: [
+      { penyedia: 'meta', model: 'muse-spark-1.3', panggilan: 120, gagal: 2, cadangan: 0, tokenMasuk: 230000, tokenKeluar: 81000, biayaUsd: 0.632, rataMs: 7400 },
+      { penyedia: 'meta', model: 'sam-3.1', panggilan: 32, gagal: 0, cadangan: 0, tokenMasuk: 0, tokenKeluar: 0, biayaUsd: 0.08, rataMs: 3900 },
+    ],
+    perKolamMalam: [
+      { malam: HARI14[12], tambak: NAMA_TAMBAK_PENUH[0], kolam: 6, panggilan: 14, biayaUsd: 0.054, perKolamUsd: 0.009 },
+      { malam: HARI14[12], tambak: NAMA_TAMBAK_PENUH[2], kolam: 4, panggilan: 9, biayaUsd: 0.028, perKolamUsd: 0.007 },
+    ],
+    rata7Malam: 0.008,
+    catatanHarga: 'Data contoh. Perkiraan dari tabel harga di server/src/ledger.ts, bukan tagihan.',
+  },
   kuota: [
     { tambak: NAMA_TAMBAK_PENUH[5], kabupaten: 'Purworejo', pakai: 60, batas: 60 },
     { tambak: NAMA_TAMBAK_PENUH[2], kabupaten: 'Cilacap', pakai: 54, batas: 60 },
