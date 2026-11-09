@@ -44,6 +44,9 @@ export const verification = (checks: VerifyCheck[]): Verification => ({ status: 
 /** The reasons of the failed checks, for a short "Cek manual" line. */
 export const failedReasons = (v: Verification | null | undefined) => (v?.checks ?? []).filter((c) => !c.ok).map((c) => c.reason ?? c.label);
 
+/** English singular or plural after a count: "1 outline", "2 outlines". Indonesian needs none. */
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
 const say = (v: number) => (currentLang() === 'en' ? String(Math.round(v * 100) / 100) : String(Math.round(v * 100) / 100).replace('.', ','));
 
 // ---------- Readings ----------
@@ -146,10 +149,20 @@ function concat(words: string[]): number | null {
   return Number(words.map((w) => (w in UNITS ? UNITS[w] : w)).join(''));
 }
 
+/**
+ * "selikur sanga" → 29: spoken Javanese also says the twenties as "selikur" (21) and then the last digit,
+ * the way round.ts tells the model to read it. Only a 21–29 word followed by one digit word.
+ */
+function likur(words: string[]): number | null {
+  if (words.length !== 2 || !(WHOLE[words[0]] > 20 && WHOLE[words[0]] < 30) || !/likur$/.test(words[0])) return null;
+  const unit = UNITS[words[1]];
+  return unit >= 1 && unit <= 9 ? 20 + unit : null;
+}
+
 /** Every value a run of number words can mean, digit by digit or composed, whole or in part. */
 function readings(words: string[]): number[] {
   const out: number[] = [];
-  const whole = (ws: string[]) => [compose(ws), concat(ws)].filter((v): v is number => v !== null);
+  const whole = (ws: string[]) => [compose(ws), concat(ws), likur(ws)].filter((v): v is number => v !== null);
   for (let i = 0; i < words.length; i++) for (let j = i + 1; j <= Math.min(words.length, i + 4); j++) out.push(...whole(words.slice(i, j)));
   return out;
 }
@@ -189,7 +202,7 @@ const heardIn = (v: number, said: number[]) => said.some((s) => Math.abs(s - v) 
 
 const notHeardReason = (field: Field, v: number) =>
   field === 'mortality'
-    ? tx(`${v} sidat mati tidak terdengar di rekaman.`, `${v} dead eels was not heard in the recording.`)
+    ? tx(`${v} sidat mati tidak terdengar di rekaman.`, `${v === 1 ? '1 dead eel was' : `${v} dead eels were`} not heard in the recording.`)
     : tx(`${NAME[field]()} ${say(v)} tidak terdengar di rekaman.`, `${NAME[field]()} ${say(v)} was not heard in the recording.`);
 
 // ---------- Pond names in what was said ----------
@@ -367,7 +380,7 @@ export function verifyCount(r: Omit<CountResult, 'ms'>): Verification {
     id: 'masks',
     ok: !emptyMask.length && !nothing,
     label: tx('Setiap sidat punya garis tepi', 'Every eel has an outline'),
-    ...((emptyMask.length || nothing) && { reason: nothing ? tx('Ada angka tanpa sidat yang ditandai di foto.', 'There is a number with no eel marked in the photo.') : tx(`${emptyMask.length} garis tepi kosong atau rusak.`, `${emptyMask.length} outlines are empty or broken.`) }),
+    ...((emptyMask.length || nothing) && { reason: nothing ? tx('Ada angka tanpa sidat yang ditandai di foto.', 'There is a number with no eel marked in the photo.') : tx(`${emptyMask.length} garis tepi kosong atau rusak.`, `${emptyMask.length === 1 ? '1 outline is' : `${emptyMask.length} outlines are`} empty or broken.`) }),
   });
 
   const slack = Math.max(1, Math.round(COUNT_TOLERANCE * Math.max(r.high, 1)));
@@ -380,7 +393,7 @@ export function verifyCount(r: Omit<CountResult, 'ms'>): Verification {
     ...(apart && {
       reason: tx(
         `Badan dan kepala tidak cocok: ${sure} badan jelas, ${r.heads.length} kepala, kisaran ${r.low}–${r.high}.`,
-        `Bodies and heads do not agree: ${sure} clear bodies, ${r.heads.length} heads, range ${r.low}–${r.high}.`,
+        `Bodies and heads do not agree: ${plural(sure, 'clear body', 'clear bodies')}, ${plural(r.heads.length, 'head', 'heads')}, range ${r.low}–${r.high}.`,
       ),
     }),
   });
@@ -392,7 +405,7 @@ export function verifyCount(r: Omit<CountResult, 'ms'>): Verification {
     id: 'area',
     ok: odd === 0,
     label: tx('Ukuran garis tepi wajar', 'Outline sizes are sensible'),
-    ...(odd && { reason: tx(`${odd} garis tepi jauh lebih besar atau kecil dari sidat lain.`, `${odd} outlines are far larger or smaller than the other eels.`) }),
+    ...(odd && { reason: tx(`${odd} garis tepi jauh lebih besar atau kecil dari sidat lain.`, `${odd === 1 ? '1 outline is' : `${odd} outlines are`} far larger or smaller than the other eels.`) }),
   });
   return verification(checks);
 }
@@ -474,7 +487,7 @@ export function verifyRows(rows: { checks: { note: string }[] }[]): Verification
       id: 'rows',
       ok: bad.length === 0,
       label: tx('Setiap isian masuk akal', 'Every cell is plausible'),
-      ...(bad.length && { reason: tx(`${bad.length} isian perlu dicek: ${bad[0].note}`, `${bad.length} cells need a look: ${bad[0].note}`) }),
+      ...(bad.length && { reason: tx(`${bad.length} isian perlu dicek: ${bad[0].note}`, `${bad.length === 1 ? '1 cell needs' : `${bad.length} cells need`} a look: ${bad[0].note}`) }),
     },
   ]);
 }

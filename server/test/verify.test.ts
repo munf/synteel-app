@@ -157,3 +157,33 @@ test('notebook rows: any cell marked for a look fails the page check with its no
   assert.equal(v.status, 'failed');
   assert.match(v.checks[0].reason!, /pH 74/);
 });
+
+test('Javanese: "selikur sanga koma lima" is 29.5, as the round prompt reads it, and is not held back', () => {
+  assert.ok(has(numbersSaid('suhune selikur sanga koma lima'), 29.5));
+  assert.ok(has(numbersSaid('suhune selikur sanga'), 29));
+  assert.ok(has(numbersSaid('sangalikur koma lima'), 29.5));
+  // Only a twenties word and one digit: "selikur" alone stays 21, "selikur sanga wolu" is not 298.
+  assert.ok(!has(numbersSaid('selikur'), 29));
+  assert.ok(!has(numbersSaid('selikur sanga wolu'), 298));
+  // The benchmark's jv-2 round (eval/labelled/rounds.json): C1 29.5 °C and TDS 160 both pass.
+  const out = verifyDraft(
+    { data: { readings: { temperature: 29.5, tds: 160 } }, transcript: 'Kolam A suhune selikur sanga koma lima, tds satus sewidak.', problems: [] },
+    ponds[0],
+    ponds,
+  );
+  assert.equal(out.verify.status, 'passed');
+  assert.equal(out.held.length, 0);
+});
+
+test('English check reasons count right: one outline, one cell, one dead eel', () =>
+  withLang('en', () => {
+    const one = verifyCount(combine([[eel(0, 0, 0.9), eel(100, 0, 0.9, 0)]], []));
+    assert.match(one.checks.find((c) => c.id === 'masks')!.reason!, /^1 outline is empty/);
+    const huge = verifyCount(combine([[eel(0, 0, 0.9), eel(100, 0, 0.9), eel(200, 0, 0.9), eel(0, 50, 0.9, 40000, 400, 400)]], []));
+    assert.match(huge.checks.find((c) => c.id === 'area')!.reason!, /^1 outline is far/);
+    const apart = verifyCount(combine([[eel(0, 0, 0.9)]], Array.from({ length: 9 }, (_, i) => eye(i * 50, 100))));
+    assert.match(apart.checks.find((c) => c.id === 'agree')!.reason!, /1 clear body, 9 heads/);
+    assert.match(verifyRows([{ checks: [{ note: 'pH 74' }] }]).checks[0].reason!, /^1 cell needs a look/);
+    const dead = verifyDraft({ data: { mortality: 1 }, transcript: 'Kolam A normal.', problems: [] }, ponds[0], ponds);
+    assert.match(dead.held[0].reason, /^1 dead eel was not heard/);
+  }));
