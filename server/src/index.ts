@@ -14,6 +14,7 @@ import { mailer } from './mail.ts';
 import { MONITOR_INTERVAL_MS, startMonitor } from './monitor.ts';
 import { describeRoute, TASKS } from './providers.ts';
 import type { Nowcast } from './nowcast.ts';
+import { withWebApp } from './webapp.ts';
 import { pickProvider } from './whatsapp.ts';
 
 const app = new Hono().basePath('/api');
@@ -114,6 +115,9 @@ setInterval(() => api.briefFarms().catch((err) => console.error('briefings:', er
 // Weekly water temperature pattern notes per farm (patterns.ts): checked every hour, each farm once a week.
 setInterval(() => api.patternFarms().catch((err) => console.error('patterns:', err)), 60 * 60_000);
 
-serve({ fetch: app.fetch, port: env.port, hostname: env.host }, (info) => {
+// Self-hosting (Dockerfile): SYNTEEL_WEB_DIR=web/dist serves the built app at / next to /api. Unset behind Caddy.
+const webDir = process.env.SYNTEEL_WEB_DIR;
+if (webDir) console.log(`Web app: files from ${webDir}`);
+serve({ fetch: webDir ? withWebApp(app, webDir).fetch : app.fetch, port: env.port, hostname: env.host }, (info) => {
   console.log(`synteel server listening on http://${env.host ?? 'localhost'}:${info.port}`);
 });
