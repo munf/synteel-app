@@ -1,6 +1,7 @@
 // Shapes shared by the server and the web app for the features added in the second design round:
 // voice rounds over many ponds, record history with corrections, the AI quota page and support.
 import type { Level, LogData, LogSource } from './domain.ts';
+import type { Verification } from './verify.ts';
 
 // ---------- Voice round: one recording that names many ponds ----------
 
@@ -13,7 +14,9 @@ export type RoundIssue =
   /** The same pond and field said twice with different values; the last one is preselected. */
   | { kind: 'twice'; field: ReadingField; values: number[] }
   /** Part of what was said about this pond could not be understood. */
-  | { kind: 'unclear'; text: string };
+  | { kind: 'unclear'; text: string }
+  /** A number the model wrote that was not heard in the recording (verify.ts): offered, never filled in by itself. */
+  | { kind: 'unverified'; field: ReadingField | 'mortality'; value: number; note: string };
 
 /** A number that was impossible as heard and was corrected without asking (pH 74 → 7,4). Shown, not asked. */
 export interface AutoFix {
@@ -34,6 +37,8 @@ export interface RoundDraft {
   autoFixed: AutoFix[];
   /** The words this draft came from, for the farmer to check. */
   quote: string;
+  /** The code checks on this pond's draft (verify.ts). */
+  verify?: Verification;
 }
 
 export interface RoundResult {
@@ -45,6 +50,10 @@ export interface RoundResult {
   empty: boolean;
   model: string;
   mode: 'meta' | 'mock';
+  /** The code checks over every pond's draft (verify.ts). */
+  verify?: Verification;
+  /** The AI call ledger entry (ledger.ts) behind this result: "Cara AI memproses ini". */
+  trace?: string;
 }
 
 // ---------- Record history and corrections ----------
@@ -166,6 +175,8 @@ export interface NotebookPage {
   recorded: Record<string, number[]>;
   model: string;
   mode: 'meta' | 'mock';
+  verify?: Verification;
+  trace?: string;
 }
 
 /** One checked row the farmer confirmed. */
