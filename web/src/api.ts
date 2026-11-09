@@ -4,6 +4,7 @@ import type { CaseCheck, CaseQuestion, CaseRun, CaseView } from '../../server/sr
 import type { Aeration, Batch, Behavior, Farm, Finding, Level, Log, LogData, Phase, Pond, Setting } from '../../server/src/domain.ts';
 import type { Nowcast, NowcastPoint, RiskFactor, RiskLevel, SuggestedCheck } from '../../server/src/nowcast.ts';
 import type { Limits } from '../../server/src/rules.ts';
+import type { CountKind, CycleSummary } from '../../server/src/cycle.ts';
 import type { Outage, PowerBackup, PowerLevel, PowerNight, PowerReason } from '../../server/src/power.ts';
 import type { Draft, DraftField } from '../../server/src/ai.ts';
 import type { AiStep, Outcome, Trace, TraceStep } from '../../server/src/ledger.ts';
@@ -23,6 +24,7 @@ export type { Outage, PowerBackup, PowerLevel, PowerNight, PowerReason };
 export type { Draft, DraftField, LogSource };
 export type { AiStep, HeldField, Outcome, Trace, TraceStep, Verification, VerifyCheck };
 export type { Light, MeasureHour, Place, PondPattern, PondPhotoDraft, ThermalModel, WaterColor };
+export type { CountKind, CycleSummary };
 
 /** The pond page's water temperature card (GET /ponds/:id/temperature). */
 export interface PondTemperature {
@@ -340,7 +342,11 @@ export const api = {
   pondTemperature: (id: number) => call<PondTemperature>('GET', `/ponds/${id}/temperature`),
   /** The pattern agent for this pond now, in the viewer's language. */
   pondPattern: (id: number) => call<{ pattern: PondPattern; left: number }>('POST', `/ponds/${id}/pattern`),
-  pond: (id: number) => call<{ pond: PondSummary; logs: Log[] }>('GET', `/ponds/${id}`),
+  pond: (id: number) => call<{ pond: PondSummary; logs: Log[]; cycle: CycleSummary | null }>('GET', `/ponds/${id}`),
+  /** The running batch's stocked count (owner only). */
+  setStockedCount: (pondId: number, count: number) => call<{ cycle: CycleSummary | null }>('PUT', `/ponds/${pondId}/cycle/stocked`, { count }),
+  /** What was counted at sorting or harvest. */
+  addCycleCount: (pondId: number, c: { count: number; kind: CountKind; countedOn?: string }) => call<{ cycle: CycleSummary | null }>('POST', `/ponds/${pondId}/cycle/counts`, c),
   startBatch: (pondId: number, batch: { phase: Phase; stockedAt: string; initialCount?: number }) =>
     call<{ pond: PondSummary }>('POST', `/ponds/${pondId}/batches`, batch),
   /** `link`: a dead-eel report from Masalah opens or adds to the pond's case; `recheck` answers its re-check. */

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { StepList, useSteps } from '../steps.tsx';
 import { CaseCard, ClosedCases, useCases } from './case.tsx';
-import { api, ApiError, coverUrl, type Aeration, type Limits, type Log, type Nowcast, type NowcastState, type PondPhotoDraft, type PondProfile, type PondSummary, type PondTemperature, type Role } from '../api.ts';
+import { api, ApiError, coverUrl, type Aeration, type CountKind, type CycleSummary, type Limits, type Log, type Nowcast, type NowcastState, type PondPhotoDraft, type PondProfile, type PondSummary, type PondTemperature, type Role } from '../api.ts';
 import { applyDraft, errorWords, PondPhoto, profileBody, ProfileFields, profileLine, profileOf, saveCover, useCoverChange } from '../pondprofile.tsx';
 import type { Go } from '../app.tsx';
 import { aerationLabel, fmtAgo, fmtNum, fmtTemp, fmtTime, phaseLabel, readingWord, sourceLabel, summarizeLog } from '../labels.ts';
@@ -376,6 +376,148 @@ function Nicknames({ pond, role, onSaved }: { pond: PondSummary; role?: Role | n
   );
 }
 
+// ---------- Cycle summary (server/src/cycle.ts) ----------
+
+const COUNT_KIND: Record<CountKind, string> = { sorting: t('Sortir', 'Sorting'), harvest: t('Panen', 'Harvest') };
+const pctText = (v: number) => `${fmtNum(Math.round(v * 1000) / 10)}%`;
+/** "12 November" without the weekday: the card is narrow. */
+const dayMonth = (ymd: string) => new Date(`${ymd}T00:00:00`).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long' });
+
+/**
+ * One glass eel → elver cycle of the pond's batch, from the records already kept. Survival only when both
+ * the stocked and a counted number were entered; the 20–40% beside it is what the partner farmer
+ * reported, never a measured figure, and the card says so.
+ */
+function CycleCard({ pond, cycle, role, onChanged }: { pond: PondSummary; cycle: CycleSummary; role?: Role | null; onChanged: (c: CycleSummary | null) => void }) {
+  const [form, setForm] = useState<'stocked' | 'count' | null>(null);
+  const [value, setValue] = useState('');
+  const [kind, setKind] = useState<CountKind[]>(['sorting']);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const owner = role !== 'worker';
+  const c = cycle;
+
+  const open = (f: 'stocked' | 'count') => {
+    setForm(f);
+    setValue(f === 'stocked' && c.stockedCount ? String(c.stockedCount) : '');
+    setError('');
+  };
+  const save = async (e: Event) => {
+    e.preventDefault();
+    const n = Number(value.replace(/[.\s]/g, ''));
+    if (!Number.isInteger(n) || n < (form === 'stocked' ? 1 : 0)) return setError(t('Isi jumlah ekor dengan angka bulat.', 'Enter the number of eels as a whole number.'));
+    setBusy(true);
+    setError('');
+    try {
+      const r = form === 'stocked' ? await api.setStockedCount(pond.id, n) : await api.addCycleCount(pond.id, { count: n, kind: kind[0] ?? 'sorting' });
+      onChanged(r.cycle);
+      setForm(null);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const rows: [string, string][] = [
+    [t('Catatan per hari', 'Records per day'), fmtNum(c.logsPerDay)],
+    [t('Malam yang dicek', 'Nights checked'), t(`${c.nights.covered} dari ${c.nights.total}`, `${c.nights.covered} of ${c.nights.total}`)],
+    [t('Ukuran dalam batas', 'Readings in range'), t(`${c.readings.inRange} dari ${c.readings.inRange + c.readings.outOfRange}`, `${c.readings.inRange} of ${c.readings.inRange + c.readings.outOfRange}`)],
+    [t('Tanda bahaya dicek ulang', 'Danger signs checked again'), c.alarms.raised ? t(`${c.alarms.answered} dari ${c.alarms.raised}`, `${c.alarms.answered} of ${c.alarms.raised}`) : t('Belum ada', 'None yet')],
+    [t('Sidat mati tercatat', 'Dead eels recorded'), t(`${fmtNum(c.deaths.total)} ekor`, `${fmtNum(c.deaths.total)} ${c.deaths.total === 1 ? 'eel' : 'eels'}`)],
+  ];
+  const baseline = t('Patokan menurut petani: 20–40%', 'Farmer-reported baseline: 20–40%');
+  const vsWord = c.baseline.vs === 'below' ? t('di bawah patokan', 'below the baseline') : c.baseline.vs === 'above' ? t('di atas patokan', 'above the baseline') : t('di dalam patokan', 'within the baseline');
+
+  return (
+    <section class="card" aria-labelledby="cycle-title">
+      <div class="stack-xs">
+        <h2 id="cycle-title">{t('Siklus batch ini', "This batch's cycle")}</h2>
+        <span class="meta">
+          {t(`Hari ke-${c.days} sejak tebar ${dayMonth(c.stockedAt)}`, `Day ${c.days} since stocking on ${dayMonth(c.stockedAt)}`).replace(/ (\S+)$/, ' $1')}
+        </span>
+      </div>
+
+      <div class="row" style={{ background: 'var(--bg)', borderRadius: 16, padding: '8px 8px 8px 16px' }}>
+        <span class="grow stack-xs" style={{ gap: 0 }}>
+          <span class="meta">{t('Jumlah tebar', 'Number stocked')}</span>
+          <span class="strong num">{c.stockedCount !== null ? t(`${fmtNum(c.stockedCount)} ekor`, `${fmtNum(c.stockedCount)} eels`) : t('Belum diisi', 'Not filled in yet')}</span>
+        </span>
+        {owner && form !== 'stocked' && (
+          <button type="button" class="nick-btn" onClick={() => open('stocked')}>
+            <Icon name="pencil" size={16} stroke={2.5} />
+            {c.stockedCount !== null ? t('Ubah', 'Edit') : t('Isi', 'Fill in')}
+          </button>
+        )}
+      </div>
+
+      <div class="stack-xs" style={{ gap: 0 }}>
+        {rows.map(([k, v]) => (
+          <div key={k} class="row between" style={{ padding: '8px 0', borderBottom: '1px solid var(--line)' }}>
+            <span class="ink2">{k}</span>
+            <span class="strong num">{v}</span>
+          </div>
+        ))}
+      </div>
+
+      <div class="box stack-xs" style={{ background: 'var(--tint)' }}>
+        {c.survival !== null ? (
+          <>
+            <span class="strong">
+              {t('Bertahan hidup', 'Survival')} <span class="num">{pctText(c.survival)}</span>, {vsWord}
+            </span>
+            <span class="label ink2">
+              {t(
+                `${fmtNum(c.count!.count)} dari ${fmtNum(c.stockedCount!)} ekor, hitung ${COUNT_KIND[c.count!.kind].toLowerCase()} ${dayMonth(c.count!.on)}.`,
+                `${fmtNum(c.count!.count)} of ${fmtNum(c.stockedCount!)} eels, ${COUNT_KIND[c.count!.kind].toLowerCase()} count on ${dayMonth(c.count!.on)}.`,
+              )}{' '}
+              {baseline}.
+            </span>
+          </>
+        ) : (
+          <>
+            <span class="strong">
+              {c.survivalMissing === 'count_above_stocked'
+                ? t('Hasil hitung lebih banyak dari jumlah tebar', 'More counted than stocked')
+                : t('Bertahan hidup belum bisa dihitung', 'Survival cannot be worked out yet')}
+            </span>
+            <span class="label ink2">
+              {c.survivalMissing === 'stocked'
+                ? t('Isi jumlah tebar, lalu catat hasil hitung saat sortir atau panen.', 'Fill in the number stocked, then record the count at sorting or harvest.')
+                : c.survivalMissing === 'count'
+                  ? t('Catat jumlah yang dihitung saat sortir atau panen.', 'Record the number counted at sorting or harvest.')
+                  : t('Cek kedua angka, lalu catat hitungan baru.', 'Check both numbers, then record a new count.')}{' '}
+              {baseline}.
+            </span>
+          </>
+        )}
+      </div>
+
+      {form ? (
+        <form class="stack" onSubmit={save}>
+          {form === 'count' && <Chips options={COUNT_KIND} value={kind} onChange={(v) => v.length && setKind(v)} />}
+          <Field label={form === 'stocked' ? t('Jumlah tebar (ekor)', 'Number stocked (eels)') : t('Jumlah dihitung hari ini (ekor)', 'Number counted today (eels)')}>
+            <input inputMode="numeric" value={value} onInput={(e) => setValue(e.currentTarget.value)} placeholder={t('contoh: 2000', 'example: 2000')} autoFocus />
+          </Field>
+          {error && <p class="error">{error}</p>}
+          <div class="grid2" style={{ gap: 8 }}>
+            <button type="submit" class="btn primary" disabled={busy || !value.trim()}>
+              {busy ? t('Menyimpan…', 'Saving…') : t('Simpan', 'Save')}
+            </button>
+            <button type="button" class="btn secondary" onClick={() => setForm(null)}>
+              {t('Batal', 'Cancel')}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <button type="button" class="btn secondary" onClick={() => open('count')}>
+          <Icon name="plus" size={20} /> {t('Catat hasil hitung sortir atau panen', 'Record a sorting or harvest count')}
+        </button>
+      )}
+    </section>
+  );
+}
+
 /** "13:00" → "13.00" in Indonesian. */
 const hourText = (hhmm: string) => (isEn ? hhmm : hhmm.replace(':', '.'));
 
@@ -647,7 +789,7 @@ export function PondDetail({
   go: Go;
 }) {
   const prefs = usePrefs();
-  const [data, setData] = useState<{ pond: PondSummary; logs: Log[] } | null>(null);
+  const [data, setData] = useState<{ pond: PondSummary; logs: Log[]; cycle?: CycleSummary | null } | null>(null);
   const [error, setError] = useState('');
   const [tech, setTech] = useState(prefs.techOpen);
   const [editing, setEditing] = useState(false);
@@ -858,6 +1000,8 @@ export function PondDetail({
       <MetricCard pond={pond} logs={logs} />
 
       <SensorCard pond={pond} />
+
+      {data.cycle && <CycleCard key={data.cycle.batchId} pond={pond} cycle={data.cycle} role={role} onChanged={(cycle) => setData({ ...data, cycle })} />}
 
       {!tech && (
         <button class="card history-row" onClick={() => go({ name: 'history', pondId: pond.id })}>
