@@ -97,9 +97,9 @@ const WHOLE: Record<string, number> = {
   sepuluh: 10, sedasa: 10, ten: 10, sebelas: 11, sewelas: 11, eleven: 11, rolas: 12, twelve: 12,
   thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19,
   twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90,
-  // Javanese twenties: selikur 21 … sangalikur 29; selawe 25; seket 50; satus 100.
+  // Javanese twenties: selikur 21 … sangalikur 29; selawe 25; seket 50; sewidak 60; satus 100.
   selikur: 21, rolikur: 22, telulikur: 23, patlikur: 24, selawe: 25, nemlikur: 26, pitulikur: 27, wolulikur: 28, sangalikur: 29,
-  seket: 50, seratus: 100, satus: 100, seribu: 1000, sewu: 1000,
+  seket: 50, sewidak: 60, seratus: 100, satus: 100, seribu: 1000, sewu: 1000,
   rong: 2, telung: 3, patang: 4, limang: 5, nem: 6, pitung: 7, wolung: 8, sangang: 9, // "telung puluh" = 30
 };
 const MULT: Record<string, number> = { puluh: 10, ratus: 100, atus: 100, hundred: 100, ribu: 1000, thousand: 1000, ewu: 1000 };
