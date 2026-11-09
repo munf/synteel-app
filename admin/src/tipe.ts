@@ -138,3 +138,33 @@ export interface Wilayah {
   /** jumlah kabupaten yang disembunyikan (kurang dari 3 tambak) */
   tersembunyi?: number
 }
+
+// ─────────────────────────── Data lapangan: siklus per batch ───────────────────────────
+/** Sama dengan CycleSummary di server/src/cycle.ts. Patokan 20–40% = menurut petani, bukan hasil ukur. */
+export interface RingkasanSiklus {
+  batchId: number
+  pondId: number
+  phase: 'glass_eel' | 'elver'
+  stockedAt: string
+  endedOn: string | null
+  stockedCount: number | null
+  days: number
+  logs: number
+  logsPerDay: number
+  daysLogged: number
+  nights: { covered: number; total: number }
+  readings: { inRange: number; outOfRange: number; danger: number }
+  alarms: { raised: number; answered: number }
+  deaths: { total: number; reports: number }
+  count: { on: string; count: number; kind: 'sorting' | 'harvest' } | null
+  survival: number | null
+  survivalMissing: 'stocked' | 'count' | 'count_above_stocked' | null
+  baseline: { low: number; high: number; source: 'farmer-reported'; vs: 'below' | 'within' | 'above' | null }
+}
+export interface Siklus {
+  id: string // "s12" = batch 12
+  tambakId: string
+  tambak: string
+  kolam: string
+  ringkasan: RingkasanSiklus
+}

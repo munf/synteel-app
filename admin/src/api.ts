@@ -8,7 +8,7 @@
 //  asli tombolnya dinonaktifkan (AKSI_AKUN, BALAS_EMAIL). Setiap aksi baru WAJIB
 //  divalidasi dan dicatat (audit) di server; konfirmasi di halaman hanya pengaman tampilan.
 // ════════════════════════════════════════════════════════════════════════════
-import { CONTOH, type Akun, type Bantuan, type Kasus, type Kesehatan, type PemakaianAi, type Ringkasan, type Tambak, type Wilayah } from './tipe'
+import { CONTOH, type Akun, type Bantuan, type Kasus, type Kesehatan, type PemakaianAi, type Ringkasan, type Siklus, type Tambak, type Wilayah } from './tipe'
 
 /** Server menjawab 401: sesi admin habis atau belum masuk. */
 export class BelumMasuk extends Error {}
@@ -53,6 +53,11 @@ export const ambilPemakaianAi = (): Promise<PemakaianAi> => (CONTOH ? contoh((m)
 export const ambilKesehatan = (): Promise<Kesehatan> => (CONTOH ? contoh((m) => m.KESEHATAN) : ambil('/kesehatan'))
 /** Agregat tanpa nama; kabupaten < 3 tambak tidak dikirim; tamu demo tidak dihitung. */
 export const ambilWilayah = (): Promise<Wilayah> => (CONTOH ? contoh((m) => m.WILAYAH) : ambil('/wilayah'))
+/** Satu ringkasan siklus per batch, tambak asli saja. */
+export const ambilSiklus = (): Promise<Siklus[]> => (CONTOH ? contoh((m) => m.SIKLUS) : ambil('/siklus'))
+/** Tautan unduh (cookie admin ikut); null di build data contoh. `batch` kosong = semua batch. */
+export const tautanUnduhSiklus = (format: 'csv' | 'json', batch?: string): string | null =>
+  CONTOH ? null : `${DASAR}/siklus/unduh?format=${format}${batch ? `&batch=${encodeURIComponent(batch)}` : ''}`
 
 // ── aksi ──
 export const ubahStatusBantuan = (id: string, status: Bantuan['status']) => (CONTOH ? jeda({ ok: true }, 200) : kirim<{ ok: boolean }>(`/bantuan/${id}/status`, { status }))

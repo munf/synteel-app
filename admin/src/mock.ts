@@ -13,7 +13,7 @@
 //     tamu "Coba demo" tidak dihitung di angka pengguna.
 // ════════════════════════════════════════════════════════════════════════════
 
-import type { Akun, Bantuan, Kasus, Kesehatan, PemakaianAi, Ringkasan, Tambak, Wilayah } from './tipe'
+import type { Akun, Bantuan, Kasus, Kesehatan, PemakaianAi, Ringkasan, Siklus, Tambak, Wilayah } from './tipe'
 
 const KABUPATEN = [
   'Sleman', 'Bantul', 'Kulon Progo', 'Cilacap', 'Banyumas', 'Kebumen', 'Purworejo', 'Magelang', 'Klaten',
@@ -276,3 +276,16 @@ for (const x of [...KASUS, ...PEMAKAIAN_AI.kuota]) {
   const t = TAMBAK.find((y) => y.nama === x.tambak)
   if (t) x.kabupaten = t.kabupaten
 }
+
+// Data contoh: satu batch rekaan untuk melihat tampilan halaman Data lapangan (bukan data tambak).
+export const SIKLUS: Siklus[] = [
+  {
+    id: 's1', tambakId: 't1', tambak: 'Tambak Contoh', kolam: 'Kolam A',
+    ringkasan: {
+      batchId: 1, pondId: 1, phase: 'glass_eel', stockedAt: '2026-10-10', endedOn: null, stockedCount: 2000, days: 22, logs: 41, logsPerDay: 1.9, daysLogged: 19,
+      nights: { covered: 12, total: 21 }, readings: { inRange: 88, outOfRange: 9, danger: 2 }, alarms: { raised: 3, answered: 2 },
+      deaths: { total: 64, reports: 9 }, count: null, survival: null, survivalMissing: 'count',
+      baseline: { low: 0.2, high: 0.4, source: 'farmer-reported', vs: null },
+    },
+  },
+]

@@ -11,7 +11,10 @@ import type { Ai } from './ai.ts';
 import { SUPPORT_TOPICS } from './api.ts';
 import { attemptLimiter, AuthError, maskEmail } from './auth.ts';
 import { regionCandidates } from './bmkg.ts';
-import type { Db } from './db.ts';
+import { cycleCsv, summarizeBatch, type CycleSummary } from './cycle.ts';
+import { farmRepo, type Db } from './db.ts';
+import { knowledge } from './knowledge.ts';
+import type { Threshold } from './rules.ts';
 import { nightOf, type Ledger } from './ledger.ts';
 
 const HOUR = 3600_000;
@@ -510,6 +513,46 @@ export function createAdmin(db: Db, { creds, cookieName = 'synteel_session', now
       emailKode: { terkirim: ev('code_mail_sent'), gagal: ev('code_mail_failed') },
       login: { gagal: ev('login_failed'), kenaBatas: ev('rate_limited') },
       galat,
+    });
+  });
+
+  // ---------- field data: one glass eel → elver cycle per batch (cycle.ts) ----------
+  // Real farms only. The export names a farm by its id ("t12") and a pond by its name: no owner, phone or place,
+  // so a file passed around the team or to a partner identifies nobody.
+  const cycles = (batchId?: number) => {
+    const thresholds = knowledge.thresholds.parameters as Threshold[];
+    const farms = new Map(realFarms().map((f) => [f.id as number, f]));
+    const rows = db
+      .prepare('select b.id, b.pond_id, b.phase, b.stocked_at, b.initial_count, b.ended_at, p.name as pond, p.farm_id from batches b join ponds p on p.id = b.pond_id where (? is null or b.id = ?) order by b.stocked_at desc, b.id desc limit 500')
+      .all(batchId ?? null, batchId ?? null) as Row[];
+    return rows
+      .filter((b) => farms.has(b.farm_id as number))
+      .map((b) => {
+        const batch = { id: b.id as number, pondId: b.pond_id as number, phase: b.phase as CycleSummary['phase'], stockedAt: b.stocked_at as string, initialCount: b.initial_count as number | null, endedAt: (b.ended_at as string | null) ?? null };
+        return { farm: `t${b.farm_id}`, farmName: farms.get(b.farm_id as number)!.name as string, pond: b.pond as string, s: summarizeBatch(farmRepo(db, b.farm_id as number), batch, thresholds, now()) };
+      });
+  };
+
+  admin.get('/siklus', (c) => c.json(cycles().map(({ farm, farmName, pond, s }) => ({ id: `s${s.batchId}`, tambakId: farm, tambak: farmName, kolam: pond, ringkasan: s }))));
+
+  // ?batch=12 for one batch, none for all; ?format=csv or json. Downloads are logged as an admin action.
+  admin.get('/siklus/unduh', (c) => {
+    const batch = c.req.query('batch') ? Number(String(c.req.query('batch')).replace(/^s/, '')) : undefined;
+    if (batch !== undefined && !Number.isInteger(batch)) return c.json({ error: 'Batch tidak dikenal' }, 400);
+    const rows = cycles(batch);
+    if (batch !== undefined && !rows.length) return c.json({ error: 'Batch tidak ditemukan' }, 404);
+    const format = c.req.query('format') === 'csv' ? 'csv' : 'json';
+    events?.record('admin_action', `siklus ${batch ?? 'semua'}`, `unduh ${format}`);
+    const name = `synteel-siklus-${batch ? `batch-${batch}` : 'semua'}-${now().toISOString().slice(0, 10)}.${format}`;
+    c.header('Content-Disposition', `attachment; filename="${name}"`);
+    if (format === 'csv') {
+      c.header('Content-Type', 'text/csv; charset=utf-8');
+      return c.body(cycleCsv(rows));
+    }
+    return c.json({
+      about: 'Synteel cycle summaries (glass eel → elver), one per batch. Survival only where the farmer entered both the stocked and the counted number. The 20–40% baseline is farmer-reported, not measured.',
+      generatedAt: now().toISOString(),
+      batches: rows.map(({ farm, pond, s }) => ({ farm, pond, ...s })),
     });
   });
 

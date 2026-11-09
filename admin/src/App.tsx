@@ -9,6 +9,7 @@ import { BantuanHalaman } from './pages/Bantuan'
 import { PemakaianAiHalaman } from './pages/PemakaianAi'
 import { KesehatanHalaman } from './pages/Kesehatan'
 import { WilayahHalaman } from './pages/Wilayah'
+import { SiklusHalaman } from './pages/Siklus'
 import { CONTOH } from './tipe'
 
 type Tema = 'dark' | 'light'
@@ -258,6 +259,7 @@ function Dasbor({ keluar: keluarDasbor }: { keluar: () => void }) {
             : hal === 'bantuan' ? <BantuanHalaman />
             : hal === 'ai' ? <PemakaianAiHalaman />
             : hal === 'kesehatan' ? <KesehatanHalaman />
+            : hal === 'siklus' ? <SiklusHalaman />
             : <WilayahHalaman />}
         </main>
       </div>

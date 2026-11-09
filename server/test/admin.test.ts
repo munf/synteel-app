@@ -116,3 +116,27 @@ test(`region figures skip a kabupaten with fewer than ${MIN_FARMS_SHOWN} farms`,
 test('maskPhone keeps the first four and last four digits', () => {
   assert.equal(maskPhone('6285712345678'), '0857-••••-5678');
 });
+
+test('cycle export: one summary per batch as CSV or JSON, the farm by id only, the baseline marked farmer-reported', async () => {
+  const s = setup();
+  const owner = s.app;
+  await owner('POST', '/auth/register', { name: 'Bu Sumarni', phone: '081234564471', pin: '246810' });
+  await owner('PUT', '/farm', { name: 'Tambak Sidat Mitra', locationName: 'Sleman' });
+  const pond = (await owner('POST', '/ponds', { name: 'Kolam A' })).json.pond;
+  await owner('POST', `/ponds/${pond.id}/batches`, { phase: 'glass_eel', stockedAt: '2026-10-20', initialCount: 1000 });
+  await owner('POST', `/ponds/${pond.id}/cycle/counts`, { count: 300, kind: 'sorting' });
+  const a = await signedIn(s);
+  const list = (await a('GET', '/siklus')).json;
+  assert.equal(list.length, 1);
+  assert.equal(list[0].ringkasan.survival, 0.3);
+
+  const csv = await (await a.raw(`/siklus/unduh?batch=${list[0].id}&format=csv`)).text();
+  assert.match(csv.split('\n')[1], /^t\d+,Kolam A,/);
+  assert.doesNotMatch(csv, /Sumarni|Tambak Sidat Mitra|Sleman|0812/);
+  const json = (await a('GET', `/siklus/unduh?batch=${list[0].id}`)).json;
+  assert.match(json.about, /farmer-reported/);
+  assert.equal(json.batches[0].baseline.source, 'farmer-reported');
+  assert.doesNotMatch(JSON.stringify(json), /Sumarni|Tambak Sidat Mitra|Sleman/);
+  assert.equal((await a('GET', '/siklus/unduh?batch=9999')).status, 404);
+  assert.equal((await s.admin()('GET', '/siklus')).status, 401);
+});
