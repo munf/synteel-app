@@ -1,6 +1,7 @@
 // Shared by the API tests: an in-memory server and a client that keeps its session cookie.
 import { createApi } from '../src/api.ts';
 import { openDb, repo } from '../src/db.ts';
+import { aiLedger } from '../src/ledger.ts';
 
 export type Api = ReturnType<typeof createApi>;
 export type Deps = Parameters<typeof createApi>[1];
@@ -28,10 +29,13 @@ export type Call = ReturnType<typeof client>;
 
 /** `now` is a mutable clock, so a test can move time forward. */
 export function server(nowIso = '2026-10-28T03:00:00Z', deps: Deps = {}) {
-  const store = repo(openDb(':memory:'));
+  const db = openDb(':memory:');
+  const store = repo(db);
   const now = { t: new Date(nowIso) };
-  const api = createApi(store, { clock: () => now.t, getWeather: async () => ({ hours: [], fetchedAt: 0 }), geocode: async () => null, getBmkg: async () => { throw new Error('offline'); }, getStorm: async () => [], ...deps });
-  return { store, api, now, client: (headers?: Record<string, string>) => client(api, headers) };
+  // Every test server keeps an AI call ledger, as the real one does.
+  const ledger = aiLedger(db, () => now.t);
+  const api = createApi(store, { clock: () => now.t, getWeather: async () => ({ hours: [], fetchedAt: 0 }), geocode: async () => null, getBmkg: async () => { throw new Error('offline'); }, getStorm: async () => [], ledger, ...deps });
+  return { store, db, ledger, api, now, client: (headers?: Record<string, string>) => client(api, headers) };
 }
 
 /** An owner with a farm and ponds, plus a worker who joined it. */

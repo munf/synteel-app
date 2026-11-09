@@ -8,6 +8,7 @@ import { openDb, repo } from './db.ts';
 import { DEMO_MAX_LIVE, DEMO_PER_IP_PER_DAY } from './demo.ts';
 import { env } from './env.ts';
 import { emergenciesEn, knowledge } from './knowledge.ts';
+import { aiLedger } from './ledger.ts';
 import { parseLang } from './i18n.ts';
 import { mailer } from './mail.ts';
 import { MONITOR_INTERVAL_MS, startMonitor } from './monitor.ts';
@@ -26,11 +27,13 @@ const db = openDb();
 const store = repo(db);
 // What the team dashboard counts (admin.ts). AI calls are timed inside the daily cap, so its refusals are not counted.
 const events = eventLog(db);
+// Every model call, with its time, tokens, estimated cost and the checks on its result (ledger.ts).
+const ledger = aiLedger(db);
 const ai = withDailyCap(withAiLog(createAi({ chat: env.aiChat, transcriber: env.aiTranscriber, mock: env.aiMock }), events), env.aiDailyCap);
 const chain = env.aiChat.filter((p) => p.apiKey).map((p) => p.name).join(' → ');
 console.log(`AI mode: ${ai.mode}${ai.mode === 'meta' ? ` (${chain}${env.aiTranscriber.apiKey ? ', voice: meta' : ', no voice'}${env.aiDailyCap ? `, cap ${env.aiDailyCap}/day` : ''})` : ''}`);
 if (ai.mode === 'meta') console.log(`Briefing and case agent: ${env.agentChat.filter((p) => p.apiKey).map((p) => p.name).join(' → ')}`);
-const api = createApi(store, { ai, saveCapture: captureStore(), cookieName: env.cookieName, demoPhone: env.demoPhone, farmAiCap: env.farmAiCap, agentProviders: env.agentChat.filter((p) => p.apiKey), sam: env.aiTranscriber.apiKey ? { apiKey: env.aiTranscriber.apiKey, base: env.aiTranscriber.base } : null, mail: mailer(env.smtp), removeFarmFiles: (farmId) => removeFarmCaptures(farmId), covers: coverStore(), demoLimits: { perIp: env.demoPerIp ?? DEMO_PER_IP_PER_DAY, maxLive: env.demoMaxLive ?? DEMO_MAX_LIVE }, events });
+const api = createApi(store, { ai, saveCapture: captureStore(), cookieName: env.cookieName, demoPhone: env.demoPhone, farmAiCap: env.farmAiCap, agentProviders: env.agentChat.filter((p) => p.apiKey), sam: env.aiTranscriber.apiKey ? { apiKey: env.aiTranscriber.apiKey, base: env.aiTranscriber.base } : null, mail: mailer(env.smtp), removeFarmFiles: (farmId) => removeFarmCaptures(farmId), covers: coverStore(), demoLimits: { perIp: env.demoPerIp ?? DEMO_PER_IP_PER_DAY, maxLive: env.demoMaxLive ?? DEMO_MAX_LIVE }, events, ledger });
 console.log(`Support mail: ${env.smtp ? `${env.smtp.host}:${env.smtp.port}` : 'not configured (tickets only stored)'}`);
 // Team dashboard: off unless SYNTEEL_ADMIN_USER and SYNTEEL_ADMIN_PASSWORD are set. Registered before the app's routes.
 app.route(
@@ -41,6 +44,7 @@ app.route(
     demoPhone: env.demoPhone,
     farmAiCap: env.farmAiCap,
     events,
+    ledger,
     // The services on this server (synteel-app.service, synteel-preview.service) and the public site.
     checks: [
       { id: 'app', nama: 'Aplikasi', ket: 'Aplikasi petani dan API (eel.synt.fun/app)', url: 'http://127.0.0.1:8788/api/health' },

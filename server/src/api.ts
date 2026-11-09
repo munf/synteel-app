@@ -14,7 +14,9 @@ import { currentLang, parseLang, tx, withLang, type Lang } from './i18n.ts';
 import { DEMO_MAX_LIVE, DEMO_PER_IP_PER_DAY, seedDemoFarm } from './demo.ts';
 import { AiFailed, AiUnavailable, type Ai, type CaptureKind, type ChatProvider } from './ai.ts';
 import { rulesBriefing, runBriefing, type Briefing, type BriefingInput } from './agent.ts';
-import { countDeadEels, type SamProvider } from './sam.ts';
+import { countDeadEels, type CountResult, type SamProvider } from './sam.ts';
+import { noLedger, type AiKind, type Ledger } from './ledger.ts';
+import { verifyCount, verifyDraft, verifyRound, verifyRows } from './verify.ts';
 import { caseView, MAX_AGENT_RUNS_PER_DAY, MAX_LANG_RUNS_PER_DAY, RECHECK_AFTER, RECHECK_GRACE, mockCaseRun, rulesCaseRun, runCaseAgent, type CaseEvent, type CaseInput, type CaseRun, type CaseTrigger, type CaseView } from './cases.ts';
 import type { CoverStore, SaveCapture } from './captures.ts';
 import { computeNowcast } from './nowcast.ts';
@@ -174,6 +176,8 @@ export interface ApiDeps {
   covers?: CoverStore | null;
   /** What the team dashboard counts (admin.ts): failed sign-ins, code e-mails, errors, demo visits, last seen. */
   events?: EventLog | null;
+  /** The AI call ledger (ledger.ts): every model call, its time, tokens, estimated cost and the result's checks. */
+  ledger?: Ledger | null;
 }
 
 /** Briefings made in another language for the same evening (the viewer's language had none yet), per farm per day. */
@@ -280,7 +284,7 @@ type Env = { Variables: { userId: number; farmId: number | null; tokenHash: stri
 
 export function createApi(
   store: Repo,
-  { clock = () => new Date(), getWeather = defaultGetWeather, geocode = defaultGeocode, ai, saveCapture, cookieName = 'synteel_session', demoPhone = null, farmAiCap = 0, agentProviders = [], sam = null, getBmkg = getBmkgForecast, getStorm = getStormHours, mail = null, demoLimits = { perIp: DEMO_PER_IP_PER_DAY, maxLive: DEMO_MAX_LIVE }, removeFarmFiles, fetchArchive, covers = null, events = null }: ApiDeps = {},
+  { clock = () => new Date(), getWeather = defaultGetWeather, geocode = defaultGeocode, ai, saveCapture, cookieName = 'synteel_session', demoPhone = null, farmAiCap = 0, agentProviders = [], sam = null, getBmkg = getBmkgForecast, getStorm = getStormHours, mail = null, demoLimits = { perIp: DEMO_PER_IP_PER_DAY, maxLive: DEMO_MAX_LIVE }, removeFarmFiles, fetchArchive, covers = null, events = null, ledger = null }: ApiDeps = {},
 ) {
   const api = new Hono<Env>();
   // Every handler below answers in the language the app asked for (i18n.ts).
@@ -296,6 +300,9 @@ export function createApi(
   const codeIpLimiter = attemptLimiter(30, 60 * 60_000, undefined, codeMessage);
   // "Dengarkan": Muse Spark rewrites the Waspada text as speech (spoken.ts); repeats come from its cache.
   const spoken = spokenWriter(agentProviders);
+  // Every AI feature runs inside track(): its model calls land in the ledger under one request id.
+  const track = (ledger ?? noLedger).track;
+  const mock = () => ai?.mode === 'mock';
   const spokenLimiter = attemptLimiter(30, 60 * 60_000, undefined, () => tx('Terlalu sering. Coba lagi 1 jam lagi.', 'Too often. Try again in 1 hour.'));
   const speechLimiter = attemptLimiter(20, 60 * 60_000, undefined, () => tx('Terlalu sering. Ketik saja dulu, atau coba lagi 1 jam lagi.', 'Too often. Type it in for now, or try again in 1 hour.'));
 
@@ -598,10 +605,18 @@ export function createApi(
     const input = await briefingInput(r);
     const providers = ai?.mode === 'meta' ? agentProviders : [];
     const start = Date.now();
-    const briefing = await runBriefing(input, providers);
+    // Without a model nothing is asked, so nothing goes in the ledger and no "Cara AI memproses ini" shows.
+    const briefing = providers.length
+      ? await track('briefing', async (trace) => ({ ...(await runBriefing(input, providers)), trace: trace || undefined }), {
+          farmId: r.farmId,
+          verify: (b) => b.verify,
+          rules: (b) => b.source === 'rules',
+        })
+      : await runBriefing(input, providers);
     // Counted as an AI call when a model was asked; 'rules' then means every model failed.
     if (providers.length) events?.ai('malam', Date.now() - start, briefing.source === 'agent', briefing.source === 'agent' ? null : 'Model tidak menjawab, ringkasan dari aturan');
     const id = r.saveBriefing(localDate(new Date(input.now), timezone(r)), briefing, basis === null ? null : 'lang', basis);
+    if (briefing.trace) ledger?.settle(briefing.trace, null, `briefing:${id}`);
     return { ...briefing, id };
   }
 
@@ -687,8 +702,10 @@ export function createApi(
     const input = await caseInput(r, c, trigger);
     const used = caseRunsToday(r, input.events);
     let run: CaseRun;
-    if (ai?.mode === 'mock') run = mockCaseRun(input);
-    else if (ai?.mode === 'meta' && (basis === undefined ? used.agent < MAX_AGENT_RUNS_PER_DAY : used.lang < MAX_LANG_RUNS_PER_DAY)) run = await runCaseAgent(input, agentProviders);
+    const link = { farmId: r.farmId, pondId: c.pondId, ref: () => `case:${caseId}` };
+    if (ai?.mode === 'mock') run = await track('case', async (trace) => ({ ...mockCaseRun(input), trace: trace || undefined }), { ...link, mock: true });
+    else if (ai?.mode === 'meta' && (basis === undefined ? used.agent < MAX_AGENT_RUNS_PER_DAY : used.lang < MAX_LANG_RUNS_PER_DAY))
+      run = await track('case', async (trace) => ({ ...(await runCaseAgent(input, agentProviders)), trace: trace || undefined }), { ...link, verify: (x) => x.verify, rules: (x) => x.source === 'rules' });
     else run = rulesCaseRun(input);
     // The case may have been closed while the model was thinking.
     if (r.getCase(caseId)?.status === 'open') r.addCaseEvent(caseId, 'run', clock().toISOString(), null, basis === undefined ? run : { ...run, langRun: true, basis });
@@ -1433,7 +1450,7 @@ export function createApi(
     if (ai?.mode !== 'meta' || !agentProviders.length) return c.json({ text, source: 'rules' });
     const key = `farm:${c.get('farmId')}`;
     spokenLimiter.check(key);
-    const result = await spoken(text);
+    const result = await track('spoken', () => spoken(text), { farmId: c.get('farmId'), rules: (x) => x.source === 'rules' });
     if (result.source === 'agent') spokenLimiter.fail(key);
     return c.json(result);
   });
@@ -1627,7 +1644,7 @@ export function createApi(
     if (!ai || ai.mode === 'off' || typeof ai.pondPhoto !== 'function') throw new AiUnavailable(tx('AI belum aktif. Pilih sendiri dulu.', 'The AI is not on yet. Pick them yourself for now.'));
     useAi(r, c.get('userId'));
     const started = Date.now();
-    const read = await ai.pondPhoto({ image });
+    const read = await track('pond_photo', () => ai.pondPhoto({ image }), { farmId: r.farmId, pondId: Number(form.pondId) || null, mock: mock() });
     const draft = guardPondPhoto(read.raw, { model: read.model, mode: read.mode });
     await keptBy(c)?.({ farmId: r.farmId, pondId: Number(form.pondId) || 0, userId: c.get('userId'), kind: 'pondphoto', at: clock().toISOString(), ms: Date.now() - started, raw: read.raw, draft }, [{ name: 'image-0.jpg', blob: image }]).catch((err) =>
       console.error('capture not stored:', err),
@@ -1706,7 +1723,7 @@ export function createApi(
       running = true;
       const lang = currentLang();
       const job = withLang(lang, async () => {
-        const [note] = await runPatterns({ farmName: r.getFarm()?.name ?? '', now, timezone: timezone(r), ponds: [facts] }, agentProviders, false);
+        const [note] = await track('pattern', () => runPatterns({ farmName: r.getFarm()?.name ?? '', now, timezone: timezone(r), ponds: [facts] }, agentProviders, false), { farmId: r.farmId, pondId: pond.id });
         r.savePattern(pond.id, new Date(now).toISOString(), lang, note.source, { ...note, translatedFrom: original });
       })
         .catch((err) => console.error(`pattern pond ${pond.id} (${lang}):`, err))
@@ -1730,7 +1747,7 @@ export function createApi(
     const { now, facts } = await pondTemperature(r, pond);
     const left = patternRunsLeft(r);
     if (left <= 0) throw new BadRequest(tx('Pola sudah dibaca beberapa kali hari ini. Coba lagi besok.', 'The pattern has been read several times today. Try again tomorrow.'));
-    const [note] = await runPatterns({ farmName: r.getFarm()?.name ?? '', now, timezone: timezone(r), ponds: [facts] }, ai?.mode === 'meta' ? agentProviders : [], ai?.mode === 'mock');
+    const [note] = await track('pattern', () => runPatterns({ farmName: r.getFarm()?.name ?? '', now, timezone: timezone(r), ponds: [facts] }, ai?.mode === 'meta' ? agentProviders : [], ai?.mode === 'mock'), { farmId: r.farmId, pondId: pond.id, mock: mock() });
     // Too few readings: nothing was asked, nothing is counted.
     if (facts.model.backtest.n >= 6) r.savePattern(pond.id, new Date(now).toISOString(), currentLang(), note.source, note);
     return c.json({ pattern: note, left: patternRunsLeft(r) });
@@ -1742,7 +1759,7 @@ export function createApi(
     const ready = facts.filter((f) => f.facts.model.backtest.n >= 6);
     if (!ready.length) return [];
     const now = clock().getTime();
-    const notes = await runPatterns({ farmName: r.getFarm()?.name ?? '', now, timezone: timezone(r), ponds: ready.map((f) => f.facts) }, ai?.mode === 'meta' ? agentProviders : [], ai?.mode === 'mock');
+    const notes = await track('pattern', () => runPatterns({ farmName: r.getFarm()?.name ?? '', now, timezone: timezone(r), ponds: ready.map((f) => f.facts) }, ai?.mode === 'meta' ? agentProviders : [], ai?.mode === 'mock'), { farmId: r.farmId, mock: mock() });
     for (const n of notes) r.savePattern(n.pondId, new Date(now).toISOString(), currentLang(), n.source, n);
     return notes;
   }
@@ -1796,7 +1813,13 @@ export function createApi(
     useAi(r, c.get('userId'));
     const batch = r.activeBatch(pond.id);
     const started = Date.now();
-    const draft = await ai.draft({ kind, field, images, audio, pondName: pond.name, phase: batch?.phase });
+    // Verify before show (verify.ts): numbers not heard, implausible or converted are held back as "Cek manual".
+    const ponds = r.listPonds().map(({ id, name, nicknames }) => ({ id, name, nicknames }));
+    const draft = await track(
+      kind,
+      async (trace) => ({ ...verifyDraft(await ai.draft({ kind, field, images, audio, pondName: pond.name, phase: batch?.phase }), { id: pond.id, name: pond.name, nicknames: pond.nicknames }, ponds), trace: trace || undefined }),
+      { farmId: r.farmId, pondId: pond.id, mock: mock(), verify: (d) => d.verify, ref: () => 'draft' },
+    );
     await keptBy(c)?.(
       { farmId: r.farmId, pondId: pond.id, kind, field, at: clock().toISOString(), ms: Date.now() - started, draft },
       [...images.map((blob, i) => ({ name: `image-${i}.jpg`, blob })), ...(audio ? [{ name: `audio.${audio.type.includes('wav') ? 'wav' : 'webm'}`, blob: audio }] : [])],
@@ -1814,10 +1837,23 @@ export function createApi(
     const image = form.image instanceof File ? form.image : null;
     if (!image) throw new BadRequest(tx('Foto belum ada', 'No photo yet'));
     if (image.size > MAX_IMAGE_BYTES) throw new BadRequest(tx('Foto terlalu besar', 'The photo is too large'));
-    if (ai?.mode === 'mock') return c.json({ result: { count: 0, low: 0, high: 0, atLeast: false, eels: [], heads: [], review: true, model: 'mock', ms: 0 }, mock: true });
+    const link = { farmId: r.farmId, pondId: pond.id, verify: (x: CountResult) => x.verify, ref: () => 'count' };
+    if (ai?.mode === 'mock') {
+      const sample: CountResult = { count: 0, low: 0, high: 0, atLeast: false, eels: [], heads: [], review: true, model: 'mock', ms: 0 };
+      const result = await track('count', async (trace) => ({ ...sample, verify: verifyCount(sample), trace: trace || undefined }), { ...link, mock: true });
+      return c.json({ result, mock: true });
+    }
     if (ai?.mode !== 'meta' || !sam?.apiKey) throw new AiUnavailable(tx('Hitung otomatis belum aktif. Hitung manual dulu.', 'Automatic counting is not on yet. Count by hand for now.'));
     // Part of an emergency report: it does not use the farm's daily AI quota (the app promises that).
-    const result = await countDeadEels(image, sam, r.activeBatch(pond.id)?.phase ?? 'glass_eel');
+    // Verify before show: a count that fails its checks is shown as "Cek manual", not filled in.
+    const result = await track(
+      'count',
+      async (trace) => {
+        const counted = await countDeadEels(image, sam, r.activeBatch(pond.id)?.phase ?? 'glass_eel');
+        return { ...counted, verify: verifyCount(counted), trace: trace || undefined };
+      },
+      link,
+    );
     await keptBy(c)?.({ farmId: r.farmId, pondId: pond.id, kind: 'count', at: clock().toISOString(), ms: result.ms, count: result.count, low: result.low, high: result.high, review: result.review }, [{ name: 'image-0.jpg', blob: image }]).catch((err) =>
       console.error('capture not stored:', err),
     );
@@ -1841,6 +1877,8 @@ export function createApi(
       },
       c.get('userId'),
     );
+    // A log saved from an AI draft: the ledger learns what the draft became.
+    if (typeof body.trace === 'string' && body.trace) ledger?.link(body.trace.slice(0, 64), r.farmId, `log:${log.id}`);
     // A dead-eel report from Masalah (`report: 'dead'`) or the re-check answer (`recheck`) feeds the pond's case.
     caseAfterLog(r, log, c.get('userId'), { report: body.report === 'dead', recheck: oneOf(body.recheck, ['better', 'worse'] as const, 'cek ulang') });
     return c.json({ log, pond: pondSummary(r, pond) }, 201);
@@ -1982,10 +2020,13 @@ export function createApi(
     useAi(r, c.get('userId'));
     const today = localDate(clock(), timezone(r));
     const started = Date.now();
-    const read = await ai.notebook({ image, ponds, today });
+    let trace = '';
+    const read = await track('notebook', async (id) => ((trace = id), ai.notebook({ image, ponds, today })), { farmId: r.farmId, pondId: defaultPondId, mock: mock() });
     const { rows, problems } = guardNotebook(read.raw, ponds, { today, page, defaultPondId });
     const dates = rows.flatMap((row) => [row.date, ...row.checks.map((ch) => (ch.field === 'date' && typeof ch.suggestion === 'string' ? ch.suggestion : null))]).filter((d): d is string => !!d);
-    const result: NotebookPage = { rows, problems, recorded: recordedOn(r, dates), model: read.model, mode: read.mode };
+    const verify = verifyRows(rows);
+    if (trace) ledger?.settle(trace, verify, 'notebook');
+    const result: NotebookPage = { rows, problems, recorded: recordedOn(r, dates), model: read.model, mode: read.mode, verify, trace: trace || undefined };
     await keptBy(c)?.({ farmId: r.farmId, pondId: defaultPondId ?? 0, userId: c.get('userId'), kind: 'notebook', at: clock().toISOString(), ms: Date.now() - started, raw: read.raw, rows }, [{ name: 'image-0.jpg', blob: image }]).catch((err) =>
       console.error('capture not stored:', err),
     );
@@ -2048,6 +2089,15 @@ export function createApi(
 
   api.get('/quota', (c) => c.json(quotaState(needFarm(c))));
 
+  // "Cara AI memproses ini": the steps, models, time taken and checks behind one AI result of this farm.
+  // Costs stay on the team dashboard.
+  api.get('/ai/trace/:id', (c) => {
+    const r = needFarm(c);
+    const trace = ledger?.trace(c.req.param('id'), r.farmId);
+    if (!trace) return c.json({ error: tx('Riwayat AI tidak ditemukan', 'AI history not found') }, 404);
+    return c.json({ trace });
+  });
+
   // ---------- voice round: one recording that names many ponds ----------
 
   /** Drafts for every pond named, from a recording or its transcript. Nothing is saved to the ponds here. */
@@ -2058,7 +2108,13 @@ export function createApi(
     if (!ai || ai.mode === 'off' || typeof ai.round !== 'function') throw new AiUnavailable(tx('AI belum aktif. Isi manual dulu, atau coba lagi nanti.', 'The AI is not on yet. Type it in for now, or try again later.'));
     useAi(r, c.get('userId'));
     const started = Date.now();
-    const result = await ai.round({ ...input, ponds });
+    // Verify before show: each number must have been said, each pond must be on the farm (verify.ts).
+    const result = await track('round', async (trace) => ({ ...verifyRound(await ai.round({ ...input, ponds }), ponds), trace: trace || undefined }), {
+      farmId: r.farmId,
+      mock: mock(),
+      verify: (x) => x.verify,
+      ref: () => 'round',
+    });
     const audio = input.audio;
     await keptBy(c)?.(
       { farmId: r.farmId, pondId: 0, userId: c.get('userId'), kind: 'round', at: clock().toISOString(), ms: Date.now() - started, transcript: input.transcript, round: result },
@@ -2093,7 +2149,7 @@ export function createApi(
     const key = `user:${c.get('userId')}`;
     speechLimiter.check(key);
     speechLimiter.fail(key);
-    return c.json({ text: (await ai.transcribe(audio)).trim() });
+    return c.json({ text: (await track('transcribe', () => ai.transcribe(audio), { farmId: c.get('farmId'), mock: mock() })).trim() });
   });
 
   // For the server's own background monitor, which has no session.

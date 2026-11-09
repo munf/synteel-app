@@ -12,6 +12,7 @@ import { SUPPORT_TOPICS } from './api.ts';
 import { attemptLimiter, AuthError, maskEmail } from './auth.ts';
 import { regionCandidates } from './bmkg.ts';
 import type { Db } from './db.ts';
+import { nightOf, type Ledger } from './ledger.ts';
 
 const HOUR = 3600_000;
 const DAY = 24 * HOUR;
@@ -155,6 +156,8 @@ export interface AdminDeps {
   /** Real AI reads per farm per day (0 = no cap), for the quota list. */
   farmAiCap?: number;
   events?: EventLog | null;
+  /** The AI call ledger (ledger.ts): recent calls, totals per model, estimated cost per pond per night. */
+  ledger?: Ledger | null;
   /** Health checks on the Kesehatan page (the app itself, the preview, the site). */
   checks?: ServiceCheck[];
   /** Time and size of the last database backup (written by synteel-backup); null when unknown. */
@@ -197,7 +200,7 @@ function vps() {
   return { ramTotalGb: gb(total), ramPakaiGb: gb(total - available), diskTotalGb: gb(diskTotal), diskPakaiGb: gb(diskTotal - diskFree) };
 }
 
-export function createAdmin(db: Db, { creds, cookieName = 'synteel_session', now = () => new Date(), demoPhone = null, farmAiCap = 0, events = null, checks = [], backupStatus = () => null, fetcher = fetch }: AdminDeps) {
+export function createAdmin(db: Db, { creds, cookieName = 'synteel_session', now = () => new Date(), demoPhone = null, farmAiCap = 0, events = null, ledger = null, checks = [], backupStatus = () => null, fetcher = fetch }: AdminDeps) {
   const admin = new Hono();
   const cookie = `${cookieName}_admin`;
   const limiter = attemptLimiter(5, 15 * 60_000, () => now().getTime(), () => 'Terlalu banyak percobaan. Coba lagi 15 menit lagi.');
@@ -420,8 +423,55 @@ export function createAdmin(db: Db, { creds, cookieName = 'synteel_session', now
       })
       .sort((a, b) => b.pakai - a.pakai)
       .slice(0, 10);
-    return c.json({ hari: days, perFitur, log, kuota: used, ambangLambatDtk: SLOW_AI_S });
+    return c.json({ hari: days, perFitur, log, kuota: used, ambangLambatDtk: SLOW_AI_S, buku: ledger ? ledgerView(t, farms) : null });
   });
+
+  /**
+   * The ledger for the team: the newest calls, totals per model over 14 days, and the estimated cost
+   * per pond per night for real farms (demo copies left out). Costs are estimates from ledger.ts PRICES.
+   */
+  function ledgerView(t: Date, farms: Map<number, Row>) {
+    const since = new Date(t.getTime() - 14 * DAY).toISOString();
+    const usd = (v: unknown) => (v === null || v === undefined ? null : Math.round(Number(v) * 1e6) / 1e6);
+    const panggilan = ledger!.recent(50).map((r) => ({
+      id: `c${r.id}`,
+      waktu: r.started_at,
+      jenis: r.kind,
+      langkah: r.step,
+      penyedia: r.provider,
+      model: r.model,
+      durasiMs: r.ms,
+      tokenMasuk: r.input_tokens,
+      tokenKeluar: r.output_tokens,
+      biayaUsd: usd(r.cost_usd_estimate),
+      hasil: r.outcome,
+      cek: r.verify ? (JSON.parse(r.verify as string).status as string) : null,
+      tambak: farms.get(r.farm_id as number)?.name ?? null,
+      pesan: r.error ?? null,
+    }));
+    const perModel = ledger!.perModel(since).map((r) => ({
+      penyedia: r.provider,
+      model: r.model,
+      panggilan: Number(r.calls),
+      gagal: Number(r.errors),
+      cadangan: Number(r.fallbacks),
+      tokenMasuk: Number(r.input_tokens),
+      tokenKeluar: Number(r.output_tokens),
+      biayaUsd: usd(r.cost),
+      rataMs: Math.round(Number(r.avg_ms)),
+    }));
+    const ponds = new Map([...farms.values()].map((f) => [f.id as number, f.ponds as number]));
+    const perKolamMalam = ledger!
+      .perFarmNight(since)
+      .filter((n) => farms.has(n.farmId) && (ponds.get(n.farmId) ?? 0) > 0)
+      .map((n) => ({ malam: n.night, tambak: farms.get(n.farmId)!.name, kolam: ponds.get(n.farmId)!, panggilan: n.calls, biayaUsd: usd(n.cost), perKolamUsd: usd(n.cost / ponds.get(n.farmId)!) }))
+      .sort((a, b) => b.malam.localeCompare(a.malam) || (b.perKolamUsd ?? 0) - (a.perKolamUsd ?? 0));
+    // The last 7 full nights: the average over farm-nights that used the AI at all.
+    const lastNight = nightOf(t.toISOString());
+    const week = perKolamMalam.filter((n) => n.malam < lastNight && n.malam >= nightOf(new Date(t.getTime() - 7 * DAY).toISOString()));
+    const rata7Malam = week.length ? usd(week.reduce((a, n) => a + (n.perKolamUsd ?? 0), 0) / week.length) : null;
+    return { panggilan, perModel, perKolamMalam: perKolamMalam.slice(0, 60), rata7Malam, catatanHarga: 'Perkiraan dari tabel harga di server/src/ledger.ts (dibaca 9 Nov 2026), bukan tagihan.' };
+  }
 
   let lastChecks: { at: number; layanan: unknown[] } = { at: 0, layanan: [] };
   admin.get('/kesehatan', async (c) => {

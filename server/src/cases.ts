@@ -18,6 +18,7 @@ import { clock, degrees, fn, overstated, searchGuidance, toolLoop, unsafeText, w
 import { nextTime } from './agent.ts';
 import { DAY_MS, localDate, type Log } from './domain.ts';
 import type { Nowcast } from './nowcast.ts';
+import { adviceChecks, type AtRisk, type Verification } from './verify.ts';
 
 const HOUR = 3600_000;
 const WINDOW_H = 18;
@@ -73,6 +74,10 @@ export interface CaseRun {
   generatedAt: number;
   lang: Lang;
   trigger: CaseTrigger;
+  /** The code checks on the agent's summary (verify.ts); absent when no model wrote one. */
+  verify?: Verification;
+  /** The AI call ledger entry behind this update (ledger.ts): "Cara AI memproses ini". */
+  trace?: string;
 }
 
 export interface CaseDay {
@@ -419,7 +424,12 @@ export function guardCase(input: CaseInput, p: Partial<Collected> & { summary?: 
   const base = rulesCaseRun(input, steps);
   const fits = (s: string, min: number, max: number) => fitsText(s, min, max) && !overstated(s, input.weather);
   const summary = degrees(String(p.summary ?? '').trim());
-  if (!fits(summary, 20, 500)) return base;
+  // Verify before show: the summary may not call the pond safe while the rules see deaths rising or a warning.
+  const facts = caseFacts(input);
+  const level = facts.rising || input.findings.some((f) => f.level === 'critical') || input.nowcast?.peak.level === 'critical' ? 'critical' : input.findings.some((f) => f.level === 'warning') || input.nowcast?.peak.level === 'warning' ? 'warning' : null;
+  const atRisk: AtRisk[] = level ? [{ name: input.pondName, level }] : [];
+  const verify = adviceChecks(summary, atRisk, { overstated: overstated(summary, input.weather), fits: fitsText(summary, 20, 500) });
+  if (verify.status === 'failed') return { ...base, verify };
 
   const watch = (Array.isArray(p.watch) ? p.watch : [])
     .map((w) => degrees(String(w).trim()))
@@ -454,6 +464,7 @@ export function guardCase(input: CaseInput, p: Partial<Collected> & { summary?: 
     ownerNote: fits(note, 10, 300) ? note : base.ownerNote,
     source: 'agent',
     model,
+    verify,
   };
 }
 

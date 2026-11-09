@@ -10,6 +10,7 @@ import type { ChatProvider } from './ai.ts';
 import { clock, degrees, fn, overstated, searchGuidance, toolLoop, unsafeText, wordingRules } from './agentloop.ts';
 import type { Nowcast } from './nowcast.ts';
 import { powerBackupLabel, type PowerNight } from './power.ts';
+import { adviceChecks, type AtRisk, type Verification } from './verify.ts';
 
 const HOUR = 3600_000;
 const WINDOW_H = 18;
@@ -61,6 +62,10 @@ export interface Briefing {
   generatedAt: number;
   /** Language the summary and checks were written in (missing on older ones: Indonesian). */
   lang?: Lang;
+  /** The code checks on the agent's summary (verify.ts); absent when no model wrote one. */
+  verify?: Verification;
+  /** The AI call ledger entry behind this briefing (ledger.ts): "Cara AI memproses ini". */
+  trace?: string;
 }
 
 /** "21:30" or "21.30" → the next such moment after `now` (in the farm's time zone, UTC+7 for WIB). */
@@ -239,6 +244,17 @@ export async function runBriefing(input: BriefingInput, providers: ChatProvider[
 /** Rain per hour from both forecasts, for the rain-word guard: BMKG gives mm per 3-hour step. */
 const rainSeen = (input: BriefingInput) => [...input.weather, ...(input.bmkg?.steps ?? []).map((s) => ({ rain: s.rain / 3 }))];
 
+/** Ponds the fixed rules see at risk now or tonight: the agent's summary may not call them safe. */
+export function atRiskOf(input: Pick<BriefingInput, 'ponds' | 'nowcasts'>): AtRisk[] {
+  const out: AtRisk[] = [];
+  for (const p of input.ponds) {
+    const peak = input.nowcasts.find((n) => n.pondId === p.id)?.peak.level;
+    const level = p.level === 'critical' || peak === 'critical' ? 'critical' : p.level === 'warning' || peak === 'warning' ? 'warning' : null;
+    if (level) out.push({ name: p.name, level });
+  }
+  return out;
+}
+
 /** Applies the guardrails to what the model submitted. */
 export function guard(input: BriefingInput, proposal: Record<string, any>, steps: Briefing['steps'], model: string): Briefing {
   const base = rulesBriefing(input, steps);
@@ -254,9 +270,11 @@ export function guard(input: BriefingInput, proposal: Record<string, any>, steps
     if (base.checks.some((r) => r.pondId === pond.id && Math.abs(r.t - t) < 30 * 60_000)) continue;
     agentChecks.push({ pondId: pond.id, t, action, alarm: Boolean(c.alarm), source: 'agent', why: degrees(String(c.why ?? '')).slice(0, 140) || undefined });
   }
-  const usable = summary.length >= 20 && summary.length <= 500 && !unsafeText(summary) && !overstated(summary, rainSeen(input));
+  // Verify before show: a summary that fails any check is replaced by the rules' own; the rules win.
+  const verify = adviceChecks(summary, atRiskOf(input), { overstated: overstated(summary, rainSeen(input)), fits: summary.length >= 20 && summary.length <= 500 });
+  const usable = verify.status === 'passed';
   // In the server log, so a summary the guard turned down can be looked into.
-  if (!usable) console.warn(`briefing agent: summary refused (${summary.length < 20 || summary.length > 500 ? `${summary.length} characters` : unsafeText(summary) ? 'unsafe words' : 'says more than the data'})`);
+  if (!usable) console.warn(`briefing agent: summary refused (${verify.checks.filter((c) => !c.ok).map((c) => c.id).join(', ')})`);
   return {
     summary: usable ? summary : base.summary,
     checks: [...base.checks, ...agentChecks].sort((a, b) => a.t - b.t),
@@ -265,5 +283,6 @@ export function guard(input: BriefingInput, proposal: Record<string, any>, steps
     steps,
     generatedAt: input.now,
     lang: currentLang(),
+    verify,
   };
 }
