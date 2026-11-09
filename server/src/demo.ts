@@ -43,6 +43,7 @@ export function eraseFarm(db: Db, farmId: number) {
   db.prepare('delete from cases where farm_id = ?').run(farmId);
   db.prepare('delete from device_links where farm_id = ?').run(farmId);
   db.exec(`delete from logs where pond_id in ${ponds}`);
+  db.exec(`delete from batch_counts where batch_id in (select id from batches where pond_id in ${ponds})`);
   db.exec(`delete from batches where pond_id in ${ponds}`);
   db.prepare('delete from ponds where farm_id = ?').run(farmId);
   db.prepare('delete from briefings where farm_id = ?').run(farmId);
@@ -60,6 +61,7 @@ export function eraseFarm(db: Db, farmId: number) {
 export function eraseUser(db: Db, userId: number) {
   db.prepare('update logs set created_by = null where created_by = ?').run(userId);
   db.prepare('update case_events set user_id = null where user_id = ?').run(userId);
+  db.prepare('update batch_counts set created_by = null where created_by = ?').run(userId);
   db.prepare('update cases set closed_by = null where closed_by = ?').run(userId);
   db.prepare('update outages set started_by = null where started_by = ?').run(userId);
   db.prepare('update outages set ended_by = null where ended_by = ?').run(userId);

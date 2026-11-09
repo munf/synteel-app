@@ -3,6 +3,7 @@ import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 import { demoStore, eraseFarm, eraseUser } from './demo.ts';
+import type { BatchCount, CountKind } from './cycle.ts';
 import { deviceStore } from './devices.ts';
 import { tx } from './i18n.ts';
 import type { Aeration, Batch, Farm, Log, LogData, Phase, Pond, Setting } from './domain.ts';
@@ -235,6 +236,22 @@ export function openDb(path = process.env.SYNTEEL_DB ?? defaultPath) {
   // (named with the farm id, so a deleted demo farm's covers go with its captures); null = the pond icon.
   if (!pondCols.includes('cover_photo')) db.exec('alter table ponds add column cover_photo text');
   // ---------- end of the pond cover block ----------
+  // ---------- Cycle counts (cycle.ts) ----------
+  // Additive only. What the farmer counted at sorting or harvest, per batch: with the stocked count
+  // (batches.initial_count) it gives the cycle's survival. Several sortings per batch can be kept.
+  db.exec(`
+    create table if not exists batch_counts (
+      id integer primary key,
+      batch_id integer not null references batches(id),
+      counted_on text not null,
+      count integer not null,
+      kind text not null check (kind in ('sorting', 'harvest')),
+      created_by integer references users(id),
+      created_at text not null
+    );
+    create index if not exists batch_counts_batch on batch_counts (batch_id, counted_on);
+  `);
+  // ---------- end of the cycle counts block ----------
   db.exec('create index if not exists ponds_farm on ponds (farm_id)');
   // Single-farm databases (before accounts): the old farm becomes farm 1 and owns every pond.
   const legacy = db.prepare("select name from sqlite_master where type = 'table' and name = 'farm'").get();
@@ -457,6 +474,33 @@ export function farmRepo(db: Db, farmId: number) {
         .prepare('insert into batches (pond_id, phase, stocked_at, initial_count) values (?, ?, ?, ?)')
         .run(b.pondId, b.phase, b.stockedAt, b.initialCount);
       return { id: Number(lastInsertRowid), ...b };
+    },
+
+    // ---------- cycle summary (cycle.ts) ----------
+    /** The pond's newest batch, running or ended, with the day it ended. */
+    latestBatch(pondId: number): (Batch & { endedAt: string | null }) | null {
+      const r = db.prepare('select * from batches where pond_id = ? order by id desc limit 1').get(pondId) as Row | undefined;
+      return r ? { ...toBatch(r), endedAt: (r.ended_at as string | null) ?? null } : null;
+    },
+    /** Sets the stocked count of a batch the caller already checked belongs to this farm. */
+    setInitialCount(batchId: number, count: number | null) {
+      db.prepare('update batches set initial_count = ? where id = ?').run(count, batchId);
+    },
+    batchCounts(batchId: number): BatchCount[] {
+      return (db.prepare('select * from batch_counts where batch_id = ? order by counted_on, id').all(batchId) as Row[]).map((r) => ({
+        id: r.id as number,
+        batchId: r.batch_id as number,
+        countedOn: r.counted_on as string,
+        count: r.count as number,
+        kind: r.kind as CountKind,
+      }));
+    },
+    addBatchCount(batchId: number, c: { countedOn: string; count: number; kind: CountKind }, userId: number | null) {
+      db.prepare('insert into batch_counts (batch_id, counted_on, count, kind, created_by, created_at) values (?, ?, ?, ?, ?, ?)').run(batchId, c.countedOn, c.count, c.kind, userId, new Date().toISOString());
+    },
+    /** A batch's logs (not deleted), oldest first. */
+    batchLogs(batchId: number): Log[] {
+      return (db.prepare('select * from logs where batch_id = ? and deleted_at is null order by logged_at').all(batchId) as Row[]).map(toLog);
     },
 
     /** `createdBy`: the person who recorded it; null only for logs from scripts. */

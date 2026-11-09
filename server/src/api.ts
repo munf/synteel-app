@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import { batchWeek, DAY_MS, LOG_SOURCES, localDate, READING_LIMITS, type Aeration, type Behavior, type Level, type Log, type LogData, type Phase, type Pond, type Setting } from './domain.ts';
+import { batchWeek, DAY_MS, LOG_SOURCES, localDate, READING_LIMITS, type Aeration, type Batch, type Behavior, type Level, type Log, type LogData, type Phase, type Pond, type Setting } from './domain.ts';
 import type { CaseRow, FarmRepo, LogRecord, Repo, Role } from './db.ts';
 import type { HistoryLog, NotebookPage, NotebookSaveResult, QuotaState, SupportTopic } from './contract.ts';
 import { guardNotebook, localIso } from './notebook.ts';
@@ -20,6 +20,7 @@ import { verifyCount, verifyDraft, verifyRound, verifyRows } from './verify.ts';
 import { caseView, MAX_AGENT_RUNS_PER_DAY, MAX_LANG_RUNS_PER_DAY, RECHECK_AFTER, RECHECK_GRACE, mockCaseRun, rulesCaseRun, runCaseAgent, type CaseEvent, type CaseInput, type CaseRun, type CaseTrigger, type CaseView } from './cases.ts';
 import type { CoverStore, SaveCapture } from './captures.ts';
 import { computeNowcast } from './nowcast.ts';
+import { summarizeBatch, type CycleSummary } from './cycle.ts';
 import { assessPond, classifyReading, limitsFor, overallLevel, type Limits, type Threshold } from './rules.ts';
 import { geocode as defaultGeocode, getWeather as defaultGetWeather } from './weather.ts';
 // Pond profile from a photo, the learned water temperature model and the weekly pattern note.
@@ -63,6 +64,7 @@ const FIELD_EN: Record<string, string> = {
   'nama kolam': 'Pond name', 'jenis kolam': 'Pond type', 'jenis rekaman': 'Recording type', 'Nomor WhatsApp': 'WhatsApp number',
   'Nomor HP akun': 'Account phone number', aerasi: 'Aeration', aerator: 'Aerator', fase: 'Phase', cahaya: 'Light',
   'cadangan listrik': 'Power backup', wilayah: 'Region', 'lama padam': 'How long the power has been out',
+  'jumlah tebar': 'Number stocked', 'jumlah hitung': 'Number counted', 'tanggal hitung': 'Count date', 'jenis hitung': 'Count type',
 };
 const fieldName = (f: string) => tx(f, FIELD_EN[f] ?? f);
 const invalid = (field: string) => new BadRequest(tx(`${field} tidak valid`, `${fieldName(field)} is not valid`));
@@ -1769,7 +1771,46 @@ export function createApi(
     const pond = r.getPond(Number(c.req.param('id')));
     if (!pond) return c.json({ error: tx('Kolam tidak ditemukan', 'Pond not found') }, 404);
     const since = new Date(clock().getTime() - 14 * DAY_MS).toISOString();
-    return c.json({ pond: pondSummary(r, pond), logs: r.logsSince(pond.id, since) });
+    return c.json({ pond: pondSummary(r, pond), logs: r.logsSince(pond.id, since), cycle: pondCycle(r, pond.id) });
+  });
+
+  // ---------- cycle summary (cycle.ts) ----------
+  /** The running batch's cycle so far, or null without one. */
+  function pondCycle(r: FarmRepo, pondId: number): CycleSummary | null {
+    const batch = r.activeBatch(pondId);
+    return batch ? batchCycle(r, { ...batch, endedAt: null }) : null;
+  }
+
+  const batchCycle = (r: FarmRepo, batch: Batch & { endedAt: string | null }) => summarizeBatch(r, batch, thresholds, clock());
+
+  // Stocked count for a batch set up without one (owner only, like starting the batch).
+  api.put('/ponds/:id/cycle/stocked', async (c) => {
+    const r = needOwner(c);
+    const pond = r.getPond(Number(c.req.param('id')));
+    const batch = pond && r.activeBatch(pond.id);
+    if (!pond || !batch) return c.json({ error: tx('Belum ada batch di kolam ini', 'No batch in this pond yet') }, 404);
+    const body = await c.req.json();
+    const count = num(body.count, 'jumlah tebar', { min: 1, max: 10_000_000 });
+    if (count === undefined || !Number.isInteger(count)) throw invalid('jumlah tebar');
+    r.setInitialCount(batch.id, count);
+    return c.json({ cycle: pondCycle(r, pond.id) });
+  });
+
+  // What was counted at sorting or harvest. Workers sort and count too, so any member may enter it.
+  api.post('/ponds/:id/cycle/counts', async (c) => {
+    const r = needFarm(c);
+    const pond = r.getPond(Number(c.req.param('id')));
+    const batch = pond && r.activeBatch(pond.id);
+    if (!pond || !batch) return c.json({ error: tx('Belum ada batch di kolam ini', 'No batch in this pond yet') }, 404);
+    const body = await c.req.json();
+    const count = num(body.count, 'jumlah hitung', { min: 0, max: 10_000_000 });
+    if (count === undefined || !Number.isInteger(count)) throw invalid('jumlah hitung');
+    const kind = oneOf(body.kind, ['sorting', 'harvest'] as const, 'jenis hitung') ?? 'sorting';
+    const today = localDate(clock(), timezone(r));
+    const countedOn = text(body.countedOn, 'tanggal hitung') ?? today;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(countedOn) || countedOn < batch.stockedAt || countedOn > today) throw invalid('tanggal hitung');
+    r.addBatchCount(batch.id, { countedOn, count, kind }, c.get('userId'));
+    return c.json({ cycle: pondCycle(r, pond.id) }, 201);
   });
 
   api.post('/ponds/:id/batches', async (c) => {
