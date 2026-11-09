@@ -279,7 +279,7 @@ export function runsFromBench(file: BenchFile, labelled: Labelled, fileName: str
   const where = `docs/eval-results/${fileName}`;
   const source: Words =
     file.mode === 'live'
-      ? { id: `Uji dengan API model nyata, ${file.date}, ${file.calls} panggilan model (${where})`, en: `Real API run, ${file.date}, ${file.calls} model calls (${where})` }
+      ? { id: `Uji dengan API model nyata, ${file.date}, ${file.calls} panggilan model (${where})`, en: `Real API run, ${file.date}, ${file.calls} model ${file.calls === 1 ? 'call' : 'calls'} (${where})` }
       : { id: `Uji tiruan, jawaban dari label tanpa model, ${file.date} (${where})`, en: `Mock run, answers from the labels, no model, ${file.date} (${where})` };
   const runs: ReplayRun[] = [];
   for (const [task, t] of Object.entries(file.tasks)) {

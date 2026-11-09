@@ -30,7 +30,7 @@ export function modelName(provider: string, model: string): string {
   return `${name} · ${PROVIDER[provider] ?? provider}`;
 }
 
-const secs = (ms: number) => (ms < 1000 ? t('kurang dari 1 detik', 'under 1 second') : t(`${fmtNum(Math.round(ms / 100) / 10)} detik`, `${fmtNum(Math.round(ms / 100) / 10)} seconds`));
+const secs = (ms: number) => (ms < 1000 ? t('kurang dari 1 detik', 'under 1 second') : t(`${fmtNum(Math.round(ms / 100) / 10)} detik`, `${fmtNum(Math.round(ms / 100) / 10)} ${Math.round(ms / 100) === 10 ? 'second' : 'seconds'}`));
 
 const OUTCOME: Partial<Record<Outcome, () => string>> = {
   error: () => t('Gagal, dicoba penyedia lain', 'Failed, another provider tried'),

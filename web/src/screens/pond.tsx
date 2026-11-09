@@ -441,7 +441,7 @@ function CycleCard({ pond, cycle, role, onChanged }: { pond: PondSummary; cycle:
       <div class="row" style={{ background: 'var(--bg)', borderRadius: 16, padding: '8px 8px 8px 16px' }}>
         <span class="grow stack-xs" style={{ gap: 0 }}>
           <span class="meta">{t('Jumlah tebar', 'Number stocked')}</span>
-          <span class="strong num">{c.stockedCount !== null ? t(`${fmtNum(c.stockedCount)} ekor`, `${fmtNum(c.stockedCount)} eels`) : t('Belum diisi', 'Not filled in yet')}</span>
+          <span class="strong num">{c.stockedCount !== null ? t(`${fmtNum(c.stockedCount)} ekor`, `${fmtNum(c.stockedCount)} ${c.stockedCount === 1 ? 'eel' : 'eels'}`) : t('Belum diisi', 'Not filled in yet')}</span>
         </span>
         {owner && form !== 'stocked' && (
           <button type="button" class="nick-btn" onClick={() => open('stocked')}>
