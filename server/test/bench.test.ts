@@ -105,3 +105,29 @@ test('the call budget stops a run before an item that could go past it', async (
     await api.close();
   }
 });
+
+test('nowcast check: night readings against the estimate at that hour, oxygen signs against the night peak', async () => {
+  const { scoreNight, summarizeNights } = await import('../../scripts/nowcast-check.ts');
+  const T = Date.parse('2026-11-01T10:00:00Z'); // 17.00 WIB
+  const H = 3600_000;
+  const hour = (h: number, temp: number | null, level: 'ok' | 'warning' | 'critical') => ({ t: T + h * H, temp, sigma: 0.3, score: 0, level, factors: [] });
+  const nc = { pondId: 7, generatedAt: T, hours: [hour(0, 28, 'ok'), hour(4, 27.5, 'warning'), hour(10, 26.8, 'ok'), hour(20, 29, 'critical')] } as any;
+  const log = (h: number, data: Record<string, unknown>) => ({ id: h, pondId: 7, batchId: 1, loggedAt: new Date(T + h * H).toISOString(), source: 'manual', data }) as any;
+  const n = scoreNight(nc, '2026-11-01', [
+    log(-2, { readings: { temperature: 30 } }), // before the forecast: not scored
+    log(4.5, { readings: { temperature: 27.2 }, behavior: ['surfacing'] }),
+    log(14, { readings: { do: 4.2 }, mortality: 3 }), // 07.00: no estimate within an hour
+    log(30, { behavior: ['surfacing'] }), // the next evening: another night
+  ]);
+  assert.deepEqual(n.tempErrors, [-0.3]);
+  assert.deepEqual(n.signs, ['surfacing', 'do 4.2']);
+  assert.equal(n.dead, 3);
+  // The peak of the night only: the critical hour 20 h ahead is the next day.
+  assert.equal(n.peak, 'warning');
+  const quiet = { ...n, peak: 'ok' as const, signs: ['gathering_inlet'], night: '2026-11-02' };
+  const s = summarizeNights([n, quiet, { ...n, records: 0, night: '2026-11-03' }]);
+  assert.equal(s.nightsWithRecords, 2);
+  assert.deepEqual(s.table.map((r) => [r.peak, r.signsLogged, r.noSigns]), [['ok', 1, 0], ['warning', 1, 0], ['critical', 0, 0]]);
+  assert.deepEqual(s.missed, ['pond 7 2026-11-02: gathering_inlet']);
+  assert.equal(s.tempReadings, 2);
+});
