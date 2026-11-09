@@ -166,7 +166,8 @@ test('no model on the alarm path: the rules, nowcast and monitor cannot reach a 
     // Type-only imports are erased at run time and cannot call anything.
     for (const m of src.matchAll(/^import\s+(type\s+)?[^'"]*from\s+'\.\/([\w-]+\.ts)';/gm)) if (!m[1]) walk(m[2]);
   };
-  for (const f of ['rules.ts', 'nowcast.ts', 'monitor.ts', 'thermal.ts']) walk(f);
+  // whatsapp.ts sends the danger summary: an extra channel, but it must not reach a model either.
+  for (const f of ['rules.ts', 'nowcast.ts', 'monitor.ts', 'thermal.ts', 'whatsapp.ts']) walk(f);
   for (const model of ['ai.ts', 'providers.ts', 'agentloop.ts', 'sam.ts', 'agent.ts', 'spoken.ts']) assert.equal(seen.has(model), false, `${model} reachable from the alarm path`);
   assert.ok(seen.has('rules.ts') && seen.has('nowcast.ts'));
 });

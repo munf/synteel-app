@@ -42,6 +42,7 @@ export function eraseFarm(db: Db, farmId: number) {
   db.prepare('delete from pond_patterns where farm_id = ?').run(farmId);
   db.prepare('delete from cases where farm_id = ?').run(farmId);
   db.prepare('delete from device_links where farm_id = ?').run(farmId);
+  db.prepare('delete from wa_sends where farm_id = ?').run(farmId);
   db.exec(`delete from logs where pond_id in ${ponds}`);
   db.exec(`delete from batch_counts where batch_id in (select id from batches where pond_id in ${ponds})`);
   db.exec(`delete from batches where pond_id in ${ponds}`);
@@ -69,6 +70,8 @@ export function eraseUser(db: Db, userId: number) {
   db.prepare('delete from invites where created_by = ?').run(userId);
   db.prepare('update support_tickets set user_id = null where user_id = ?').run(userId);
   db.prepare('delete from ai_usage where user_id = ?').run(userId);
+  db.prepare('delete from wa_sends where user_id = ?').run(userId);
+  db.prepare('delete from wa_settings where user_id = ?').run(userId);
   db.prepare('delete from memberships where user_id = ?').run(userId);
   db.prepare('delete from sessions where user_id = ?').run(userId);
   db.prepare('delete from users where id = ?').run(userId);

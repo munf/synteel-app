@@ -14,6 +14,7 @@ import { mailer } from './mail.ts';
 import { MONITOR_INTERVAL_MS, startMonitor } from './monitor.ts';
 import { describeRoute, TASKS } from './providers.ts';
 import type { Nowcast } from './nowcast.ts';
+import { pickProvider } from './whatsapp.ts';
 
 const app = new Hono().basePath('/api');
 
@@ -35,7 +36,10 @@ console.log(`AI mode: ${ai.mode}${env.aiDailyCap && ai.mode === 'meta' ? ` (cap 
 // The routes per task (providers.ts), provider and model names only.
 if (ai.mode === 'meta') for (const task of TASKS) console.log(`  ${task.padEnd(8)} ${describeRoute(env.routes[task])}`);
 for (const s of env.routesSkipped.filter((s) => s.why !== 'no key')) console.warn(`AI route ${s.task}: ${s.entry} left out (${s.why})`);
-const api = createApi(store, { ai, saveCapture: captureStore(), cookieName: env.cookieName, demoPhone: env.demoPhone, farmAiCap: env.farmAiCap, agentProviders: env.agentChat, sam: env.routes.segment, mail: mailer(env.smtp), removeFarmFiles: (farmId) => removeFarmCaptures(farmId), covers: coverStore(), demoLimits: { perIp: env.demoPerIp ?? DEMO_PER_IP_PER_DAY, maxLive: env.demoMaxLive ?? DEMO_MAX_LIVE }, events, ledger });
+// WhatsApp: the Cloud API only with WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID, else a wa.me link the farmer opens.
+const whatsapp = pickProvider(process.env);
+const api = createApi(store, { ai, saveCapture: captureStore(), cookieName: env.cookieName, demoPhone: env.demoPhone, farmAiCap: env.farmAiCap, agentProviders: env.agentChat, sam: env.routes.segment, mail: mailer(env.smtp), removeFarmFiles: (farmId) => removeFarmCaptures(farmId), covers: coverStore(), demoLimits: { perIp: env.demoPerIp ?? DEMO_PER_IP_PER_DAY, maxLive: env.demoMaxLive ?? DEMO_MAX_LIVE }, events, ledger, whatsapp });
+console.log(`WhatsApp: ${whatsapp.channel === 'cloud' ? 'Cloud API' : whatsapp.channel === 'mock' ? 'mock (nothing leaves the server)' : 'wa.me link only (no Cloud API settings)'}`);
 console.log(`Support mail: ${env.smtp ? `${env.smtp.host}:${env.smtp.port}` : 'not configured (tickets only stored)'}`);
 // Team dashboard: off unless SYNTEEL_ADMIN_USER and SYNTEEL_ADMIN_PASSWORD are set. Registered before the app's routes.
 app.route(
@@ -65,7 +69,11 @@ app.get('/monitor', (c) => c.json({ intervalMs: MONITOR_INTERVAL_MS, ...monitor.
 const monitor = startMonitor(
   // Every farm, not just the ones somebody has open. Pond ids are unique across farms.
   async () => ({ ponds: (await Promise.all(store.farmIds().map((id) => api.nowcastFarm(id)))).flatMap((n) => n.ponds as Nowcast[]) }),
-  (change) => console.log(`risk up: pond ${change.pondId} ${change.from} → ${change.to}: ${change.reasons.join('; ')}`),
+  (change) => {
+    console.log(`risk up: pond ${change.pondId} ${change.from} → ${change.to}: ${change.reasons.join('; ')}`);
+    // An extra channel after the fact: the phone alarm does not wait for it, and a failure here changes nothing there.
+    api.whatsappAlarm(change).catch((err) => console.error('whatsapp alarm:', err));
+  },
 );
 
 // Linked Synteel devices (today: simulated ones from eel.synt.fun/sim) send their readings.

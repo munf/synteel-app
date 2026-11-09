@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { demoStore, eraseFarm, eraseUser } from './demo.ts';
 import type { BatchCount, CountKind } from './cycle.ts';
 import { deviceStore } from './devices.ts';
+import { whatsappStore } from './whatsapp.ts';
 import { tx } from './i18n.ts';
 import type { Aeration, Batch, Farm, Log, LogData, Phase, Pond, Setting } from './domain.ts';
 import type { Outage } from './power.ts';
@@ -684,6 +685,8 @@ export function repo(db: Db) {
     },
     devices: deviceStore(db),
     demo: demoStore(db),
+    /** Profil → WhatsApp settings and the log of sends (whatsapp.ts). */
+    whatsapp: whatsappStore(db),
 
     createFarm(f: Farm, ownerId: number): number {
       const { lastInsertRowid } = db

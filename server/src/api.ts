@@ -19,7 +19,7 @@ import { noLedger, type AiKind, type Ledger } from './ledger.ts';
 import { verifyCount, verifyDraft, verifyRound, verifyRows } from './verify.ts';
 import { caseView, MAX_AGENT_RUNS_PER_DAY, MAX_LANG_RUNS_PER_DAY, RECHECK_AFTER, RECHECK_GRACE, mockCaseRun, rulesCaseRun, runCaseAgent, type CaseEvent, type CaseInput, type CaseRun, type CaseTrigger, type CaseView } from './cases.ts';
 import type { CoverStore, SaveCapture } from './captures.ts';
-import { computeNowcast } from './nowcast.ts';
+import { computeNowcast, type Nowcast } from './nowcast.ts';
 import { summarizeBatch, type CycleSummary } from './cycle.ts';
 import { assessPond, classifyReading, limitsFor, overallLevel, type Limits, type Threshold } from './rules.ts';
 import { geocode as defaultGeocode, getWeather as defaultGetWeather } from './weather.ts';
@@ -34,6 +34,8 @@ import { findDesa, searchDesa, type Desa } from './desa.ts';
 import { applyPower, assessPowerNight, getStormHours, POWER_BACKUPS, type GetStorm, type PowerBackup, type PowerNight } from './power.ts';
 import { TERMS_VERSION } from './terms.ts';
 import { deviceLabel } from './useragent.ts';
+import { unsafeText } from './agentloop.ts';
+import { alarmMessage, blockedReason, codeMessage as waCodeMessage, linkProvider, nightPlanMessage, phoneCodes, stepsMessage, waLink, WA_CONSENT_VERSION, WA_KINDS, type Fact, type WaKind, type WaMessage, type WaProvider, type WaSettings } from './whatsapp.ts';
 
 const thresholds = knowledge.thresholds.parameters as Threshold[];
 const stages = knowledge.nurseryProgram.stages as { weeks: [number, number]; name: string; feed: string; mesh_mm: string; water: string }[];
@@ -180,6 +182,8 @@ export interface ApiDeps {
   events?: EventLog | null;
   /** The AI call ledger (ledger.ts): every model call, its time, tokens, estimated cost and the result's checks. */
   ledger?: Ledger | null;
+  /** WhatsApp delivery (whatsapp.ts): the Cloud API when configured, else a wa.me link the farmer opens. */
+  whatsapp?: WaProvider;
 }
 
 /** Briefings made in another language for the same evening (the viewer's language had none yet), per farm per day. */
@@ -286,7 +290,7 @@ type Env = { Variables: { userId: number; farmId: number | null; tokenHash: stri
 
 export function createApi(
   store: Repo,
-  { clock = () => new Date(), getWeather = defaultGetWeather, geocode = defaultGeocode, ai, saveCapture, cookieName = 'synteel_session', demoPhone = null, farmAiCap = 0, agentProviders = [], sam = null, getBmkg = getBmkgForecast, getStorm = getStormHours, mail = null, demoLimits = { perIp: DEMO_PER_IP_PER_DAY, maxLive: DEMO_MAX_LIVE }, removeFarmFiles, fetchArchive, covers = null, events = null, ledger = null }: ApiDeps = {},
+  { clock = () => new Date(), getWeather = defaultGetWeather, geocode = defaultGeocode, ai, saveCapture, cookieName = 'synteel_session', demoPhone = null, farmAiCap = 0, agentProviders = [], sam = null, getBmkg = getBmkgForecast, getStorm = getStormHours, mail = null, demoLimits = { perIp: DEMO_PER_IP_PER_DAY, maxLive: DEMO_MAX_LIVE }, removeFarmFiles, fetchArchive, covers = null, events = null, ledger = null, whatsapp = linkProvider() }: ApiDeps = {},
 ) {
   const api = new Hono<Env>();
   // Every handler below answers in the language the app asked for (i18n.ts).
@@ -648,6 +652,60 @@ export function createApi(
       briefJobs.set(r.farmId, job);
     }
     return { briefing: { ...rulesBriefing(await briefingInput(r)), generatedAt: original.body.generatedAt }, running };
+  }
+
+  // ---------- WhatsApp (whatsapp.ts): an extra channel, never instead of the phone alarm ----------
+
+  /** Sends one message to a farmer's own number and records how it went (never the text or the number). */
+  async function waSend(userId: number, farmId: number | null, pondId: number | null, s: WaSettings, msg: WaMessage) {
+    const result = await whatsapp.send(s.phone, msg);
+    store.whatsapp.record({ userId, farmId, pondId, kind: msg.kind, channel: whatsapp.channel, result }, clock());
+    if (result.status === 'failed') console.error(`whatsapp ${msg.kind} user ${userId}: ${result.error}`);
+    return result;
+  }
+
+  /** After the evening run's briefing: tonight's checks to everyone on the farm who asked for them. */
+  async function waNightPlan(r: FarmRepo, checks: { pondId: number; t: number; alarm: boolean }[]) {
+    const farm = r.getFarm();
+    if (!farm) return;
+    const names = new Map(r.listPonds().map((p) => [p.id, p.name]));
+    const from = clock().getTime() - 15 * 60_000;
+    const plan = checks.filter((c) => names.has(c.pondId) && c.t >= from).map((c) => ({ pondName: names.get(c.pondId)!, t: c.t, alarm: c.alarm }));
+    for (const { userId, settings } of store.whatsapp.receivers(r.farmId, 'night', whatsapp)) {
+      await waSend(userId, r.farmId, null, settings, withLang(settings.lang, () => nightPlanMessage({ farmName: farm.name, checks: plan, timezone: farm.timezone })));
+    }
+  }
+
+  /** One danger summary per pond per farmer within this time, however often the risk goes up and down. */
+  const WA_ALARM_EVERY_MS = 6 * 3600_000;
+
+  /**
+   * The monitor saw a pond's risk rise to danger (monitor.ts, fixed rules). The phone alarm is already the
+   * signal; this only tells the farmers who chose it on WhatsApp too, with the rules' reasons in their language.
+   */
+  async function waAlarm(change: { pondId: number; at: number; to: string; reasons: string[] }) {
+    if (change.to !== 'critical') return 0;
+    const farmId = store.whatsapp.farmOfPond(change.pondId);
+    if (farmId === null || store.demo.kindOf(farmId)) return 0;
+    const r = store.farm(farmId);
+    const pond = r.getPond(change.pondId);
+    if (!pond) return 0;
+    const since = new Date(clock().getTime() - WA_ALARM_EVERY_MS);
+    let sent = 0;
+    for (const { userId, settings } of store.whatsapp.receivers(farmId, 'alarm', whatsapp)) {
+      if (store.whatsapp.sentSince('alarm', pond.id, userId, since)) continue;
+      const msg = await withLang(settings.lang, async () => {
+        let reasons = change.reasons;
+        // The monitor writes its reasons in Indonesian: an English reader gets them from the rules again.
+        if (settings.lang === 'en') {
+          const nc = ((await nowcastFull(r)).ponds as Nowcast[]).find((p) => p.pondId === pond.id);
+          if (nc) reasons = (nc.now.level === 'critical' ? nc.now : nc.peak).factors.map((f) => f.label);
+        }
+        return alarmMessage({ pondName: pond.name, at: change.at, timezone: timezone(r), reasons });
+      });
+      if ((await waSend(userId, farmId, pond.id, settings, msg)).status === 'sent') sent++;
+    }
+    return sent;
   }
 
   // ---------- dead-eel cases (cases.ts) ----------
@@ -1265,6 +1323,117 @@ export function createApi(
     }
     deleteCookie(c, cookieName, { path: '/' });
     return c.body(null, 204);
+  });
+
+  // ---------- Profil → WhatsApp (whatsapp.ts) ----------
+
+  const waCodes = phoneCodes(() => clock().getTime());
+  const waCodeLimiter = attemptLimiter(5, 60 * 60_000, () => clock().getTime(), codeMessage);
+
+  /** What Profil shows: the channel this server has, the farmer's number and choices, the last sends. */
+  function waView(userId: number) {
+    const s = store.whatsapp.settings(userId);
+    return {
+      channel: whatsapp.channel,
+      /** The server can send by itself (Cloud API, or the mock in tests); the link needs the farmer's tap. */
+      push: whatsapp.push,
+      phone: s?.phone ?? null,
+      verified: Boolean(s?.phone && s.verifiedAt),
+      optIn: s?.optIn ?? false,
+      kinds: s?.kinds ?? [...WA_KINDS],
+      consented: s?.consentVersion === WA_CONSENT_VERSION,
+      sends: store.whatsapp.recent(userId),
+    };
+  }
+
+  api.get('/whatsapp', (c) => c.json(waView(c.get('userId'))));
+
+  // Number, opt-in, which messages and the consent. Turning sending on needs a number and the current consent.
+  api.put('/whatsapp', async (c) => {
+    const body = await c.req.json();
+    const userId = c.get('userId');
+    const before = store.whatsapp.settings(userId);
+    const patch: Partial<WaSettings> = { lang: currentLang() };
+    if (body.phone !== undefined) {
+      const raw = String(body.phone ?? '').trim();
+      patch.phone = raw ? normalizePhone(raw) : null;
+      if (!patch.phone) patch.optIn = false;
+    }
+    if (body.kinds !== undefined) {
+      if (!Array.isArray(body.kinds) || body.kinds.some((k: unknown) => !WA_KINDS.includes(k as WaKind))) throw new BadRequest(tx('Pilihan pesan tidak valid', 'The message choice is not valid'));
+      patch.kinds = WA_KINDS.filter((k) => body.kinds.includes(k));
+    }
+    if (body.consent === true) {
+      patch.consentVersion = WA_CONSENT_VERSION;
+      patch.consentAt = clock().toISOString();
+    }
+    if (body.optIn === true) {
+      if (!(patch.phone ?? before?.phone)) throw new BadRequest(tx('Isi nomor WhatsApp dulu', 'Fill in the WhatsApp number first'));
+      if ((patch.consentVersion ?? before?.consentVersion) !== WA_CONSENT_VERSION) throw new BadRequest(tx('Centang persetujuan dulu', 'Tick the agreement first'));
+      patch.optIn = true;
+    } else if (body.optIn === false) patch.optIn = false;
+    store.whatsapp.save(userId, patch, clock());
+    return c.json(waView(userId));
+  });
+
+  // A code to the number, through WhatsApp itself: only a server that can send (Cloud API) can verify a number.
+  api.post('/whatsapp/code', async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const userId = c.get('userId');
+    if (!whatsapp.push) throw new AuthError(tx('Verifikasi lewat WhatsApp belum tersedia di server ini.', 'WhatsApp verification is not available on this server yet.'), 409, 'wa_off');
+    if (whatsapp.channel === 'cloud' && isDemoUser(userId)) throw new AuthError(tx('Akun demo tidak bisa menerima pesan WhatsApp.', 'The demo account cannot receive WhatsApp messages.'), 403);
+    const phone = body.phone ? normalizePhone(body.phone) : store.whatsapp.settings(userId)?.phone;
+    if (!phone) throw new BadRequest(tx('Isi nomor WhatsApp dulu', 'Fill in the WhatsApp number first'));
+    waCodeLimiter.check(`wa:${userId}`, `wa:${phone}`);
+    waCodeLimiter.fail(`wa:${userId}`, `wa:${phone}`);
+    const s = store.whatsapp.save(userId, { phone, lang: currentLang() }, clock());
+    const result = await waSend(userId, c.get('farmId'), null, s, waCodeMessage(waCodes.issue(userId, phone)));
+    if (result.status !== 'sent') throw new AuthError(tx('Kode belum terkirim ke WhatsApp. Coba lagi nanti.', 'The code did not reach WhatsApp. Try again later.'), 409, 'wa_failed');
+    return c.json(waView(userId));
+  });
+
+  api.post('/whatsapp/verify', async (c) => {
+    const userId = c.get('userId');
+    const phone = store.whatsapp.settings(userId)?.phone;
+    const used = phone ? waCodes.use(userId, phone, (await c.req.json()).code) : 'expired';
+    if (used === 'expired') throw new AuthError(tx('Kode sudah tidak berlaku. Minta kode baru.', 'This code no longer works. Ask for a new code.'), 410, 'code_expired');
+    if (used === 'wrong') throw new AuthError(tx('Kode salah. Cek pesan WhatsApp yang paling baru.', 'Wrong code. Check the newest WhatsApp message.'), 400, 'code_wrong');
+    store.whatsapp.save(userId, { verifiedAt: clock().toISOString() }, clock());
+    return c.json(waView(userId));
+  });
+
+  /** One line of plain text from the phone: no line breaks, at most `max` characters. */
+  const line = (v: unknown, max: number) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+
+  // Problem flow → "Kirim langkah lewat WhatsApp". Sent by the server when the farmer turned it on and the number
+  // is verified; otherwise the answer is a wa.me link the phone opens. Either way the send is recorded.
+  api.post('/whatsapp/steps', async (c) => {
+    const r = needFarm(c);
+    const body = await c.req.json();
+    const pond = r.getPond(Number(body.pondId));
+    if (!pond) throw new NotFound(tx('Kolam tidak ditemukan', 'Pond not found'));
+    const userId = c.get('userId');
+    // The steps come from the SOPs and the threshold rules on the phone; anything that reads like medicine or a diagnosis is dropped.
+    const steps = (Array.isArray(body.steps) ? body.steps : []).map((s: unknown) => line(s, 160)).filter((s: string) => s && !unsafeText(s)).slice(0, 6);
+    if (!steps.length) throw new BadRequest(tx('Belum ada langkah untuk dikirim', 'There are no steps to send yet'));
+    const seen = (Array.isArray(body.seen) ? body.seen : []).map((s: unknown) => line(s, 60)).filter(Boolean).slice(0, 4);
+    // Only values the farmer saved or entered: the pond's last saved readings and the dead count from the report.
+    const latest = pondSummary(r, pond).latest;
+    const facts: Fact[] = (['temperature', 'ph', 'tds', 'do'] as const).flatMap((field) => (latest[field] ? [{ field, value: latest[field]!.value }] : []));
+    const dead = Number(body.dead);
+    if (Number.isInteger(dead) && dead > 0 && dead <= 1_000_000) facts.push({ field: 'mortality', value: dead });
+    const at = Number.isFinite(Number(body.at)) ? Number(body.at) : clock().getTime();
+    const msg = stepsMessage({ pondName: pond.name, at, timezone: timezone(r), seen, facts, steps });
+    const s = store.whatsapp.settings(userId);
+    const blocked = blockedReason(s, 'steps', whatsapp);
+    if (blocked === null) {
+      const result = await waSend(userId, r.farmId, pond.id, s!, msg);
+      // Not delivered: the link still lets the farmer send it by hand.
+      return c.json(result.status === 'sent' ? { status: 'sent' } : { status: 'failed', url: waLink(s!.phone, msg.text) });
+    }
+    const result = await linkProvider().send(s?.phone ?? null, msg);
+    store.whatsapp.record({ userId, farmId: r.farmId, pondId: pond.id, kind: 'steps', channel: 'link', result }, clock());
+    return c.json({ status: 'link', url: result.url, blocked });
   });
 
   api.get('/farm', (c) => {
@@ -2303,8 +2472,12 @@ export function createApi(
         if (!farm || r.listPonds().length === 0 || store.demo.kindOf(id)) continue;
         const localHour = Number(clock().toLocaleString('en-GB', { hour: '2-digit', hour12: false, timeZone: farm.timezone }));
         if (localHour < hour || r.briefing(localDate(clock(), farm.timezone))) continue;
-        await makeBriefing(r).catch((err) => console.error(`briefing farm ${id}:`, err));
+        const briefing = await makeBriefing(r).catch((err) => void console.error(`briefing farm ${id}:`, err));
+        // Tonight's plan on WhatsApp for those who asked: the schedule only, rules and guarded checks.
+        if (briefing) await waNightPlan(r, briefing.checks).catch((err) => console.error(`whatsapp night farm ${id}:`, err));
       }
     },
+    /** The monitor's "risk up" (index.ts): a danger summary on WhatsApp for those who asked. Returns how many went out. */
+    whatsappAlarm: (change: { pondId: number; at: number; to: string; reasons: string[] }) => waAlarm(change),
   });
 }
